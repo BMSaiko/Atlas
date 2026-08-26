@@ -52,7 +52,15 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     })
     root.querySelector('#karch')!.addEventListener('click', showArchivedModal)
     const boardEl = root.querySelector('#kboard') as HTMLElement
+    boardEl.addEventListener('keydown', e => {
+      const tEl = e.target as HTMLElement
+      if (tEl.classList.contains('kcard') && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault()
+        const c = board.cards.find(x => x.id === tEl.dataset.id); if (c) viewModal(c)
+      }
+    })
     bindDnd(boardEl)
+
   }
 
   function count(colId: string) { return board.cards.filter(c => c.colId === colId && !c.archived).length }
@@ -62,7 +70,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     return board.cards.filter(c => c.colId === colId && !c.archived).sort(cmp).map(c => {
       const idx = board.columns.findIndex(x => x.id === c.colId)
       const prev = board.columns[idx-1]?.id, next = board.columns[idx+1]?.id
-      return `<article class="kcard" draggable="true" data-id="${c.id}">
+      return `<article class="kcard" draggable="true" tabindex="0" data-id="${c.id}">
         <h5>${esc(c.title)}</h5>
         ${c.description ? `<div class="kdesc">${esc(c.description)}</div>` : ''}
         <div class="kfoot">
@@ -83,7 +91,12 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     const boardEl = root.querySelector('#kboard') as HTMLElement
     boardEl.addEventListener('click', e => {
       const btn = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null
-      if (!btn) return
+      if (!btn) {
+        const cardEl = (e.target as HTMLElement).closest('.kcard') as HTMLElement | null
+        const c = cardEl ? board.cards.find(x => x.id === cardEl.dataset.id) : null
+        if (c) viewModal(c)
+        return
+      }
       const cardEl = btn.closest('.kcard') as HTMLElement | null
       const c = cardEl ? board.cards.find(x => x.id === (cardEl.dataset as { id?: string }).id) : null
       const act = btn.dataset.act
@@ -141,6 +154,23 @@ export async function renderKanban(root: HTMLElement, slug: string) {
         if (c) Object.assign(c, data); else board.cards.push({ id: uid(), ts: Date.now(), archived: false, ...data })
         save().then(render); toast(c ? 'Guardado' : 'Criado')
       },
+    })
+  }
+
+  function viewModal(c: Card) {
+    const col = board.columns.find(x => x.id === c.colId)?.name || ''
+    openModal({
+      title: 'Cartão', submitText: 'Editar',
+      body: () => `
+        <div style="font-size:.95rem;margin-bottom:8px">
+          <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
+          <span class="muted"> · ${esc(col)}</span>
+        </div>
+        ${c.description
+          ? `<div class="kdesc" style="font-size:1rem;white-space:pre-wrap">${esc(c.description)}</div>`
+          : '<div class="muted">Sem descrição</div>'}`
+      ,
+      onSubmit: () => cardModal(c),
     })
   }
 
