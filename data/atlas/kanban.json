@@ -13,5 +13,51 @@
       "name": "Concluído"
     }
   ],
-  "cards": []
+  "cards": [
+    {
+      "id": "43ix4j52",
+      "ts": 1787781356838,
+      "archived": false,
+      "title": "ordenação de prioridades no kanban",
+      "description": "DR: Atlas nova tarefa: o kanban deve dar para filtrar a posição dos cards consuante a prioridade entre outros valores",
+      "priority": "high",
+      "colId": "done"
+    },
+    {
+      "id": "1ki09sl2",
+      "ts": 1787781183148,
+      "archived": false,
+      "title": "botão de auto dev e abertura de terminal",
+      "description": "DR: Atlas nova tarefa: todos os cards do kanban devem ter um botão para abrir o wezterm no hermes e iniciar autonomamente a tarefa do card. deve tambem ir atualizando o estado do kanban conduante o desenvolvimento da mesma.",
+      "priority": "high",
+      "colId": "todo"
+    },
+    {
+      "id": "9ev5x8wt",
+      "ts": 1787781463338,
+      "archived": false,
+      "title": "side bar não atualiza o estado se não mudar de workdir",
+      "description": "DR: Atlas nova tarefa: quando adiciono cards no kanbar ou atualizo o estados dos mesmo o numero de cards em \"To Do\" da sidebar não atualiza",
+      "priority": "medium",
+      "colId": "todo"
+    },
+    {
+      "id": "o6lwby2k",
+      "ts": 1787781270174,
+      "archived": false,
+      "title": "cards clicaveis com modal",
+      "description": "DR: Atlas nova tarefa: todos os cards devem ser clicáveis para a abertura de um modal aonde é mais visível o conteúdo do card.",
+      "priority": "medium",
+      "colId": "done"
+    },
+    {
+      "id": "ytb3v55j",
+      "ts": 1787780898894,
+      "archived": false,
+      "title": "links clicaveis",
+      "description": "DR: Atlas nova tarefa: links que estejam em notas descrições, etc. devem ser clicaveis e ter a cor \"amarela\" do Atlas",
+      "priority": "low",
+      "colId": "todo"
+    }
+  ]
 }
