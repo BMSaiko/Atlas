@@ -2,7 +2,7 @@
   "columns": [
     {
       "id": "todo",
-      "name": "A Fazer"
+      "name": "To Do"
     },
     {
       "id": "doing",
@@ -15,13 +15,13 @@
   ],
   "cards": [
     {
-      "id": "txxwgvmg",
-      "ts": 1787761981595,
+      "id": "0s1fvdo5",
+      "ts": 1787778476174,
       "archived": false,
-      "title": "Fazer declaração",
-      "description": "Entregar documento no serviço",
-      "priority": "high",
-      "colId": "done"
+      "title": "teste",
+      "description": "",
+      "priority": "low",
+      "colId": "todo"
     }
   ]
 }

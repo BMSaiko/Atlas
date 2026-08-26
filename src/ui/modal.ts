@@ -13,7 +13,6 @@ export function openModal(opts: ModalOpts): { root: HTMLElement; close: () => vo
   backdrop.querySelector('[data-act=cancel]')!.addEventListener('click', () => { opts.onCancel?.(); close() })
   form.addEventListener('submit', e => {
     e.preventDefault()
-    if (opts.danger && !confirm('Tem a certeza? Esta acção é irreversível.')) return
     opts.onSubmit?.(); close()
   })
   // focus first input

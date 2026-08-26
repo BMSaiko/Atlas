@@ -1,6 +1,7 @@
 import { api, Board } from '../api'
 import { icon } from '../ui/icons'
 import { toast } from '../ui/toast'
+import { confirmDialog } from '../ui/confirm'
 import { navigate } from '../router'
 
 export async function renderSettings(root: HTMLElement, slug: string) {
@@ -43,11 +44,14 @@ export async function renderSettings(root: HTMLElement, slug: string) {
     const btn = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null
     if (!btn || btn.dataset.act !== 'col-del') return
     const id = (btn.closest('.col-row') as HTMLElement).dataset.col!
+    const colName = board.columns.find(x => x.id === id)?.name || ''
     if (board.columns.length <= 1) { toast('Precisa de pelo menos uma coluna'); return }
+    confirmDialog({ title: 'Eliminar coluna', message: `Apagar a coluna "${colName}"?` }).then(ok => { if (!ok) return
     const moving = board.cards.filter(c => c.colId === id).length
     if (moving) board.cards.forEach(c => { if (c.colId === id) c.colId = board.columns[0].id })
     board.columns = board.columns.filter(x => x.id !== id)
     renderList(); toast(`${moving ? moving + ' cartões movidos. ' : ''}Coluna removida — guarda para persistir.`)
+    })
   })
   list.addEventListener('input', e => {
     const inp = e.target as HTMLInputElement
@@ -73,8 +77,8 @@ export async function renderSettings(root: HTMLElement, slug: string) {
   })
 
   root.querySelector('#wd-del')!.addEventListener('click', async () => {
-    if (!confirm(`Eliminar definitivamente o workdir "${meta?.name || slug}"?`)) return
-    if (!confirm('Tem a certeza absoluta? Esta acção não pode ser desfeita.')) return
+    const ok = await confirmDialog({ title: 'Eliminar workdir', message: `Eliminar definitivamente "${meta?.name || slug}"? Esta acção não pode ser desfeita.` })
+    if (!ok) return
     await api.deleteWorkdir(slug); toast('Workdir eliminado'); navigate('/')
   })
 }

@@ -9,6 +9,7 @@ const I = {
   trash: '<path d="M4 7h16M10 7V4h4v3M6 7l1 13h10l1-13M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
   archive: '<rect x="3" y="5" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 9v10h14V9M9 13h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
   search: '<circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  forward: '<path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   back: '<path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
   move: '<path d="M8 7l4 5-4 5M14 7l4 5-4 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',

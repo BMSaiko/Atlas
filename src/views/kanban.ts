@@ -2,6 +2,7 @@ import { api, Board, Card, Coluna, Prioridade, uid } from '../api'
 import { icon } from '../ui/icons'
 import { openModal } from '../ui/modal'
 import { toast } from '../ui/toast'
+import { confirmDialog } from '../ui/confirm'
 
 export async function renderKanban(root: HTMLElement, slug: string) {
   let board = await api.kanban.get(slug).catch(() => ({ columns: [], cards: [] } as Board))
@@ -42,8 +43,8 @@ export async function renderKanban(root: HTMLElement, slug: string) {
         <div class="kfoot">
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
           <div class="kops">
-            <button class="btn-icon btn-ghost" data-act="move" data-dir="-1" ${prev?'':'disabled'} aria-label="Mover atrás">${icon('move', 15)}</button>
-            <button class="btn-icon btn-ghost" data-act="move" data-dir="1" ${next?'':'disabled'} aria-label="Mover frente">${icon('move', 15)}</button>
+            <button class="btn-icon btn-ghost" data-act="move" data-dir="-1" ${prev?'':'disabled'} aria-label="Mover atrás">${icon('back', 15)}</button>
+            <button class="btn-icon btn-ghost" data-act="move" data-dir="1" ${next?'':'disabled'} aria-label="Mover frente">${icon('forward', 15)}</button>
             <button class="btn-icon btn-ghost" data-act="edit" aria-label="Editar">${icon('pencil', 15)}</button>
             <button class="btn-icon btn-ghost" data-act="arch" aria-label="Arquivar">${icon('archive', 15)}</button>
             <button class="btn-icon btn-ghost" data-act="del" aria-label="Eliminar" style="color:var(--danger)">${icon('trash', 15)}</button>
@@ -62,7 +63,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       const c = cardEl ? board.cards.find(x => x.id === (cardEl.dataset as { id?: string }).id) : null
       const act = btn.dataset.act
       if (act === 'edit' && c) { cardModal(c); return }
-      if (act === 'del' && c) { if (!confirm('Eliminar este cartão?')) return; board.cards = board.cards.filter(x => x.id !== c.id); save().then(render); toast('Eliminado'); return }
+      if (act === 'del' && c) { confirmDialog({ title: 'Eliminar cartão', message: 'Apagar este cartão?' }).then(ok => { if (!ok) return; board.cards = board.cards.filter(x => x.id !== c.id); save().then(render); toast('Eliminado') }); return }
       if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquivado'); return }
       if (act === 'move' && c) {
         const dir = parseInt(btn.dataset.dir || '0'); const idx = board.columns.findIndex(x => x.id === c.colId)

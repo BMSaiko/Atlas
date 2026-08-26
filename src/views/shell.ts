@@ -50,6 +50,14 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
   }))
   root.querySelectorAll('[data-nav]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); navigate(el.getAttribute('data-nav')!) }))
   root.querySelector('#side-new')!.addEventListener('click', () => newWorkdir())
+  window.addEventListener('keydown', e => {
+    if (!e.ctrlKey) return
+    if (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return
+    if (document.querySelector('.modal-backdrop')) return
+    const n = parseInt(e.key); if (n >= 1 && n <= 9 && items[n - 1]) {
+      e.preventDefault(); setActive(items[n - 1].slug); navigate('/w/' + items[n - 1].slug)
+    }
+  })
 }
 
 function renderEmpty(panel: HTMLElement, items: Array<any>, root: HTMLElement) {

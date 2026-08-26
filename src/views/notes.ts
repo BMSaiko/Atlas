@@ -2,6 +2,7 @@ import { api, Nota, uid } from '../api'
 import { icon } from '../ui/icons'
 import { openModal } from '../ui/modal'
 import { toast } from '../ui/toast'
+import { confirmDialog } from '../ui/confirm'
 
 export async function renderNotes(root: HTMLElement, slug: string) {
   let notes = await api.notes.get(slug).catch(() => [] as Nota[])
@@ -41,7 +42,9 @@ export async function renderNotes(root: HTMLElement, slug: string) {
     if (!btn) return
     const card = btn.closest('.note-card') as HTMLElement
     const n = notes.find(x => x.id === card.dataset.id)!
-    if (btn.dataset.act === 'del') { if (!confirm('Eliminar esta nota?')) return; notes = notes.filter(x => x.id !== n.id); save().then(()=>doRender()); toast('Nota eliminada') }
+    if (btn.dataset.act === 'del') {
+      confirmDialog({ title: 'Eliminar nota', message: 'Apagar esta nota?' }).then(ok => { if (!ok) return; notes = notes.filter(x => x.id !== n.id); save().then(()=>doRender()); toast('Nota eliminada') })
+    }
     if (btn.dataset.act === 'edit') noteModal(n)
   })
 
