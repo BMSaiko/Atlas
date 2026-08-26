@@ -1,0 +1,18 @@
+// SVG inline, currentColor, 1.5 stroke, no emoji
+const I = {
+  sphere: '<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.5"/><ellipse cx="12" cy="12" rx="8" ry="3.2" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".5"/>',
+  plus: '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  note: '<path d="M5 4h11l3 3v13H5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  board: '<rect x="4" y="4" width="6" height="16" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="14" y="4" width="6" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  gear: '<circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5 5l2.1 2.1M16.9 16.9L19 19M19 5l-2.1 2.1M7.1 16.9L5 19" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  pencil: '<path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19l-4 1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M14 6.5l3 3" stroke="currentColor" stroke-width="1.5"/>',
+  trash: '<path d="M4 7h16M10 7V4h4v3M6 7l1 13h10l1-13M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  archive: '<rect x="3" y="5" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 9v10h14V9M9 13h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  search: '<circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  back: '<path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  move: '<path d="M8 7l4 5-4 5M14 7l4 5-4 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+  aura: '<ellipse cx="12" cy="17" rx="7" ry="3" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".4"/><path d="M12 2c3 3 3 8 0 12-3-4-3-9 0-12z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+}
+export function icon(name: keyof typeof I, size = 20): string {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" aria-hidden="true">${I[name]}</svg>`
+}

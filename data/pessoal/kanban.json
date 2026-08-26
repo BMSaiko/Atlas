@@ -1,0 +1,27 @@
+{
+  "columns": [
+    {
+      "id": "todo",
+      "name": "A Fazer"
+    },
+    {
+      "id": "doing",
+      "name": "Em Curso"
+    },
+    {
+      "id": "done",
+      "name": "Concluído"
+    }
+  ],
+  "cards": [
+    {
+      "id": "txxwgvmg",
+      "ts": 1787761981595,
+      "archived": false,
+      "title": "Fazer declaração",
+      "description": "Entregar documento no serviço",
+      "priority": "high",
+      "colId": "done"
+    }
+  ]
+}
