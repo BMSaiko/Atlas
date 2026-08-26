@@ -6,7 +6,15 @@ import { confirmDialog } from '../ui/confirm'
 
 export async function renderKanban(root: HTMLElement, slug: string) {
   let board = await api.kanban.get(slug).catch(() => ({ columns: [], cards: [] } as Board))
-  const save = async () => { await api.kanban.put(slug, board) }
+  const save = async () => { await api.kanban.put(slug, board); refreshSideCount() }
+  // ponytail: sidebar count computed once at renderShell; keep in sync on every board mutation
+  function refreshSideCount() {
+    const n = board.cards.filter(c => !c.archived && c.colId !== 'done').length
+    const item = document.querySelector<HTMLElement>(`.side-item[data-slug="${slug}"]`)
+    if (!item) return
+    item.querySelector('.side-count')?.remove()
+    if (n) item.insertAdjacentHTML('beforeend', `<span class="side-count">${n}</span>`)
+  }
   const PRIO: Record<Prioridade, string> = { low:'low', medium:'medium', high:'high' }
   const showArchived = false
   const P: Record<Prioridade, number> = { low: 0, medium: 1, high: 2 }
