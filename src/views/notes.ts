@@ -3,6 +3,7 @@ import { icon } from '../ui/icons'
 import { openModal } from '../ui/modal'
 import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
+import { linkify } from '../ui/text'
 
 export async function renderNotes(root: HTMLElement, slug: string) {
   let notes = await api.notes.get(slug).catch(() => [] as Nota[])
@@ -23,7 +24,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
     grid.innerHTML = list.map(n => `
       <article class="note-card" data-id="${n.id}">
         <h4>${esc(n.title)}</h4>
-        <div class="note-text">${esc(n.text)}</div>
+        <div class="note-text">${linkify(n.text)}</div>
         <div class="note-date">${fmt(n.ts)}</div>
         <div class="note-actions">
           <button class="btn-icon btn-ghost" data-act="edit" aria-label="Editar">${icon('pencil', 16)}</button>

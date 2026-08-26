@@ -3,6 +3,7 @@ import { icon } from '../ui/icons'
 import { openModal } from '../ui/modal'
 import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
+import { linkify } from '../ui/text'
 
 export async function renderKanban(root: HTMLElement, slug: string) {
   let board = await api.kanban.get(slug).catch(() => ({ columns: [], cards: [] } as Board))
@@ -80,7 +81,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       const prev = board.columns[idx-1]?.id, next = board.columns[idx+1]?.id
       return `<article class="kcard" draggable="true" tabindex="0" data-id="${c.id}">
         <h5>${esc(c.title)}</h5>
-        ${c.description ? `<div class="kdesc">${esc(c.description)}</div>` : ''}
+        ${c.description ? `<div class="kdesc">${linkify(c.description)}</div>` : ''}
         <div class="kfoot">
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
           <div class="kops">

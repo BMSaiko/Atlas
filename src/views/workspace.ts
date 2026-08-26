@@ -4,6 +4,7 @@ import { navigate } from '../router'
 import { renderNotes } from './notes'
 import { renderKanban } from './kanban'
 import { renderSettings } from './settings'
+import { linkify } from '../ui/text'
 
 class NotFound extends Error {}
 const metaOrThrow = async (slug: string): Promise<WorkdirMeta> => {
@@ -17,7 +18,7 @@ export async function renderWorkspace(panel: HTMLElement, slug: string, isSettin
   try { wdm = await metaOrThrow(slug) } catch { panel.innerHTML = `<div class="empty">Workdir não encontrado</div>`; return }
   try { localStorage.setItem('atlas.active', slug) } catch {}
   const header = `<div class="pan-head">
-      <div class="pan-title"><h1>${esc(wdm.name)}</h1><div class="desc">${esc(wdm.description || '')}</div></div>
+      <div class="pan-title"><h1>${esc(wdm.name)}</h1><div class="desc">${linkify(wdm.description || '')}</div></div>
       <div class="spacer"></div>
       <a class="btn btn-ghost" href="/w/${slug}${isSettings ? '' : '/settings'}" data-nav="/w/${slug}${isSettings ? '' : '/settings'}">${icon(isSettings ? 'back' : 'gear', 18)} ${isSettings ? 'Voltar' : 'Definir'}</a>
     </div>`
