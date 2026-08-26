@@ -78,6 +78,9 @@
 
 /* --- Kanban --- */
 .kanban { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:var(--s4); align-items:start; }
+.kanban-toolbar select { padding:8px 10px; border-radius:var(--r1); background:var(--bg-3); border:1px solid var(--line); color:var(--text); font-size:.85rem; }
+.kanban-toolbar select:hover { border-color:var(--gold); }
+.kanban-toolbar .kb-right { margin-left:auto; display:flex; align-items:center; gap:var(--s4); }
 .kcol { background:var(--bg-2); border:1px solid var(--line); border-radius:var(--r2); padding:var(--s3); min-height:140px; transition:background .15s, border-color .15s; }
 .kcol.dragover { background:var(--bg-3); border-color:var(--gold); }
 .kcol h4 { display:flex; justify-content:space-between; align-items:center; font-size:1rem; color:var(--gold); margin-bottom:var(--s3); }

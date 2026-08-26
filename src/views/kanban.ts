@@ -9,13 +9,32 @@ export async function renderKanban(root: HTMLElement, slug: string) {
   const save = async () => { await api.kanban.put(slug, board) }
   const PRIO: Record<Prioridade, string> = { low:'low', medium:'medium', high:'high' }
   const showArchived = false
+  const P: Record<Prioridade, number> = { low: 0, medium: 1, high: 2 }
+  type SortKey = 'pos'|'prio'|'date'|'title'
+  let sortKey: SortKey = (localStorage.getItem(`atlas.kbsort.${slug}`) as SortKey) || 'pos'
+  const cmp = (a: Card, b: Card): number => {
+    if (sortKey === 'prio') return P[b.priority] - P[a.priority]
+    if (sortKey === 'date') return b.ts - a.ts
+    if (sortKey === 'title') return a.title.localeCompare(b.title, 'pt')
+    return 0
+  }
 
   function render() {
     root.innerHTML = `
       <div class="kanban-toolbar" style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
         <button class="btn btn-primary" id="kadd">${icon('plus', 16)} Novo cartão</button>
         <button class="btn btn-ghost" id="karch">${icon('archive', 16)} Arquivados</button>
-        <span class="muted" style="font-size:.85rem">${board.cards.filter(c=>!c.archived).length} cartões</span>
+        <span class="kb-right">
+          <span class="muted" style="font-size:.85rem">${board.cards.filter(c=>!c.archived).length} cartões</span>
+          <label class="muted" style="font-size:.85rem;display:flex;align-items:center;gap:6px">Ordenar
+          <select id="k-sort">
+            <option value="pos" ${sortKey==='pos'?'selected':''}>Posição</option>
+            <option value="prio" ${sortKey==='prio'?'selected':''}>Prioridade</option>
+            <option value="date" ${sortKey==='date'?'selected':''}>Data</option>
+            <option value="title" ${sortKey==='title'?'selected':''}>Título</option>
+          </select>
+        </label>
+        </span>
       </div>
       <div class="kanban" id="kboard">${board.columns.map(col => `
         <section class="kcol" data-col="${col.id}">
@@ -25,6 +44,12 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       </div>`
     bind()
     root.querySelector('#kadd')!.addEventListener('click', () => cardModal(null))
+    root.querySelector('#k-sort')!.addEventListener('change', e => {
+      sortKey = (e.target as HTMLSelectElement).value as SortKey
+      board.cards.sort(cmp)
+      localStorage.setItem(`atlas.kbsort.${slug}`, sortKey)
+      save().then(render)
+    })
     root.querySelector('#karch')!.addEventListener('click', showArchivedModal)
     const boardEl = root.querySelector('#kboard') as HTMLElement
     bindDnd(boardEl)
@@ -34,7 +59,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
   function prioLabel(p: Prioridade) { return p === 'high' ? 'Alta' : p === 'medium' ? 'Média' : 'Baixa' }
 
   function cardsOf(colId: string) {
-    return board.cards.filter(c => c.colId === colId && !c.archived).map(c => {
+    return board.cards.filter(c => c.colId === colId && !c.archived).sort(cmp).map(c => {
       const idx = board.columns.findIndex(x => x.id === c.colId)
       const prev = board.columns[idx-1]?.id, next = board.columns[idx+1]?.id
       return `<article class="kcard" draggable="true" data-id="${c.id}">
