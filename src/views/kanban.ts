@@ -82,9 +82,11 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       return `<article class="kcard" draggable="true" tabindex="0" data-id="${c.id}">
         <h5>${esc(c.title)}</h5>
         ${c.description ? `<div class="kdesc">${linkify(c.description)}</div>` : ''}
+        ${c.result ? `${resultHtml(c.result)}` : ''}
         <div class="kfoot">
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
           <div class="kops">
+            <button class="btn-icon btn-ghost" data-act="run" aria-label="Executar no Hermes">${icon('play', 15)}</button>
             <button class="btn-icon btn-ghost" data-act="move" data-dir="-1" ${prev?'':'disabled'} aria-label="Mover atrás">${icon('back', 15)}</button>
             <button class="btn-icon btn-ghost" data-act="move" data-dir="1" ${next?'':'disabled'} aria-label="Mover frente">${icon('forward', 15)}</button>
             <button class="btn-icon btn-ghost" data-act="edit" aria-label="Editar">${icon('pencil', 15)}</button>
@@ -111,13 +113,25 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       const act = btn.dataset.act
       if (act === 'edit' && c) { cardModal(c); return }
       if (act === 'del' && c) { confirmDialog({ title: 'Eliminar cartão', message: 'Apagar este cartão?' }).then(ok => { if (!ok) return; board.cards = board.cards.filter(x => x.id !== c.id); save().then(render); toast('Eliminado') }); return }
-      if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquivado'); return }
+      if (act === 'run' && c) { runCard(c); return }
+if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquivado'); return }
       if (act === 'move' && c) {
         const dir = parseInt(btn.dataset.dir || '0'); const idx = board.columns.findIndex(x => x.id === c.colId)
         const target = board.columns[idx + dir]; if (!target) return
         c.colId = target.id; save().then(render); return
       }
     })
+  }
+
+  function runCard(c: Card) {
+    toast('A abrir WezTerm com o Hermes...')
+    fetch(`/api/w/${slug}/run`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cardId: c.id }),
+    }).then(r => r.json()).then((d: any) => {
+      if (d && d.ok) { c.colId = 'doing'; save().then(render) }
+      else toast((d && d.error) || 'Erro ao executar')
+    }).catch(() => toast('Falha ao abrir Hermes'))
   }
 
   function bindDnd(boardEl: HTMLElement) {
@@ -177,7 +191,10 @@ export async function renderKanban(root: HTMLElement, slug: string) {
         </div>
         ${c.description
           ? `<div class="kdesc" style="font-size:1rem;white-space:pre-wrap">${esc(c.description)}</div>`
-          : '<div class="muted">Sem descrição</div>'}`
+          : '<div class="muted">Sem descrição</div>'}
+        ${c.result
+          ? `<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--line)"><div class="muted" style="font-size:.8rem;font-weight:600;margin-bottom:6px;color:var(--gold)">Resultado</div>${resultHtml(c.result)}</div>`
+          : ''}`
       ,
       onSubmit: () => cardModal(c),
     })
@@ -200,5 +217,23 @@ export async function renderKanban(root: HTMLElement, slug: string) {
   }
 
   render()
+
+  // ponytail: poll board while any card is in 'doing' so progress/result appears without manual refresh
+  setInterval(async () => {
+    if (!document.getElementById('kboard')) return
+    const hasDoing = board.cards.some(c => !c.archived && c.colId === 'doing')
+    if (!hasDoing) return
+    const fresh = await api.kanban.get(slug).catch(() => null)
+    if (!fresh) return
+    if (JSON.stringify(board) !== JSON.stringify(fresh)) { board = fresh; render() }
+  }, 4000)
 }
+function resultHtml(r: string): string {
+  // ponytail: primeira linha = destaque (ex. 'Task cumprida: ...'); corpo separado
+  const nl = r.indexOf('\n')
+  const title = nl === -1 ? r : r.slice(0, nl)
+  const body = nl === -1 ? '' : r.slice(nl + 1)
+  return `<div class="kresult"><div class="kresult-title">${esc(title)}</div>${body ? `<div class="kresult-body">${esc(deindent(body))}</div>` : ''}</div>`
+}
+function deindent(s: string): string { return s.replace(/^\s+/gm, '').replace(/\n{2,}/g, '\n').trim() }
 function esc(s: string) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }

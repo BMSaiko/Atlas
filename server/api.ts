@@ -1,11 +1,17 @@
 import type { Plugin, Connect } from 'vite'
 import { existsSync, mkdirSync } from 'node:fs'
 import { readFile, writeFile, rm } from 'node:fs/promises'
+import { spawn } from 'node:child_process'
 import { join, normalize, extname, relative, sep } from 'node:path'
 
 const DATA = join(process.cwd(), 'data')
 const SLUG = /^[a-z0-9-]+$/
 const INDEX = 'index.json'
+const WEZTERM = process.env.WEZTERM || 'C:\\Program Files\\WezTerm\\wezterm-gui.exe'
+const VENV_PY = process.env.HERMES_PY || 'C:\\Users\\bruno\\Documents\\hermes-agent\\.venv\\Scripts\\python.exe'
+const HERMES_CWD = process.env.HERMES_CWD || 'C:\\Users\\bruno\\Documents\\hermes-agent'
+const HERMES_HOME = process.env.HERMES_LIVE_HOME || 'C:\\Users\\bruno\\AppData\\Local\\hermes'
+
 
 function initIndex() {
   mkdirSync(DATA, { recursive: true })
@@ -73,6 +79,42 @@ export default function atlasApi(): Plugin {
         if (m === 'DELETE') { await rm(dir, { recursive:true, force:true }); await writeJ(join(DATA, INDEX), idx.filter(w=>w.slug!==slug)); send(200,{ok:true}); return }
       }
       // /api/w/:slug/{notes,kanban,meta}
+      // /api/w/:slug/run -> marca doing + abre wezterm com hermes (tarefa = description)
+      if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'run' && m === 'POST') {
+        const slug = parts[1]
+        const b = (await body(req)) || {}
+        const id = typeof b.cardId === 'string' ? b.cardId : ''
+        const file = join(DATA, slug, 'kanban.json')
+        if (!inside(DATA, file) || !id) { send(400, { error: 'bad request' }); return }
+        const board = await readJ(file)
+        const card = board?.cards?.find((c: any) => c.id === id)
+        if (!card) { send(404, { error: 'card not found' }); return }
+        if (card.colId === 'done' || card.archived) { send(409, { error: 'card done or archived' }); return }
+        card.colId = 'doing'
+        await writeJ(file, board)
+        const prompt = [
+          'Tu es um agente autonomo. Executa o trabalho abaixo do card de kanban e atualiza o estado.',
+          `Workdir: ${slug}`,
+          `Kanban JSON (em disco): ${join(DATA, slug, 'kanban.json')}`,
+          `Kanban API (para updates): http://localhost:5173/api/w/${slug}/kanban`,
+          '',
+          `CARTAO: ${card.title}`,
+          '',
+          'TAREFA:',
+          card.description || '(sem descricao)',
+          '',
+          'REGRAS:',
+          '- A inicios marca o teu card como "doing" (ja feito) e mantem-no ai.',
+          '- Durante o progresso, atualiza o kanban.json/API para refletir o estado real.',
+          '- NUNCA marques o teu card como "done"/concluido. So o BMS conclui apos validar na branch dev.',
+          '- No fim, ATUALIZA o teu card no kanban.json com um campo `result`: um resumo breve do que fizeste. Deixa o card em "doing".',
+        ].join('\n')
+        const p = spawn(WEZTERM, ['start', '--', VENV_PY, '-m', 'hermes_cli.main', '-z', prompt],
+          { cwd: HERMES_CWD, detached: true, stdio: 'ignore', env: { ...process.env, HERMES_HOME } })
+        p.unref()
+        send(200, { ok: true })
+        return
+      }
       if (parts[0] === 'w' && parts.length === 3) {
         const slug = parts[1], kind = parts[2]
         if (!SLUG.test(slug) || !['notes','kanban','meta'].includes(kind)) { send(400,{error:'bad request'}); return }
