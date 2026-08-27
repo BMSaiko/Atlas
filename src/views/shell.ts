@@ -5,6 +5,7 @@ import { toast } from '../ui/toast'
 import { navigate } from '../router'
 import { renderWorkspace } from './workspace'
 import { startClockWidget } from '../ui/clock'
+import { getTheme, setAuto, setManual, Shift } from '../ui/theme'
 import { mountFocus } from '../ui/pomodoro'
 
 const ACTIVE_KEY = 'atlas.active'
@@ -67,24 +68,29 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
 
 const SHIFT_ICON: Record<string, 'sun'|'dusk'|'moon'> = { day: 'sun', dusk: 'dusk', night: 'moon' }
 const SHIFT_LABEL: Record<string, string> = { day: 'Dia', dusk: 'Entardecer', night: 'Noite' }
+// Clicar no indicador cicla Dia -> Entardecer -> Noite -> Automático -> ...
+// Manual fixa o tema; Automático volta a seguir a hora do dia.
+const CYCLE: Array<'day'|'dusk'|'night'|'auto'> = ['day', 'dusk', 'night', 'auto']
 function renderShift() {
   const el = document.getElementById('shift-ind')
   if (!el) return
-  const s = document.documentElement.dataset.shift || 'night'
-  el.innerHTML = icon(SHIFT_ICON[s] || 'moon', 16) + `<span class="shift-label">${SHIFT_LABEL[s] || 'Noite'}</span>`
+  const t = getTheme()
+  const s = t.mode === 'auto' ? document.documentElement.dataset.shift || 'night' : t.shift
+  const auto = t.mode === 'auto'
+  el.innerHTML = icon(SHIFT_ICON[s] || 'moon', 16) +
+    `<span class="shift-label">${SHIFT_LABEL[s] || 'Noite'}</span>` +
+    (auto ? `<span class="shift-mode">auto</span>` : '')
   el.setAttribute('data-shift', s)
-}
-const SHIFT_ORDER: Array<'day'|'dusk'|'night'> = ['day', 'dusk', 'night']
-function nextShift(s: string): 'day'|'dusk'|'night' {
-  const i = SHIFT_ORDER.indexOf(s as 'day'|'dusk'|'night')
-  return SHIFT_ORDER[(i + 1) % SHIFT_ORDER.length]
 }
 function watchShift() {
   renderShift()
   const el = document.getElementById('shift-ind')
   el?.addEventListener('click', () => {
-    const cur = document.documentElement.dataset.shift || 'night'
-    document.documentElement.dataset.shift = nextShift(cur)
+    const t = getTheme()
+    const cur = t.mode === 'auto' ? 'auto' : t.shift
+    const next = CYCLE[(CYCLE.indexOf(cur as any) + 1) % CYCLE.length]
+    if (next === 'auto') setAuto()
+    else setManual(next as Shift)
   })
   const mo = new MutationObserver(renderShift)
   mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-shift'] })

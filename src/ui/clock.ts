@@ -1,5 +1,6 @@
 // Relógio de relojaria — hora real de Portugal continental (Europe/Lisbon).
 // Sem libs: Intl.DateTimeFormat + timeZone. Tabular-nums via CSS.
+import { getTheme, applyTheme } from './theme'
 
 export function startClockWidget(root: HTMLElement) {
   const timeEl = root.querySelector<HTMLElement>('[data-clock="time"]')
@@ -13,10 +14,8 @@ export function startClockWidget(root: HTMLElement) {
     const now = new Date()
     timeEl.textContent = tFmt.format(now)
     if (dateEl) dateEl.textContent = dFmt.format(now)
-    // Hora atual tambem reflete a luminosidade do dia (data-shift)
-    const h = now.getHours()
-    const shift = h >= 7 && h < 17 ? 'day' : h >= 17 && h < 20 ? 'dusk' : 'night'
-    if (document.documentElement.dataset.shift !== shift) document.documentElement.dataset.shift = shift
+    // Em modo auto o tema segue a hora do dia; em manual fica fixo (nao reescreve).
+    if (getTheme().mode === 'auto') applyTheme()
   }
   tick()
   return window.setInterval(tick, 1000)
