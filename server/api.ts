@@ -227,7 +227,7 @@ export default function atlasApi(): Plugin {
         return
       }
       // /api/w/:slug/import-roadmap -> migra tarefas abertas de um roadmap md (notas+cards)
-      if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'import-roadmap' && m === 'POST') {
+      if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'import-roadmap' && m === 'POST') {
         const slug = parts[1]
         const file = join(DATA, slug, 'kanban.json')
         if (!SLUG.test(slug) || !inside(DATA, file)) { send(400, { error: 'bad request' }); return }
