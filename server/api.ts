@@ -3,6 +3,7 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { readFile, writeFile, rm } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { join, normalize, extname, relative, sep } from 'node:path'
+import { parseRoadmap } from './roadmap'
 
 const DATA = join(process.cwd(), 'data')
 const SLUG = /^[a-z0-9-]+$/
@@ -15,6 +16,7 @@ const HERMES_HOME = process.env.HERMES_LIVE_HOME || 'C:\\Users\\bruno\\AppData\\
 const GIT = process.env.GIT_BIN || 'C:\\Program Files\\Git\\bin\\git.exe'
 const ATLAS_REPO = process.env.ATLAS_REPO || 'C:\\Users\\bruno\\Documents\\Second-Brain\\knowledge\\projects\\atlas\\code'
 const WT_ROOT = join(ATLAS_REPO, 'data', '.wt')  // ponytail: worktrees por card -> N cards em paralelo sem colidir no checkout
+const nid = () => Math.random().toString(36).slice(2, 10)  // id curto p/ notas/cards
 
 
 function initIndex() {
@@ -222,6 +224,38 @@ export default function atlasApi(): Plugin {
         await writeJ(file, board)
         await launchHermes(slug, card)
         send(200, { ok: true })
+        return
+      }
+      // /api/w/:slug/import-roadmap -> migra tarefas abertas de um roadmap md (notas+cards)
+      if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'import-roadmap' && m === 'POST') {
+        const slug = parts[1]
+        const file = join(DATA, slug, 'kanban.json')
+        if (!SLUG.test(slug) || !inside(DATA, file)) { send(400, { error: 'bad request' }); return }
+        const b = (await body(req)) || {}
+        const path = typeof b.path === 'string' ? b.path : ''
+        if (!path) { send(400, { error: 'path required' }); return }
+        let md: string
+        try { md = await readFile(path, 'utf8') } catch { send(400, { error: 'ficheiro nao encontrado: ' + path }); return }
+        const tasks = parseRoadmap(md)
+        const board = (await readJ(file)) || { columns: [], cards: [] }
+        const notes = (await readJ(join(DATA, slug, 'notes.json'))) || []
+        if (!board.columns.some((c: any) => c.id === 'todo')) board.columns.unshift({ id: 'todo', name: 'To Do' })
+        const now = Date.now()
+        let addedCards = 0, addedNotes = 0, skipped = 0
+        const titles = new Set(board.cards.map((c: any) => c.title.toLowerCase()))
+        const noteTitles = new Set(notes.map((n: any) => n.title.toLowerCase()))
+        for (const t of tasks) {
+          if (titles.has(t.title.toLowerCase())) { skipped++; continue }
+          board.cards.push({ id: nid(), colId: 'todo', title: t.title, description: t.detail || t.raw, priority: t.priority, ts: now, archived: false })
+          titles.add(t.title.toLowerCase()); addedCards++
+          if (!noteTitles.has(t.title.toLowerCase())) {
+            notes.unshift({ id: nid(), title: t.title, text: 'Origem: roadmap (import).\n\n' + t.raw, ts: now })
+            noteTitles.add(t.title.toLowerCase()); addedNotes++
+          }
+        }
+        await writeJ(file, board)
+        await writeJ(join(DATA, slug, 'notes.json'), notes)
+        send(200, { ok: true, addedCards, addedNotes, skipped, total: tasks.length })
         return
       }
       if (parts[0] === 'w' && parts.length === 3) {

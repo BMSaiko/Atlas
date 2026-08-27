@@ -22,6 +22,7 @@ export const api = {
     get: (slug: string) => j<Nota[]>(`/api/w/${slug}/notes`),
     put: (slug: string, notes: Nota[]) => j<{ ok: boolean }>(`/api/w/${slug}/notes`, 'PUT', notes),
   },
+  importRoadmap: (slug: string, path: string) => j<{ ok: boolean; addedCards: number; addedNotes: number; skipped: number; total: number }>(`/api/w/${slug}/import-roadmap`, 'POST', { path }),
   kanban: {
     get: (slug: string) => j<Board>(`/api/w/${slug}/kanban`),
     put: (slug: string, board: Board) => j<{ ok: boolean }>(`/api/w/${slug}/kanban`, 'PUT', board),

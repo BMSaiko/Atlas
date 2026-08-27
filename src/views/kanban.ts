@@ -47,6 +47,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       <div class="kanban-toolbar" style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
         <button class="btn btn-primary kbdhint" id="kadd" aria-describedby="kadd-tip">${icon('plus', 16)} Novo cartão<span class="kbdhint-tip" id="kadd-tip" role="tooltip">Novo cartão <kbd>Ctrl</kbd>+<kbd>K</kbd></span></button>
         <button class="btn btn-ghost" id="karch">${icon('archive', 16)} Arquivados</button>
+        <button class="btn btn-ghost" id="kimport" title="Importar tarefas de um roadmap (markdown)">${icon('forward', 16)} Importar</button>
         <span class="kb-right">
           <span class="muted" style="font-size:.85rem">${board.cards.filter(c=>!c.archived).length} cartões</span>
           <label class="muted" style="font-size:.85rem;display:flex;align-items:center;gap:6px">Ordenar
@@ -74,6 +75,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       save().then(render)
     })
     root.querySelector('#karch')!.addEventListener('click', showArchivedModal)
+    root.querySelector('#kimport')!.addEventListener('click', importRoadmap)
     const boardEl = root.querySelector('#kboard') as HTMLElement
     boardEl.addEventListener('keydown', e => {
       const tEl = e.target as HTMLElement
@@ -141,6 +143,22 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
         const target = board.columns[idx + dir]; if (!target) return
         c.colId = target.id; save().then(render); return
       }
+    })
+  }
+
+  function importRoadmap() {
+    openModal({
+      title: 'Importar roadmap', submitText: 'Importar',
+      body: () => `<div class="field"><label for="ir-path">Caminho do ficheiro .md</label><input id="ir-path" name="path" placeholder="C:/caminho/TASKS_ROADMAP.md"></div><p class="muted" style="font-size:.8rem;margin-top:6px">Lê o roadmap e cria 1 cartão por tarefa aberta (+ nota com o detalhe). Idempotente: títulos repetidos não duplicam.</p>`,
+      onSubmit: () => {
+        const form = document.querySelector('.modal form') as HTMLFormElement
+        const path = (form.querySelector('[name=path]') as HTMLInputElement).value.trim()
+        if (!path) return
+        api.importRoadmap(slug, path)
+          .then(d => { toast(`Importados ${d.addedCards} cartões + ${d.addedNotes} notas (${d.skipped} já existiam)`); return api.kanban.get(slug) })
+          .then(fresh => { board = fresh; render() })
+          .catch(e => toast('Erro: ' + e.message))
+      },
     })
   }
 
