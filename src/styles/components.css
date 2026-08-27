@@ -31,7 +31,7 @@
 
 /* --- Shift indicator (day/dusk/night) --- */
 .side-head { display:flex; align-items:center; justify-content:space-between; gap:var(--s2); }
-.shift-ind { display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border-radius:999px;
+.shift-ind { display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border-radius:999px; cursor:pointer;
   border:1px solid var(--line); background:var(--bg-2); color:var(--text-dim); font-size:.72rem; font-weight:600;
   text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; transition:color .3s, border-color .3s; }
 .shift-ind:hover { color:var(--text); border-color:var(--gold); }

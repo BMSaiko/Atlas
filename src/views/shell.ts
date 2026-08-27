@@ -65,8 +65,18 @@ function renderShift() {
   el.innerHTML = icon(SHIFT_ICON[s] || 'moon', 16) + `<span class="shift-label">${SHIFT_LABEL[s] || 'Noite'}</span>`
   el.setAttribute('data-shift', s)
 }
+const SHIFT_ORDER: Array<'day'|'dusk'|'night'> = ['day', 'dusk', 'night']
+function nextShift(s: string): 'day'|'dusk'|'night' {
+  const i = SHIFT_ORDER.indexOf(s as 'day'|'dusk'|'night')
+  return SHIFT_ORDER[(i + 1) % SHIFT_ORDER.length]
+}
 function watchShift() {
   renderShift()
+  const el = document.getElementById('shift-ind')
+  el?.addEventListener('click', () => {
+    const cur = document.documentElement.dataset.shift || 'night'
+    document.documentElement.dataset.shift = nextShift(cur)
+  })
   const mo = new MutationObserver(renderShift)
   mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-shift'] })
 }
