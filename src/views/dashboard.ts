@@ -160,10 +160,8 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
       <div class="stat-grid">
         ${stat('Projetos', String(items.length), items.length ? 'mundos criados' : 'sem projetos', 'sphere', 'var(--gold)')}
         ${stat('Notas', String(total.notes), total.notesArch ? `${total.notesArch} arquivadas · ${total.notes - total.notesArch} ativas` : 'nenhuma arquivada', 'note', 'var(--pipe-done)')}
-        ${stat('Cartões em aberto', String(openCards(total)), `${total.todo} por fazer · ${total.review} em review`, 'board', 'var(--pipe-todo)')}
-        ${stat('Em review', String(total.review), 'a aguardar validação', 'forward', 'var(--pipe-review)')}
-        ${stat('Concluídos', String(total.done), total.arch ? `${total.arch} arquivados` : 'nenhum arquivado', 'check', 'var(--pipe-done)')}
-        ${stat('Sessões ativas', String(total.doing), total.doing ? 'terminais a correr' : 'nenhuma a correr', 'aura', 'var(--pipe-doing)')}
+        ${stat('Cartões em aberto', String(openCards(total)), 'a percorrer o céu', 'board', 'var(--pipe-todo)')}
+        ${stat('Concluídos', String(total.done), total.done ? 'estrelas fixas no firmamento' : 'ainda a orbitar', 'check', 'var(--pipe-done)')}
       </div>
 
       <section class="dash-sec">
