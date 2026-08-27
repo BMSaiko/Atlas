@@ -367,6 +367,9 @@ a.link:hover { color:var(--gold-soft); }
 .sess-card { color:var(--text); font-weight:500; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .sess-card:hover { color:var(--gold); }
 .sess-wd { margin-left:auto; color:var(--text-dim); font-size:.74rem; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }
+.sess-count { display:block; color:var(--gold); font-size:.85rem; font-weight:600; margin-bottom:var(--s3); }
+.sess-time { font-variant-numeric:tabular-nums; color:var(--gold-soft); font-size:.82rem; font-family:var(--font-disp); white-space:nowrap; }
+
 .dash-none { display:flex; align-items:center; gap:var(--s2); color:var(--text-dim); border:1px dashed var(--line); border-radius:var(--r2); padding:var(--s4); }
 .dash-none svg { color:var(--gold); }
 @media (prefers-reduced-motion: reduce) {

@@ -60,6 +60,23 @@ function pipeline(total: Tally): string {
     </div>`
 }
 
+function fmtElapsed(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`
+  if (m > 0) return `${m}m ${String(sec).padStart(2, '0')}s`
+  return `${sec}s`
+}
+// ponytail: ticker de 1s atualiza os tempos das sessões ativas sem re-render do dashboard
+setInterval(() => {
+  const now = Date.now()
+  document.querySelectorAll<HTMLElement>('[data-elapsed]').forEach(el => {
+    const start = parseInt(el.dataset.elapsed || '0', 10)
+    if (!start) return
+    el.textContent = fmtElapsed(now - start)
+  })
+}, 1000)
+
 function sessions(rows: Row[]): string {
   const act = rows.flatMap(r => r.board.cards.filter(c => !c.archived && c.colId === 'doing').map(c => ({ wd: r.wd, c })))
   if (!act.length) return `<div class="dash-none">${icon('pause', 16)} Sem sessões ativas — as tarefas em «Em Curso» são terminais a correr.</div>`
@@ -71,6 +88,7 @@ function sessions(rows: Row[]): string {
           <span class="sess-dot" aria-hidden="true"></span>
           ${a.wd.icon ? `<img class="sess-orb" src="/icons/${a.wd.icon}" alt="">` : ''}
           <a class="sess-card" href="/w/${a.wd.slug}" data-nav="/w/${a.wd.slug}">${esc(a.c.title)}</a>
+          <span class="sess-time" data-elapsed="${a.c.startedAt || a.c.ts}">${fmtElapsed(Date.now() - (a.c.startedAt || a.c.ts))}</span>
           <span class="sess-wd">${esc(a.wd.name)}</span>
         </li>`).join('')}
     </ul>`
@@ -79,7 +97,7 @@ function sessions(rows: Row[]): string {
 function projCard(wd: Wd, t: Tally): string {
   const tg = t.todo + t.doing + t.review + t.done
   const doneFrac = tg ? t.done / tg : 0
-  const C = 2 * Math.PI * 20 // r=20 (viewBox 48) -> circunferência para o anel de órbita
+  const C = 2 * Math.PI * 20
   const dash = `${(doneFrac * C).toFixed(1)} ${(C).toFixed(1)}`
   const orb = wd.icon ? `<img class="proj-orb" src="/icons/${wd.icon}" alt="">` : icon('sphere', 26)
   return `
@@ -111,7 +129,7 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
   for (const wd of items) {
     const [notes, board] = await Promise.all([
       api.notes.get(wd.slug).catch(() => [] as Nota[]),
-      api.kanban.get(wd.slug).catch(() => ({ columns: [], cards: [] })),
+      api.kanban.get(wd.slug).catch(() => ({ columns: [], cards: [] } as Row['board'])),
     ])
     rows.push({ wd, notes, board })
   }
@@ -141,8 +159,10 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
 
       <div class="stat-grid">
         ${stat('Projetos', String(items.length), items.length ? 'mundos criados' : 'sem projetos', 'sphere', 'var(--gold)')}
-        ${stat('Notas', String(total.notes), total.notesArch ? `${total.notesArch} arquivadas` : 'nenhuma arquivada', 'note', 'var(--pipe-done)')}
+        ${stat('Notas', String(total.notes), total.notesArch ? `${total.notesArch} arquivadas · ${total.notes - total.notesArch} ativas` : 'nenhuma arquivada', 'note', 'var(--pipe-done)')}
         ${stat('Cartões em aberto', String(openCards(total)), `${total.todo} por fazer · ${total.review} em review`, 'board', 'var(--pipe-todo)')}
+        ${stat('Em review', String(total.review), 'a aguardar validação', 'forward', 'var(--pipe-review)')}
+        ${stat('Concluídos', String(total.done), total.arch ? `${total.arch} arquivados` : 'nenhum arquivado', 'check', 'var(--pipe-done)')}
         ${stat('Sessões ativas', String(total.doing), total.doing ? 'terminais a correr' : 'nenhuma a correr', 'aura', 'var(--pipe-doing)')}
       </div>
 
@@ -165,4 +185,4 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
   panel.querySelectorAll('[data-nav]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); navigate(a.getAttribute('data-nav')!) }))
 }
 
-function esc(s: unknown) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;') }
+function esc(s: unknown) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
