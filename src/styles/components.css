@@ -55,6 +55,13 @@
 .side-item.active .side-count { background:rgba(0,0,0,.16); color:#1a1508; }
 .side-foot { padding: var(--s3); border-top:1px solid var(--line); }
 .btn-block { width:100%; justify-content:center; }
+/* --- Relogio (hora PT, visivel em qualquer workdir) --- */
+.side-clock { padding: var(--s2) var(--s4) var(--s1); text-align:center; }
+.clock-time { font-family: var(--font-disp); font-size:1.55rem; font-weight:600; letter-spacing:.02em;
+  font-variant-numeric: tabular-nums; color: var(--text); line-height:1.1; }
+.clock-sub { display:flex; justify-content:center; align-items:center; gap:4px; margin-top:2px;
+  font-size:.68rem; color: var(--text-dim); text-transform:uppercase; letter-spacing:.06em; }
+.clock-tz { color: var(--gold); font-weight:600; }
 .panel { flex:1; padding: var(--s6) var(--s7); overflow-y:auto; min-width:0; }
 .pan-head { display:flex; align-items:flex-start; gap:var(--s3); border-bottom:1px solid var(--line); padding-bottom:var(--s4); margin-bottom:var(--s5); }
 .pan-title h1 { font-size:1.9rem; font-weight:600; }
