@@ -60,13 +60,6 @@ export async function renderWorkspace(panel: HTMLElement, slug: string, isSettin
   }
   show()
   panel.querySelectorAll('.ws-tab').forEach(t => t.addEventListener('click', () => { tab = t.getAttribute('data-tab') as any; show() }))
-  const content = panel.querySelector('#ws-content') as HTMLElement
-  const show = async () => {
-    panel.querySelectorAll('.ws-tab').forEach(t => t.classList.toggle('active', t.getAttribute('data-tab') === tab))
-    if (tab === 'notes') await renderNotes(content, slug); else await renderKanban(content, slug)
-  }
-  show()
-  panel.querySelectorAll('.ws-tab').forEach(t => t.addEventListener('click', () => { tab = t.getAttribute('data-tab') as any; show() }))
 }
 
 function bindNav(root: HTMLElement) {
