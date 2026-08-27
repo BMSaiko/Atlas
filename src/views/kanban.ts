@@ -264,6 +264,9 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
 
   render()
 
+  // ponytail: pede permissao de notificacao uma vez (default -> request); ignorado se ja decidida
+  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission()
+
   // ponytail: poll board while any card is in 'doing' so progress/result appears without manual refresh
   setInterval(async () => {
     if (!document.getElementById('kboard')) return
@@ -271,7 +274,14 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
     if (!hasDoing) return
     const fresh = await api.kanban.get(slug).catch(() => null)
     if (!fresh) return
-    if (JSON.stringify(board) !== JSON.stringify(fresh)) { board = fresh; render() }
+    if (JSON.stringify(board) !== JSON.stringify(fresh)) {
+      // ponytail: tarefa 'acabou' noutro tab = qualquer card que transita para 'review' -> notifica
+      for (const fc of fresh.cards) {
+        const pc = board.cards.find(c => c.id === fc.id)
+        if (pc && pc.colId !== fc.colId && fc.colId === 'review') notifyCard(fc)
+      }
+      board = fresh; render()
+    }
   }, 4000)
 }
 // ponytail: roda a palavra do doing de 8 em 8s no DOM com fade fluido (sem re-render do board)
@@ -304,6 +314,11 @@ function resultHtml(r: string): string {
   return `<div class="kresult"><div class="kresult-title">${esc(title)}</div>${body ? `<div class="kresult-body">${esc(deindent(body))}</div>` : ''}</div>`
 }
 function deindent(s: string): string { return s.replace(/^\s+/gm, '').replace(/\n{2,}/g, '\n').trim() }
+// ponytail: notificacao de browser quando um card entra em review (agente terminou noutro tab)
+function notifyCard(c: Card) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return
+  try { new Notification(`Atlas · ${c.title}`, { body: 'Tarefa concluída — Review/Revisão' }) } catch { /* ctor ausente */ }
+}
 function fmtDate(ts: number): string {
   return new Date(ts).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
