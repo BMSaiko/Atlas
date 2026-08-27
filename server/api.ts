@@ -183,8 +183,8 @@ async function launchHermes(slug: string, card: any) {
     '    except Exception as e:',
     '\x20\x20\x20\x20\x20\x20\x20\x20print("AUTO-CLEANUP FALHOU: %r - push/merge incompleto. Worktree e branch mantidas p/ inspecao." % (e,))',
     'sys.exit(rc)',
-  ].join('\n').replace('WEZTERM_CLI_PLACEHOLDER', WEZTERM_CLI)
-  const p = spawn(WEZTERM, ['start', '--', VENV_PY, '-c', wrapper.replace('GITBIN', GIT), wt, branch, ATLAS_REPO, prompt],
+  ].join('\n').replaceAll('WEZTERM_CLI_PLACEHOLDER', WEZTERM_CLI)
+  const p = spawn(WEZTERM, ['start', '--', VENV_PY, '-c', wrapper.replaceAll('GITBIN', GIT), wt, branch, ATLAS_REPO, prompt],
     { cwd: wt, detached: true, stdio: 'ignore', env: { ...process.env, HERMES_HOME } })
   p.on('error', e => { void fail('spawn wezterm falhou: ' + e.message) })
   p.unref()
