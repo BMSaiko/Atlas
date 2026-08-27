@@ -19,8 +19,6 @@ export async function renderWorkspace(panel: HTMLElement, slug: string, isSettin
   try { localStorage.setItem('atlas.active', slug) } catch {}
   const header = `<div class="pan-head">
       <div class="pan-title"><h1>${esc(wdm.name)}</h1><div class="desc">${linkify(wdm.description || '')}</div></div>
-      <span class="kbdhint" tabindex="0" aria-describedby="kbdhint-tip"><span class="kbdhint-kbd">${icon('aura', 13)} <kbd>Ctrl</kbd>+<kbd>K</kbd></span>
-        <span class="kbdhint-tip" id="kbdhint-tip" role="tooltip">Criar nota ou cartão no trabalho selecionado — <kbd>Ctrl</kbd>+<kbd>K</kbd></span></span>
       <div class="spacer"></div>
       <a class="btn btn-ghost" href="/w/${slug}${isSettings ? '' : '/settings'}" data-nav="/w/${slug}${isSettings ? '' : '/settings'}">${icon(isSettings ? 'back' : 'gear', 18)} ${isSettings ? 'Voltar' : 'Definir'}</a>
     </div>`

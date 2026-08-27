@@ -39,7 +39,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
   function render() {
     root.innerHTML = `
       <div class="kanban-toolbar" style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
-        <button class="btn btn-primary" id="kadd">${icon('plus', 16)} Novo cartão</button>
+        <button class="btn btn-primary kbdhint" id="kadd" aria-describedby="kadd-tip">${icon('plus', 16)} Novo cartão<span class="kbdhint-tip" id="kadd-tip" role="tooltip">Novo cartão — <kbd>Ctrl</kbd>+<kbd>K</kbd></span></button>
         <button class="btn btn-ghost" id="karch">${icon('archive', 16)} Arquivados</button>
         <span class="kb-right">
           <span class="muted" style="font-size:.85rem">${board.cards.filter(c=>!c.archived).length} cartões</span>
