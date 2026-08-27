@@ -257,6 +257,7 @@ a.link:hover { color:var(--gold-soft); }
 .kresult{margin:6px 2px 4px;padding:6px 8px;border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:6px;font-size:.78rem;color:var(--muted)}
 .kcard.has-output .kresult{background:color-mix(in srgb,var(--gold) 6%, transparent);border-color:var(--gold)}
 .kresult-title{font-weight:400;color:var(--muted);font-size:.95rem;margin-bottom:2px}
+.kcard .kresult-title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .kresult-body{white-space:pre-wrap;max-height:6rem;overflow:hidden;position:relative;padding-top:4px;border-top:1px dashed var(--line)}
 .kresult-body:after{content:'...';position:absolute;right:4px;bottom:2px;background:var(--bg);padding:0 4px;font-weight:700}
 .modal-body .kresult-body{max-height:none;overflow:visible}
