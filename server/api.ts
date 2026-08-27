@@ -184,6 +184,7 @@ async function launchHermes(slug: string, card: any) {
   // Falha: pane fica aberta (Hold) p/ o BMS ver. Merge com conflito: worktree mantido p/ resolver.
   const wrapper = [
     'import subprocess,sys,os,shutil',
+    'subprocess.run([r"WEZTERM_CLI_PLACEHOLDER","cli","set-tab-title",sys.argv[5]],capture_output=True)',
     'wt=sys.argv[1]; branch=sys.argv[2]; base=sys.argv[3]',
     'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[4]])',
     'if rc==0:',
@@ -204,7 +205,7 @@ async function launchHermes(slug: string, card: any) {
     '\x20\x20\x20\x20\x20\x20\x20\x20print("AUTO-CLEANUP FALHOU: %r - push/merge incompleto. Worktree e branch mantidas p/ inspecao." % (e,))',
     'sys.exit(rc)',
   ].join('\n').replaceAll('WEZTERM_CLI_PLACEHOLDER', WEZTERM_CLI)
-  const p = spawn(WEZTERM, ['start', '--', VENV_PY, '-c', wrapper.replaceAll('GITBIN', GIT), wt, branch, ATLAS_REPO, prompt],
+  const p = spawn(WEZTERM, ['start', '--', VENV_PY, '-c', wrapper.replaceAll('GITBIN', GIT), wt, branch, ATLAS_REPO, prompt, card.title],
     { cwd: wt, detached: true, stdio: 'ignore', env: { ...process.env, HERMES_HOME } })
   p.on('error', e => { void fail('spawn wezterm falhou: ' + e.message) })
   p.unref()
