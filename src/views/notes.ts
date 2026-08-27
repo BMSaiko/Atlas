@@ -27,6 +27,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
         <div class="note-text">${linkify(n.text)}</div>
         <div class="note-date">${fmt(n.ts)}</div>
         <div class="note-actions">
+          <button class="btn-icon btn-ghost" data-act="tocanban" title="Converter para cartão" aria-label="Converter para cartão">${icon('board', 16)}</button>
           <button class="btn-icon btn-ghost" data-act="edit" aria-label="Editar">${icon('pencil', 16)}</button>
           <button class="btn-icon btn-ghost" data-act="del" aria-label="Eliminar">${icon('trash', 16)}</button>
         </div>
@@ -47,7 +48,19 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       confirmDialog({ title: 'Eliminar nota', message: 'Apagar esta nota?' }).then(ok => { if (!ok) return; notes = notes.filter(x => x.id !== n.id); save().then(()=>doRender()); toast('Nota eliminada') })
     }
     if (btn.dataset.act === 'edit') noteModal(n)
+    if (btn.dataset.act === 'tocanban') toCard(n)
   })
+
+  function toCard(n: Nota) {
+    api.kanban.get(slug).then(b => {
+      const col = b.columns.find(c => c.id === 'todo' || c.id === 'doing')?.id || b.columns[0]?.id
+      if (!col) { toast('Sem colunas no kanban'); return }
+      b.cards.push({ id: uid(), title: n.title, description: (n.text || '').trim(), priority: 'low', colId: col, ts: Date.now(), archived: false })
+      api.kanban.put(slug, b)
+        .then(() => toast(`Cartão criado: "${n.title}"`))
+        .catch(e => toast('Erro: ' + e.message))
+    }).catch(e => toast('Erro: ' + e.message))
+  }
 
   function noteModal(n: Nota | null) {
     openModal({
