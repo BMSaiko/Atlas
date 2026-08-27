@@ -28,6 +28,18 @@
 .tagline { color:var(--text-dim); margin-top:var(--s2); font-size:1.05rem; }
 .wd-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:var(--s4); margin-top:var(--s6); }
 .hub-actions { margin-top:var(--s6); display:flex; justify-content:center; }
+
+/* --- Shift indicator (day/dusk/night) --- */
+.side-head { display:flex; align-items:center; justify-content:space-between; gap:var(--s2); }
+.shift-ind { display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border-radius:999px;
+  border:1px solid var(--line); background:var(--bg-2); color:var(--text-dim); font-size:.72rem; font-weight:600;
+  text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; transition:color .3s, border-color .3s; }
+.shift-ind:hover { color:var(--text); border-color:var(--gold); }
+.shift-ind svg { flex-shrink:0; }
+.shift-ind[data-shift="day"] { color:var(--gold); }
+.shift-ind[data-shift="dusk"] { color:var(--prio-med); }
+.shift-ind[data-shift="night"] { color:var(--sky); }
+
 /* --- App shell (sidebar + panel) --- */
 .shell { display:flex; min-height:100dvh; }
 .side { width:260px; flex-shrink:0; background:var(--bg-1); border-right:1px solid var(--line); display:flex; flex-direction:column; position:sticky; top:0; height:100dvh; }

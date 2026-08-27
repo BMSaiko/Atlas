@@ -16,6 +16,9 @@ const I = {
   move: '<path d="M8 7l4 5-4 5M14 7l4 5-4 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
   check: '<path d="M5 12l5 5 9-10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   aura: '<ellipse cx="12" cy="17" rx="7" ry="3" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".4"/><path d="M12 2c3 3 3 8 0 12-3-4-3-9 0-12z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+  sun: '<circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M12 2.5V5M12 19v2.5M2.5 12H5M19 12h2.5M5 5l1.8 1.8M17.2 17.2L19 19M19 5l-1.8 1.8M6.8 17.2L5 19" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  dusk: '<circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 18h16M12 4V2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  moon: '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
 }
 export function icon(name: keyof typeof I, size = 20): string {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" aria-hidden="true">${I[name]}</svg>`
