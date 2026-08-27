@@ -53,6 +53,21 @@ async function mergeDevToMain() {
   return { ok: true, out: 'main = dev (fast-forward); push ' + (push.ok ? 'ok' : ('falhou: ' + push.out)) }
 }
 
+// rmJunction: remove SO o junction (nao segue para o target). rmdir elimina um reparse point
+// juncão sem tocar no conteudo do repo base. Previne `rm -r` seguir o junction e apagar o node_modules base.
+function rmJunction(dir: string): Promise<void> {
+  return new Promise((res) => {
+    const c = spawn('cmd', ['/c', 'rmdir', dir], { windowsHide: true })
+    c.on('close', () => res()); c.on('error', () => res())
+  })
+}
+// addJunction: junction partilhado p/ o node_modules do repo base -> SEM npm install por card (cold 45MB x cada).
+function addJunction(dir: string, target: string): Promise<boolean> {
+  return new Promise((res) => {
+    const c = spawn('cmd', ['/c', 'mklink', '/J', dir, target], { windowsHide: true })
+    c.on('close', (code) => res(code === 0)); c.on('error', () => res(false))
+  })
+}
 async function launchHermes(slug: string, card: any) {
   const branch = `feature/${slug}-${card.id}`
   const wt = join(WT_ROOT, slug, card.id)
@@ -65,11 +80,14 @@ async function launchHermes(slug: string, card: any) {
     if (c) { c.result = 'ERRO: ' + msg + ' — clica Correr para tentar de novo.'; await writeJ(ff, board) }
   }
   // ponytail: worktree isolado por card -> varios cards rodam em paralelo sem colidir no mesmo checkout.
-  // -B reseta a branch em re-runs; rmSync limpa worktree orfao.
+  // limpa junction/node_modules ANTES do rm recursivo (senao rm segue o junction e apaga o node_modules base).
   await runGit(['worktree', 'prune'])
+  await rmJunction(join(wt, 'node_modules'))
   await rm(wt, { recursive: true, force: true })
   const addOut = await runGit(['worktree', 'add', '-B', branch, wt, 'dev'])
   if (!addOut.ok) { await fail('git worktree add falhou: ' + addOut.out); return }
+  const linked = await addJunction(join(wt, 'node_modules'), join(ATLAS_REPO, 'node_modules'))
+  if (!linked) { await fail('nao consegui ligar node_modules partilhado (mklink)'); return }
   const prompt = [
     'Tu es um agente autonomo. Executa o trabalho abaixo do card de kanban e atualiza o estado.',
     `Workdir: ${slug}`,
@@ -83,13 +101,14 @@ async function launchHermes(slug: string, card: any) {
     card.description || '(sem descricao)',
     '',
     'GIT WORKFLOW:',
-    `  - Ja estas na branch ${branch} criada a partir de dev (worktree isolada). Nao mudes de branch nem checkout.`,
+    `  - Ja estas na branch ${branch} criada a partir de dev (worktree isolada). NAO mudes de branch, NAO corras git checkout/dev nem git pull.`,
     '  - Trabalha em ./ e a cada passo faz commit local.',
-    '  - So termina depois de tsc --noEmit sem erros e vite build ok.',
-    `  - No fim leva a branch para dev: git checkout dev; git merge ${branch}; git push origin dev.`,
-    '  - NUNCA cometes para main nem merges para main — isso so no approve do Review.',
+    `  - O merge ${branch} -> dev e o push dev sao feitos AUTOMATICAMENTE quando terminares (pelo runner). Nao o facas tu.`,
+    '  - NUNCA cometes para main — main muda so no approve do Review.',
     '',
     'REGRAS:',
+    '- node_modules e PARTILHADO (junction -> repo base). NAO corras npm install / npm ci.',
+    '- So termina depois de tsc --noEmit sem erros e vite build ok (funciona sem install, deps partilhadas).',
     '- A inicios marca o teu card como "doing" (ja feito) e mantem-no ai.',
     '- Durante o progresso, atualiza o kanban.json/API para refletir o estado real.',
     '- NUNCA marques o teu card como "done"/concluido. So o BMS conclui apos validar na branch dev.',
@@ -99,15 +118,29 @@ async function launchHermes(slug: string, card: any) {
   // ponytail: global wezterm.lua forces exit_behavior=Hold; CLI override is unreliable when a GUI is already running.
   // So the task pane closes ITS OWN window: wezterm injects WEZTERM_PANE into the pane env, and
   // `wezterm cli kill-pane` (no --pane-id) targets that env pane. Only the associated terminal closes.
-  // autoclose so em sucesso (rc==0): falha deixa a pane aberta (Hold) para o BMS ver o erro.
-  const autoclose = [
-    'import subprocess,sys',
-    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[1]])',
+  // Em sucesso (rc==0): merge branch->dev + push dev (a partir do repo base, sem conflito de checkout),
+  // remove a junction node_modules (rmdir NAO segue), remove a worktree e a branch -> auto-cleanup do card.
+  // Falha: pane fica aberta (Hold) p/ o BMS ver. Merge com conflito: worktree mantido p/ resolver.
+  const wrapper = [
+    'import subprocess,sys,os,shutil',
+    'wt=sys.argv[1]; branch=sys.argv[2]; base=sys.argv[3]',
+    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[4]])',
     'if rc==0:',
-    '\x20\x20\x20\x20subprocess.run([r"WEZTERM_CLI_PLACEHOLDER","cli","kill-pane"],capture_output=True)',
+    '\x20\x20\x20\x20os.chdir(base)',
+    '\x20\x20\x20\x20mg=subprocess.run([r"GITBIN","merge",branch,"--no-edit"],capture_output=True)',
+    '\x20\x20\x20\x20if mg.returncode==0:',
+    '\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","push","origin","dev"],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20nj=os.path.join(wt,"node_modules")',
+    '\x20\x20\x20\x20\x20\x20\x20\x20try: os.rmdir(nj)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20except OSError: shutil.rmtree(nj,ignore_errors=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","worktree","remove","--force",wt],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","branch","-D",branch],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"WEZTERM_CLI_PLACEHOLDER","cli","kill-pane"],capture_output=True)',
+    '    else:',
+    '\x20\x20\x20\x20\x20\x20\x20\x20print("MERGE dev<-"+branch+" FALHOU (conflito?) — worktree mantido, verifica.")',
     'sys.exit(rc)',
-  ].join('\n')
-  const p = spawn(WEZTERM, ['start', '--', VENV_PY, '-c', autoclose.replace('WEZTERM_CLI_PLACEHOLDER', WEZTERM_CLI), prompt],
+  ].join('\n').replace('WEZTERM_CLI_PLACEHOLDER', WEZTERM_CLI)
+  const p = spawn(WEZTERM, ['start', '--', VENV_PY, '-c', wrapper.replace('GITBIN', GIT), wt, branch, ATLAS_REPO, prompt],
     { cwd: wt, detached: true, stdio: 'ignore', env: { ...process.env, HERMES_HOME } })
   p.on('error', e => { void fail('spawn wezterm falhou: ' + e.message) })
   p.unref()
