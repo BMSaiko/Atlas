@@ -11,6 +11,8 @@ const WEZTERM = process.env.WEZTERM || 'C:\\Program Files\\WezTerm\\wezterm-gui.
 const VENV_PY = process.env.HERMES_PY || 'C:\\Users\\bruno\\Documents\\hermes-agent\\.venv\\Scripts\\python.exe'
 const HERMES_CWD = process.env.HERMES_CWD || 'C:\\Users\\bruno\\Documents\\hermes-agent'
 const HERMES_HOME = process.env.HERMES_LIVE_HOME || 'C:\\Users\\bruno\\AppData\\Local\\hermes'
+const GIT = process.env.GIT_BIN || 'C:\\Program Files\\Git\\bin\\git.exe'
+const ATLAS_REPO = process.env.ATLAS_REPO || 'C:\\Users\\bruno\\Documents\\Second-Brain\\knowledge\\projects\\atlas\\code'
 
 
 function initIndex() {
@@ -26,6 +28,57 @@ function inside(root: string, p: string) {
 }
 function toSlug(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+}
+function runGit(args: string[]): Promise<{ ok: boolean; out: string }> {
+  return new Promise(res => {
+    const c = spawn(GIT, args, { cwd: process.cwd(), windowsHide: true })
+    let out = ''; c.stdout?.on('data', (d: Buffer) => out += d); c.stderr?.on('data', (d: Buffer) => out += d)
+    c.on('error', e => res({ ok: false, out: e.message }))
+    c.on('close', code => res({ ok: code === 0, out: out.trim() }))
+  })
+}
+// ponytail: fast-forward-only merge dev->main (sem checkout -> nao choca com data/ sujo)
+async function mergeDevToMain() {
+  const anc = await runGit(['merge-base', '--is-ancestor', 'main', 'dev'])
+  if (!anc.ok) return { ok: false, out: 'main e dev divergentes — merge manual necessario (dev deveria estar a frente de main)' }
+  const devSha = await runGit(['rev-parse', 'dev'])
+  if (!devSha.ok) return { ok: false, out: 'falha a obter dev' }
+  const upd = await runGit(['update-ref', 'refs/heads/main', devSha.out])
+  if (!upd.ok) return { ok: false, out: 'falha a mover main para dev' }
+  const push = await runGit(['push', 'origin', 'main'])
+  return { ok: true, out: 'main = dev (fast-forward); push ' + (push.ok ? 'ok' : ('falhou: ' + push.out)) }
+}
+
+function launchHermes(slug: string, card: any) {
+  const prompt = [
+    'Tu es um agente autonomo. Executa o trabalho abaixo do card de kanban e atualiza o estado.',
+    `Workdir: ${slug}`,
+    `Kanban JSON (em disco): ${join(DATA, slug, 'kanban.json')}`,
+    `Kanban API (para updates): http://localhost:5173/api/w/${slug}/kanban`,
+    `Repo de codigo (source-tree): ${ATLAS_REPO} — o codigo do Atlas vive ai. Edita SO nesse repo.`,
+    '',
+    `CARTAO: ${card.title}`,
+    '',
+    'TAREFA:',
+    card.description || '(sem descricao)',
+    '',
+    'GIT WORKFLOW:',
+    '  - Parte da branch dev: cria feature/<slug>-<cardId> e checkouts.',
+    '  - Trabalha ai; a cada passo commit local.',
+    '  - So termina depois de tsc --noEmit sem erros e vite build ok.',
+    '  - No fim leva a branch para dev (git checkout dev; git merge feature/...) e push origin dev.',
+    '  - NUNCA cometes para main nem merges para main — isso acontece so no approve do Review.',
+    '',
+    'REGRAS:',
+    '- A inicios marca o teu card como "doing" (ja feito) e mantem-no ai.',
+    '- Durante o progresso, atualiza o kanban.json/API para refletir o estado real.',
+    '- NUNCA marques o teu card como "done"/concluido. So o BMS conclui apos validar na branch dev.',
+    '- Apos concluires, coloca o teu card na coluna "review" (colId "review") no kanban.json — a task executada vai para review final.',
+    '- No fim, ATUALIZA o teu card com um campo `result`: um resumo breve do que fizeste.',
+  ].join('\n')
+  const p = spawn(WEZTERM, ['--config', 'exit_behavior="Close"', 'start', '--', VENV_PY, '-m', 'hermes_cli.main', '-z', prompt],
+    { cwd: ATLAS_REPO, detached: true, stdio: 'ignore', env: { ...process.env, HERMES_HOME } })
+  p.unref()
 }
 function body(req: any) { return new Promise<any>(res => { let d=''; req.on('data', (c: Buffer)=>d+=c); req.on('end', ()=>{ try{res(JSON.parse(d||'null'))}catch{res(null)} }) }) }
 async function readJ(p: string) { try { return JSON.parse(await readFile(p,'utf8')) } catch { return null } }
@@ -57,7 +110,7 @@ export default function atlasApi(): Plugin {
           const d = join(DATA, base); mkdirSync(d, { recursive: true })
           await writeJ(join(d,'meta.json'), { slug: base, name: wd.name, description: wd.description, createdAt: wd.createdAt })
           await writeJ(join(d,'notes.json'), [])
-          await writeJ(join(d,'kanban.json'), { columns:[{id:'todo',name:'To Do'},{id:'doing',name:'Em Curso'},{id:'done',name:'Concluído'}], cards:[] })
+          await writeJ(join(d,'kanban.json'), { columns:[{id:'todo',name:'To Do'},{id:'doing',name:'Em Curso'},{id:'review',name:'Review/Revisão'},{id:'done',name:'Concluído'}], cards:[] })
           send(201, wd); return
         }
       }
@@ -79,6 +132,49 @@ export default function atlasApi(): Plugin {
         if (m === 'DELETE') { await rm(dir, { recursive:true, force:true }); await writeJ(join(DATA, INDEX), idx.filter(w=>w.slug!==slug)); send(200,{ok:true}); return }
       }
       // /api/w/:slug/{notes,kanban,meta}
+      // /api/w/:slug/review/{approve,reject} -> workflow Review (done c/ merge dev->main | refinar+voltar a doing)
+      if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'review' && m === 'POST') {
+        const slug = parts[1], action = parts[3]
+        if (action !== 'approve' && action !== 'reject') { send(400,{error:'bad action'}); return }
+        const b = (await body(req)) || {}
+        const id = typeof b.cardId === 'string' ? b.cardId : ''
+        const file = join(DATA, slug, 'kanban.json')
+        if (!inside(DATA, file) || !id) { send(400, { error: 'bad request' }); return }
+        const board = await readJ(file)
+        const card = board?.cards?.find((c: any) => c.id === id)
+        if (!card) { send(404, { error: 'card not found' }); return }
+        if (card.archived) { send(409, { error: 'card archived' }); return }
+        if (action === 'reject') {
+          const note = typeof b.note === 'string' ? b.note.trim() : ''
+          if (note) {
+            // ponytail: guarda o refinamento como expansa da descricao (prompt original + nota)
+            const now = new Date().toLocaleDateString('pt-PT')
+            card.description = [
+              card.description || '',
+              ``,
+              '*Refinamento pedido (' + now + ')*',
+              note,
+            ].join('\n')
+          }
+          card.colId = 'doing'
+          // ponytail: limpa output/estado anteriores p/ a animacao de 'doing' reaparecer (so mostra se nao tem result)
+          delete card.result
+          delete card.reviewed
+          await writeJ(file, board)
+          launchHermes(slug, card)
+          send(200, { ok: true }); return
+        }
+        // approve -> so de 'review'; merge dev->main antes de done
+        if (card.colId !== 'review') { send(409, { error: 'card not in review' }); return }
+        const mgr = await mergeDevToMain()
+        if (!mgr.ok) { send(500, { error: 'merge dev->main falhou: ' + mgr.out }); return }
+        card.colId = 'done'
+        card.reviewed = true
+        await writeJ(file, board)
+        send(200, { ok: true, merge: mgr.out })
+        return
+      }
+
       // /api/w/:slug/run -> marca doing + abre wezterm com hermes (tarefa = description)
       if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'run' && m === 'POST') {
         const slug = parts[1]
@@ -92,26 +188,7 @@ export default function atlasApi(): Plugin {
         if (card.colId === 'done' || card.archived) { send(409, { error: 'card done or archived' }); return }
         card.colId = 'doing'
         await writeJ(file, board)
-        const prompt = [
-          'Tu es um agente autonomo. Executa o trabalho abaixo do card de kanban e atualiza o estado.',
-          `Workdir: ${slug}`,
-          `Kanban JSON (em disco): ${join(DATA, slug, 'kanban.json')}`,
-          `Kanban API (para updates): http://localhost:5173/api/w/${slug}/kanban`,
-          '',
-          `CARTAO: ${card.title}`,
-          '',
-          'TAREFA:',
-          card.description || '(sem descricao)',
-          '',
-          'REGRAS:',
-          '- A inicios marca o teu card como "doing" (ja feito) e mantem-no ai.',
-          '- Durante o progresso, atualiza o kanban.json/API para refletir o estado real.',
-          '- NUNCA marques o teu card como "done"/concluido. So o BMS conclui apos validar na branch dev.',
-          '- No fim, ATUALIZA o teu card no kanban.json com um campo `result`: um resumo breve do que fizeste. Deixa o card em "doing".',
-        ].join('\n')
-        const p = spawn(WEZTERM, ['start', '--', VENV_PY, '-m', 'hermes_cli.main', '-z', prompt],
-          { cwd: HERMES_CWD, detached: true, stdio: 'ignore', env: { ...process.env, HERMES_HOME } })
-        p.unref()
+        launchHermes(slug, card)
         send(200, { ok: true })
         return
       }

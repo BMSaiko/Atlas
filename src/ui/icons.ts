@@ -14,6 +14,7 @@ const I = {
   back: '<path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
   move: '<path d="M8 7l4 5-4 5M14 7l4 5-4 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+  check: '<path d="M5 12l5 5 9-10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   aura: '<ellipse cx="12" cy="17" rx="7" ry="3" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".4"/><path d="M12 2c3 3 3 8 0 12-3-4-3-9 0-12z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
 }
 export function icon(name: keyof typeof I, size = 20): string {

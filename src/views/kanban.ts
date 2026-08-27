@@ -28,6 +28,14 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     return 0
   }
 
+  // ponytail: a coluna Review/Revisao deve existir em todos os kanban -> garante no load
+  if (!board.columns.some(c => c.id === 'review')) {
+    const doneIdx = board.columns.findIndex(c => c.id === 'done')
+    const reviewIdx = doneIdx === -1 ? board.columns.length : doneIdx
+    board.columns.splice(reviewIdx, 0, { id: 'review', name: 'Review/Revisão' })
+    save().then(() => {})
+  }
+
   function render() {
     root.innerHTML = `
       <div class="kanban-toolbar" style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
@@ -79,11 +87,15 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     return board.cards.filter(c => c.colId === colId && !c.archived).sort(cmp).map(c => {
       const idx = board.columns.findIndex(x => x.id === c.colId)
       const prev = board.columns[idx-1]?.id, next = board.columns[idx+1]?.id
-      return `<article class="kcard" draggable="true" tabindex="0" data-id="${c.id}">
+      return `<article class="kcard${c.result ? ' has-output' : ''}" draggable="true" tabindex="0" data-id="${c.id}">
         <div class="ktitle"><h5>${esc(c.title)}</h5><span class="kdate">${fmtDate(c.ts)}</span></div>
         ${c.description ? `<div class="kdesc">${linkify(c.description)}</div>` : ''}
         ${c.colId === 'doing' && !c.result ? kdoing() : ''}
         ${c.result ? `${resultHtml(c.result)}` : ''}
+        ${c.colId === 'review' ? `<div class="kreview">
+          <button class="btn btn-primary btn-sm" data-act="approve">${icon('check', 14)} Aprovar</button>
+          <button class="btn btn-ghost btn-sm" data-act="reject">${icon('pencil', 14)} Refinar</button>
+        </div>` : ''}
         <div class="kfoot">
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
           <div class="kops">
@@ -116,6 +128,8 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       if (act === 'del' && c) { confirmDialog({ title: 'Eliminar cartão', message: 'Apagar este cartão?' }).then(ok => { if (!ok) return; board.cards = board.cards.filter(x => x.id !== c.id); save().then(render); toast('Eliminado') }); return }
       if (act === 'run' && c) { runCard(c); return }
 if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquivado'); return }
+      if (act === 'approve' && c) { approveCard(c); return }
+      if (act === 'reject' && c) { rejectCard(c); return }
       if (act === 'move' && c) {
         const dir = parseInt(btn.dataset.dir || '0'); const idx = board.columns.findIndex(x => x.id === c.colId)
         const target = board.columns[idx + dir]; if (!target) return
@@ -133,6 +147,30 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
       if (d && d.ok) { c.colId = 'doing'; save().then(render) }
       else toast((d && d.error) || 'Erro ao executar')
     }).catch(() => toast('Falha ao abrir Hermes'))
+  }
+
+  function approveCard(c: Card) {
+    confirmDialog({ title: 'Aprovar e concluir', message: 'Validar na branch dev, marcar como concluído e fazer merge dev → main?' })
+      .then(ok => { if (!ok) return
+        api.review.approve(slug, c.id).then(d => {
+          c.colId = 'done'; c.reviewed = true
+          save().then(render)
+          toast(d.merge ? `Concluído (${d.merge})` : 'Concluído')
+        }).catch(e => toast('Erro: ' + e.message))
+      })
+  }
+  function rejectCard(c: Card) {
+    openModal({
+      title: 'Refinar tarefa', submitText: 'Enviar para Em Curso',
+      body: () => `<div class="field"><label>Nota de revisão (o que ajustar — será anexado à tarefa)</label><textarea id="r-note" placeholder="Ex.: o resultado está aproximado, refina o prompt para..."></textarea></div>`,
+      onSubmit: () => {
+        const note = (document.querySelector('#r-note') as HTMLTextAreaElement)?.value || ''
+        api.review.reject(slug, c.id, note).then(d => {
+          // server já appends a nota à descrição; re-fetch p/ não gravar descricao obsoleta
+          return api.kanban.get(slug).then(fresh => { board = fresh; render(); toast('Voltou para Em Curso') })
+        }).catch(e => toast('Erro: ' + e.message))
+      },
+    })
   }
 
   function bindDnd(boardEl: HTMLElement) {

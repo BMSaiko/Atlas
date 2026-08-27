@@ -8,6 +8,7 @@
 .btn-ghost { background:transparent; border-color:transparent; color:var(--text-dim); }
 .btn-ghost:hover { background:var(--bg-3); color:var(--text); }
 .btn-icon { padding:8px; min-height:44px; min-width:44px; justify-content:center; }
+.btn-sm { padding:6px 10px; min-height:0; font-size:.8rem; border-radius:6px; }
 
 /* --- Cards (hub) --- */
 .wd-card { position:relative; background:var(--bg-2); border:1px solid var(--line); border-radius:var(--r3); padding:20px; display:flex; flex-direction:column; gap:8px; transition:border-color .2s, transform .15s, opacity .2s, filter .2s; overflow:hidden; }
@@ -85,7 +86,7 @@
 .kcol.dragover { background:var(--bg-3); border-color:var(--gold); }
 .kcol h4 { display:flex; justify-content:space-between; align-items:center; font-size:1rem; color:var(--gold); margin-bottom:var(--s3); }
 .kcards { display:flex; flex-direction:column; gap:var(--s3); }
-.kcard { background:var(--bg-3); border:1px solid var(--line); border-radius:var(--r2); padding:12px; cursor:grab; transition:box-shadow .15s, transform .15s, opacity .3s; }
+.kcard { background:var(--bg-3); border:1px solid var(--line); border-radius:var(--r2); padding:10px; cursor:grab; transition:box-shadow .15s, transform .15s, opacity .3s; }
 .kcard:active { cursor:grabbing; }
 .kcard.dragging { opacity:.4; }
 .kcard:hover { border-color:var(--gold); }
@@ -93,9 +94,16 @@
 .kcard .ktitle h5 { margin:0; font-size:.98rem; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .kcard .kdate { font-size:.7rem; color:var(--text-dim); white-space:nowrap; }
 .kops [data-act="run"] { background:color-mix(in srgb,var(--gold) 14%, transparent); color:var(--gold); }
-.kcard .kdesc { color:var(--text-dim); font-size:.85rem; white-space:pre-wrap; margin-bottom:8px; }
-.kcard .kfoot { display:flex; align-items:center; gap:6px; }
+/* Conteudo do card limitado a 3 linhas -> altura uniforme; texto completo via clique (modal) */
+.kcard .kdesc { color:var(--text-dim); font-size:.85rem; white-space:pre-wrap; margin-bottom:8px;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+/* Variante de output (tem result): mostra bloco do resultado, conteudo continua clampado */
+.kcard.has-output .kdesc { -webkit-line-clamp:2; }
+.kcard .kfoot { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .kcard .kops { margin-left:auto; display:flex; gap:2px; }
+/* Botões compactos: cabem na largura reduzida do card sem sair para fora */
+.kcard .btn-icon { min-height:34px; min-width:34px; padding:6px; }
+.kcard .kops svg { width:14px; height:14px; }
 .kcard.archived { opacity:.5; filter:grayscale(.6); }
 .prio { display:inline-flex; align-items:center; gap:6px; font-size:.72rem; font-weight:600; letter-spacing:.03em; text-transform:uppercase; }
 .prio .dot { width:8px; height:8px; border-radius:50%; }
@@ -144,6 +152,12 @@
 a.link { color:var(--gold); text-decoration:underline; text-underline-offset:2px; word-break:break-all; }
 a.link:hover { color:var(--gold-soft); }
 
+/* --- Review / Revisão --- */
+.kreview { display:flex; gap:8px; align-items:center; margin:8px 0 4px; padding:8px 8px 2px; border-top:1px dashed var(--line); flex-wrap:wrap; }
+.kreview:before { content:'REVISAO'; font-size:.62rem; font-weight:600; letter-spacing:.08em; color:var(--gold);
+  border:1px solid var(--gold); border-radius:4px; padding:1px 5px; margin-right:4px; }
+.kcard .kfoot { margin-top:6px; }
+
 .kdoing{display:inline-flex;align-items:center;gap:4px;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--gold);margin:8px 0 6px 2px}
 .kword{display:inline-block;white-space:nowrap}
 .kdot{width:4px;height:4px;border-radius:50%;background:var(--gold);animation:kdblink 1.2s infinite;animation-delay:calc(var(--i) * .2s)}
@@ -152,6 +166,7 @@ a.link:hover { color:var(--gold-soft); }
 @keyframes kfade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion: reduce){.kdoing .kdot{animation:none;opacity:.5}.kfade{animation:none}}
 .kresult{margin:6px 2px 4px;padding:6px 8px;border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:6px;font-size:.78rem;color:var(--muted)}
+.kcard.has-output .kresult{background:color-mix(in srgb,var(--gold) 6%, transparent);border-color:var(--gold)}
 .kresult-title{font-weight:400;color:var(--muted);font-size:.95rem;margin-bottom:2px}
 .kresult-body{white-space:pre-wrap;max-height:6rem;overflow:hidden;position:relative;padding-top:4px;border-top:1px dashed var(--line)}
 .kresult-body:after{content:'...';position:absolute;right:4px;bottom:2px;background:var(--bg);padding:0 4px;font-weight:700}

@@ -1,6 +1,6 @@
 export type Prioridade = 'low' | 'medium' | 'high'
 export interface Nota { id: string; title: string; text: string; ts: number }
-export interface Card { id: string; colId: string; title: string; description: string; priority: Prioridade; ts: number; archived: boolean; result?: string }
+export interface Card { id: string; colId: string; title: string; description: string; priority: Prioridade; ts: number; archived: boolean; result?: string; reviewed?: boolean }
 export interface Coluna { id: string; name: string }
 export interface Board { columns: Coluna[]; cards: Card[] }
 export interface Workdir { slug: string; name: string; description?: string; createdAt: number }
@@ -25,6 +25,10 @@ export const api = {
   kanban: {
     get: (slug: string) => j<Board>(`/api/w/${slug}/kanban`),
     put: (slug: string, board: Board) => j<{ ok: boolean }>(`/api/w/${slug}/kanban`, 'PUT', board),
+  },
+  review: {
+    approve: (slug: string, cardId: string) => j<{ ok: boolean; merge?: string }>(`/api/w/${slug}/review/approve`, 'POST', { cardId }),
+    reject: (slug: string, cardId: string, note: string) => j<{ ok: boolean }>(`/api/w/${slug}/review/reject`, 'POST', { cardId, note }),
   },
 }
 export const uid = () => Math.random().toString(36).slice(2, 10)
