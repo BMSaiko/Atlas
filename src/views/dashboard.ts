@@ -45,7 +45,7 @@ function pipeline(total: Tally): string {
     </span>`).join('')
   return `
     <div class="pipe">
-      <div class="pipe-bar">${bar}</div>
+      <div class="pipe-track">${bar}</div>
       <div class="pipe-cols">${cells}
         <span class="pipe-cell pipe-arch"><span class="pipe-n">${total.arch}</span><span class="pipe-l">Arquivados</span></span>
       </div>
@@ -77,10 +77,10 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
   }
   const { total, byWd } = tally(rows)
 
-  const stat = (label: string, val: string, sub: string, ico: Parameters<typeof icon>[0]) => `
+  const stat = (label: string, val: string, sub: string, ico: Parameters<typeof icon>[0], hue?: string) => `
     <div class="stat">
-      <div class="stat-ico">${icon(ico, 18)}</div>
-      <div class="stat-body"><div class="stat-val">${val}</div><div class="stat-lbl">${label}</div><div class="stat-sub">${sub}</div></div>
+      <div class="stat-ico" style="${hue ? `color:${hue};border-color:color-mix(in srgb,${hue} 45%,transparent);background:color-mix(in srgb,${hue} 13%,transparent)` : ''}">${icon(ico, 18)}</div>
+      <div class="stat-body"><div class="stat-val" style="${hue ? `color:${hue}` : ''}">${val}</div><div class="stat-lbl">${label}</div><div class="stat-sub">${sub}</div></div>
     </div>`
 
   const projCards = items.map(wd => {
@@ -104,18 +104,22 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
   panel.innerHTML = `
     <div class="dash">
       <header class="dash-head">
-        <h1>Visão Geral</h1>
-        <p class="dash-sub">O cosmos do Atlas — todos os mundos, num só olhar.</p>
+        <div class="orb-rings" aria-hidden="true"><span class="ring ring-a"></span><span class="ring ring-b"></span></div>
+        <div class="dash-head-title">
+          <span class="dash-kicker">${icon('sphere', 13)} Atlas</span>
+          <h1>Visão Geral</h1>
+          <p class="dash-sub">O cosmos do Atlas — todos os mundos, num só olhar.</p>
+        </div>
         <div class="dash-actions">
           <a class="btn btn-ghost" href="/w/${items[0]?.slug || ''}">${icon('sphere', 16)} Ir para o mundo ativo</a>
         </div>
       </header>
 
       <div class="stat-grid">
-        ${stat('Projetos', String(items.length), items.length ? 'mundos criados' : 'sem projetos', 'sphere')}
-        ${stat('Notas', String(total.notes), total.notesArch ? `${total.notesArch} arquivadas` : 'nenhuma arquivada', 'note')}
-        ${stat('Cartões em aberto', String(openCards(total)), `${total.todo} todo · ${total.doing} a decorrer`, 'board')}
-        ${stat('Sessões ativas', String(total.doing), total.doing ? 'terminais a correr' : 'nenhuma a correr', 'aura')}
+    ${stat('Projetos', String(items.length), items.length ? 'mundos criados' : 'sem projetos', 'sphere', 'var(--gold)')}
+    ${stat('Notas', String(total.notes), total.notesArch ? `${total.notesArch} arquivadas` : 'nenhuma arquivada', 'note', 'var(--pipe-done)')}
+    ${stat('Cartões em aberto', String(openCards(total)), `${total.todo} todo · ${total.doing} a decorrer`, 'board', 'var(--pipe-todo)')}
+    ${stat('Sessões ativas', String(total.doing), total.doing ? 'terminais a correr' : 'nenhuma a correr', 'aura', 'var(--pipe-doing)')}
       </div>
 
       <section class="dash-sec">
