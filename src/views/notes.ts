@@ -37,6 +37,10 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       (showArch ? n.archived : !n.archived) &&
       (!q || n.title.toLowerCase().includes(q) || n.text.toLowerCase().includes(q))
     ).sort((a, b) => b.ts - a.ts)
+    const badge = document.getElementById('narchcount')
+    if (badge) badge.textContent = String(showArch ? notes.filter(n => !n.archived).length : notes.filter(n => n.archived).length)
+    // ponytail: badge acima do early-return — arquivar a ultima nota ativa esvazia a grid e
+    // return cedo deixava a contagem desatualizada (DI). Contagem atualiza sempre.
     if (list.length === 0) { grid.innerHTML = `<div class="empty">${showArch ? 'Sem notas arquivadas.' : notes.length === 0 ? 'Sem notas ainda. Cria a primeira.' : 'Sem resultados.'}</div>`; return }
     const unhide = (print: string) => `<span class="note-arch">${print}</span>`
     grid.innerHTML = list.map(n => `
@@ -51,8 +55,6 @@ export async function renderNotes(root: HTMLElement, slug: string) {
           <button class="btn-icon btn-ghost" data-act="del" aria-label="Eliminar">${icon('trash', 16)}</button>
         </div>
       </article>`).join('')
-    const badge = document.getElementById('narchcount')
-    if (badge) badge.textContent = String(showArch ? notes.filter(n => !n.archived).length : notes.filter(n => n.archived).length)
   }
   doRender()
 
