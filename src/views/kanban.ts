@@ -3,13 +3,12 @@ import { icon } from '../ui/icons'
 import { openModal } from '../ui/modal'
 import { refreshTabCounts } from '../ui/counts'
 import { toast } from '../ui/toast'
-import { notify as notifyBrowser } from '../ui/notifs'
 import { confirmDialog } from '../ui/confirm'
 import { linkify } from '../ui/text'
 
-// ponytail: handle unico do poll — renderKanban re-corre em cada navegacao e criava
-// um setInterval novo por chamada => intervals acumulados disparavam notifyCard
-// varias vezes quando um card entrava em review. Limpa o anterior antes de criar.
+// ponytail: handle unico do poll — renderKanban re-corre em cada navegacao e criava um
+// setInterval novo por chamada. Limpa o anterior antes de criar. O poll so faz refresh
+// ao vivo do board; as notificacoes de review sao globais (main.ts), não dependem do poll.
 let pollTimer: ReturnType<typeof setInterval> | undefined
 
 export async function renderKanban(root: HTMLElement, slug: string) {
@@ -310,11 +309,6 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
     const fresh = await api.kanban.get(slug).catch(() => null)
     if (!fresh) return
     if (JSON.stringify(board) !== JSON.stringify(fresh)) {
-      // ponytail: tarefa 'acabou' noutro tab = qualquer card que transita para 'review' -> notifica
-      for (const fc of fresh.cards) {
-        const pc = board.cards.find(c => c.id === fc.id)
-        if (pc && pc.colId !== fc.colId && fc.colId === 'review') notifyCard(fc)
-      }
       board = fresh; render()
     }
   }, 4000)
@@ -359,10 +353,6 @@ function resultHtml(r: string): string {
   return `<div class="kresult"><div class="kresult-title">${esc(title)}</div>${body ? `<div class="kresult-body">${esc(deindent(body))}</div>` : ''}</div>`
 }
 function deindent(s: string): string { return s.replace(/^\s+/gm, '').replace(/\n{2,}/g, '\n').trim() }
-// ponytail: notificacao de browser quando um card entra em review (agente terminou noutro tab)
-function notifyCard(c: Card) {
-  notifyBrowser(`Atlas · ${c.title}`, 'Tarefa concluída — Review/Revisão')
-}
 function fmtElapsed(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000))
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60
