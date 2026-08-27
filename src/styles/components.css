@@ -95,6 +95,8 @@
 .note-card .note-text { color:var(--text); font-size:.92rem; white-space:pre-wrap; }
 .note-actions { display:flex; gap:4px; margin-top:auto; justify-content:flex-end; }
 .note-date { color:var(--text-dim); font-size:.78rem; }
+.note-card.archived { opacity:.55; border-style:dashed; }
+.note-date .note-arch { margin-right:6px; color:var(--gold); font-weight:600; text-transform:uppercase; font-size:.68rem; letter-spacing:.04em; }
 
 /* --- Kanban --- */
 .kanban { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:var(--s4); align-items:start; }
