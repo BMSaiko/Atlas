@@ -6,6 +6,7 @@ import { navigate } from '../router'
 import { renderWorkspace } from './workspace'
 import { startClockWidget } from '../ui/clock'
 import { getTheme, setManual, autoShift, Shift } from '../ui/theme'
+import { TZ_LIST, getTz, setTz } from '../ui/timezones'
 import { mountFocus } from '../ui/pomodoro'
 
 const ACTIVE_KEY = 'atlas.active'
@@ -40,7 +41,8 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
         </nav>
         <div class="side-clock" id="clock">
           <div class="clock-time" data-clock="time">--:--:--</div>
-          <div class="clock-sub"><span class="clock-date" data-clock="date"></span> · <span class="clock-tz">PT</span></div>
+          <div class="clock-sub"><span class="clock-date" data-clock="date"></span> · <span class="clock-tz" data-clock="tz" id="clock-tz" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-label="Fuso horário">PT</span></div>
+          <div class="tz-pop" id="tz-pop" hidden><label for="tz-select">Fuso horário</label><select id="tz-select" aria-label="Escolher fuso horário"></select></div>
         </div>
         <div class="side-focus" id="foco"></div>
         <div class="side-foot"><button class="btn btn-primary btn-block" id="side-new">${icon('plus', 16)} Novo workdir</button></div>
@@ -63,6 +65,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
   bindKeydown()
   watchShift()
   startClockWidget(shell)
+  bindClockTz(shell)
   mountFocus(root.querySelector('#foco') as HTMLElement)
 }
 
@@ -190,4 +193,20 @@ function newWorkdir() {
     },
   })
 }
+function bindClockTz(shell: HTMLElement) {
+  const btn = shell.querySelector('#clock-tz') as HTMLElement | null
+  const pop = shell.querySelector('#tz-pop') as HTMLElement | null
+  const sel = pop?.querySelector('select') as HTMLSelectElement | null
+  if (!btn || !pop || !sel) return
+  sel.innerHTML = TZ_LIST.map(z => `<option value="${z.id}"${z.id === getTz().id ? ' selected' : ''}>${z.label}</option>`).join('')
+  const open = () => { pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); sel.focus() }
+  const close = () => { pop.hidden = true; btn.setAttribute('aria-expanded', 'false') }
+  btn.addEventListener('click', () => pop.hidden ? open() : close())
+  btn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pop.hidden ? open() : close() } })
+  sel.addEventListener('change', () => { setTz(sel.value); close(); toast(`Fuso horário: ${getTz().label}`) })
+  // Fora do relógio fecha o seletor. Listeners presos ao shell (re-criado a cada render) — sem acumulação.
+  shell.addEventListener('click', e => { if (!pop.hidden && e.target !== btn && !pop.contains(e.target as Node)) close() })
+  shell.addEventListener('keydown', e => { if (!pop.hidden && e.key === 'Escape') close() })
+}
+
 function esc(s: unknown) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }

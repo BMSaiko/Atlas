@@ -106,13 +106,21 @@
   .foco-ring .arc { transition:none }
 }
 
-/* --- Relogio (hora PT, visivel em qualquer workdir) --- */
-.side-clock { padding: var(--s2) var(--s4) var(--s1); text-align:center; }
+/* --- Relogio global (fuso selecionavel — clicar no badge abre o seletor) --- */
+.side-clock { position:relative; padding: var(--s2) var(--s4) var(--s1); text-align:center; }
 .clock-time { font-family: var(--font-disp); font-size:1.55rem; font-weight:600; letter-spacing:.02em;
   font-variant-numeric: tabular-nums; color: var(--text); line-height:1.1; }
 .clock-sub { display:flex; justify-content:center; align-items:center; gap:4px; margin-top:2px;
   font-size:.68rem; color: var(--text-dim); text-transform:uppercase; letter-spacing:.06em; }
-.clock-tz { color: var(--gold); font-weight:600; }
+.clock-tz { color: var(--gold); font-weight:600; cursor:pointer; border-bottom:1px dotted currentColor; transition:color .2s, border-color .2s; }
+.clock-tz:hover { color: var(--gold-soft); border-color: var(--gold-soft); }
+.clock-tz:focus-visible { outline:2px solid var(--focus); outline-offset:2px; border-radius:3px; }
+.tz-pop { position:absolute; left:50%; bottom:calc(100% + 8px); transform:translateX(-50%); width:200px;
+  background:var(--bg-3); border:1px solid var(--line); border-radius:var(--r2); padding:var(--s3);
+  box-shadow:0 8px 30px rgba(0,0,0,.5); z-index:50; text-align:left; }
+.tz-pop label { display:block; font-size:.68rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); margin-bottom:6px; }
+.tz-pop select { width:100%; padding:8px 10px; border-radius:var(--r1); background:var(--bg-2); border:1px solid var(--line); color:var(--text); }
+.tz-pop select:hover { border-color:var(--gold); }
 .panel { flex:1; padding: var(--s6) var(--s7); overflow-y:auto; min-width:0; }
 .pan-head { display:flex; align-items:flex-start; gap:var(--s3); border-bottom:1px solid var(--line); padding-bottom:var(--s4); margin-bottom:var(--s5); }
 .pan-title h1 { font-size:1.9rem; font-weight:600; }
