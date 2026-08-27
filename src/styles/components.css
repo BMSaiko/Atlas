@@ -55,6 +55,28 @@
 .side-item.active .side-count { background:rgba(0,0,0,.16); color:#1a1508; }
 .side-foot { padding: var(--s3); border-top:1px solid var(--line); }
 .btn-block { width:100%; justify-content:center; }
+
+/* --- Pomodoro / Cronómetro (widget de foco no sidebar) --- */
+.side-pomo { padding: var(--s1) var(--s4) var(--s2); }
+.pomo { background:var(--bg-2); border:1px solid var(--line); border-radius:var(--r2); padding:var(--s3);
+  display:flex; flex-direction:column; gap:8px; }
+.pomo-head { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+.pomo-title { display:inline-flex; align-items:center; gap:5px; font-size:.68rem; font-weight:600;
+  text-transform:uppercase; letter-spacing:.05em; color:var(--gold); }
+.pomo-seg { display:flex; gap:2px; background:var(--bg-3); border-radius:999px; padding:2px; }
+.pomo-seg-btn { border:none; background:none; color:var(--text-dim); font-size:.66rem; font-weight:600;
+  padding:3px 8px; border-radius:999px; cursor:pointer; min-height:24px; transition:background .15s,color .15s; }
+.pomo-seg-btn.active { background:var(--gold); color:#1a1508; }
+.pomo-seg-btn:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+.pomo-display { font-family:var(--font-disp); font-size:1.7rem; font-weight:600; text-align:center;
+  font-variant-numeric:tabular-nums; color:var(--text); line-height:1; letter-spacing:.02em; }
+.pomo-sub { text-align:center; font-size:.66rem; color:var(--text-dim); text-transform:uppercase;
+  letter-spacing:.06em; min-height:1.1em; }
+.pomo-ctrl { display:flex; align-items:center; justify-content:center; gap:6px; }
+.pomo-ctrl .btn-primary { flex:1; justify-content:center; }
+.pomo-ctrl .btn-icon { min-height:34px; min-width:34px; padding:6px; }
+.pomo-ctrl .btn-icon svg { width:15px; height:15px; }
+
 /* --- Relogio (hora PT, visivel em qualquer workdir) --- */
 .side-clock { padding: var(--s2) var(--s4) var(--s1); text-align:center; }
 .clock-time { font-family: var(--font-disp); font-size:1.55rem; font-weight:600; letter-spacing:.02em;

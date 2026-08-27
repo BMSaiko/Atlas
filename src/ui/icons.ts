@@ -19,6 +19,10 @@ const I = {
   sun: '<circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M12 2.5V5M12 19v2.5M2.5 12H5M19 12h2.5M5 5l1.8 1.8M17.2 17.2L19 19M19 5l-1.8 1.8M6.8 17.2L5 19" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
   dusk: '<circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 18h16M12 4V2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
   moon: '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+  timer: '<circle cx="12" cy="13" r="7.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M12 9.5V13l2.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M9 4h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  pause: '<path d="M9 6v12M15 6v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  reset: '<path d="M4 12a8 8 0 1 1 2.3 5.6M4 12v4m0 0h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  leaf: '<path d="M20 4c-8 0-14 5-14 10a11 11 0 0 0 12 0 8 8 0 0 0 7-7l2-1-1 1-1 3c-1 4-4 6-8 6l2 2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
 }
 export function icon(name: keyof typeof I, size = 20): string {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" aria-hidden="true">${I[name]}</svg>`

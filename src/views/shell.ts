@@ -5,6 +5,7 @@ import { toast } from '../ui/toast'
 import { navigate } from '../router'
 import { renderWorkspace } from './workspace'
 import { startClockWidget } from '../ui/clock'
+import { pomoMount } from '../ui/pomodoro'
 
 const ACTIVE_KEY = 'atlas.active'
 const active = () => { try { return localStorage.getItem(ACTIVE_KEY) || '' } catch { return '' } }
@@ -35,6 +36,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
             <span class="side-label">${esc(w.name)}</span>
             ${w.open ? `<span class="side-count">${w.open}</span>` : ''}</a>`).join('')}
         </nav>
+        <div class="side-pomo" id="pomo-wrap"></div>
         <div class="side-clock" id="clock">
           <div class="clock-time" data-clock="time">--:--:--</div>
           <div class="clock-sub"><span class="clock-date" data-clock="date"></span> · <span class="clock-tz">PT</span></div>
@@ -59,6 +61,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
   bindKeydown()
   watchShift()
   startClockWidget(shell)
+  pomoMount(root.querySelector('#pomo-wrap') as HTMLElement)
 }
 
 
