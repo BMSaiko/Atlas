@@ -27,7 +27,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
     <div class="orb-bg"></div>
     <div class="shell" id="shell">
       <aside class="side" id="side">
-        <div class="side-head"><a class="logo logo-sm" href="/" data-nav="/">ATLAS</a></div>
+        <div class="side-head"><a class="logo logo-sm" href="/" data-nav="/">ATLAS</a><span class="shift-ind" id="shift-ind" title="Luminosidade do dia"></span></div>
         <nav class="side-nav" aria-label="Workdirs">
           ${items.map(w => `<a class="side-item${w.slug === activeSlug ? ' active' : ''}" data-slug="${w.slug}" href="/w/${w.slug}">
             <span class="side-icon">${icon('sphere', 18)}</span>
@@ -52,6 +52,23 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
   root.querySelectorAll('[data-nav]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); navigate(el.getAttribute('data-nav')!) }))
   root.querySelector('#side-new')!.addEventListener('click', () => newWorkdir())
   bindKeydown()
+  watchShift()
+}
+
+
+const SHIFT_ICON: Record<string, 'sun'|'dusk'|'moon'> = { day: 'sun', dusk: 'dusk', night: 'moon' }
+const SHIFT_LABEL: Record<string, string> = { day: 'Dia', dusk: 'Entardecer', night: 'Noite' }
+function renderShift() {
+  const el = document.getElementById('shift-ind')
+  if (!el) return
+  const s = document.documentElement.dataset.shift || 'night'
+  el.innerHTML = icon(SHIFT_ICON[s] || 'moon', 16) + `<span class="shift-label">${SHIFT_LABEL[s] || 'Noite'}</span>`
+  el.setAttribute('data-shift', s)
+}
+function watchShift() {
+  renderShift()
+  const mo = new MutationObserver(renderShift)
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-shift'] })
 }
 
 let state: { slug: string | null; items: Array<{ slug: string }> } = { slug: null, items: [] }
