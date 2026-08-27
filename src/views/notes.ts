@@ -13,7 +13,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
   root.innerHTML = `
     <div class="notes-toolbar">
       <input class="notes-search" id="nsearch" placeholder="Buscar notas…" aria-label="Buscar notas">
-      <button class="btn btn-primary kbdhint" id="nadd" aria-describedby="nadd-tip">${icon('plus', 16)} Nova nota<span class="kbdhint-tip" id="nadd-tip" role="tooltip">Nova nota — <kbd>Ctrl</kbd>+<kbd>K</kbd></span></button>
+      <button class="btn btn-primary kbdhint" id="nadd" aria-describedby="nadd-tip">${icon('plus', 16)} Nova nota<span class="kbdhint-tip" id="nadd-tip" role="tooltip">Nova nota <kbd>Ctrl</kbd>+<kbd>K</kbd></span></button>
     </div>
     <div class="notes-grid" id="ngrid"></div>`
   const grid = root.querySelector('#ngrid') as HTMLElement
