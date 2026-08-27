@@ -1,4 +1,4 @@
-import { api } from '../api'
+import { api, uid } from '../api'
 import { icon } from '../ui/icons'
 import { openModal } from '../ui/modal'
 import { toast } from '../ui/toast'
@@ -54,9 +54,48 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
     if (!e.ctrlKey) return
     if (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return
     if (document.querySelector('.modal-backdrop')) return
+    if (e.key === 'k' || e.key === 'K') { e.preventDefault(); quickAdd(activeSlug); return }
     const n = parseInt(e.key); if (n >= 1 && n <= 9 && items[n - 1]) {
       e.preventDefault(); setActive(items[n - 1].slug); navigate('/w/' + items[n - 1].slug)
     }
+  })
+}
+
+function quickAdd(slug: string | null) {
+  if (!slug) return
+  openModal({
+    title: 'Criar nota ou cartão', submitText: 'Criar',
+    body: () => `<div class="field"><label for="qa-type">Tipo</label>
+      <select id="qa-type" name="type">
+        <option value="note">Nota</option>
+        <option value="card">Cartão</option>
+      </select></div>
+      <div class="field"><label for="qa-title">Título</label><input id="qa-title" name="title" required></div>
+      <div class="field"><label for="qa-text">Texto / Descrição</label><textarea id="qa-text" name="text"></textarea></div>`,
+    onSubmit: async () => {
+      const form = document.querySelector('.modal form') as HTMLFormElement
+      const type = (form.querySelector('[name=type]') as HTMLSelectElement).value
+      const title = (form.querySelector('[name=title]') as HTMLInputElement).value.trim()
+      if (!title) return
+      const text = (form.querySelector('[name=text]') as HTMLTextAreaElement).value
+      try {
+        if (type === 'note') {
+          const notes = await api.notes.get(slug)
+          notes.unshift({ id: uid(), title, text, ts: Date.now() })
+          await api.notes.put(slug, notes)
+          toast(`Nota criada: "${title}"`)
+        } else {
+          const b = await api.kanban.get(slug)
+          const col = b.columns.find(c => c.id === 'todo' || c.id === 'doing')?.id || b.columns[0]?.id
+          if (col) {
+            b.cards.push({ id: uid(), title, description: text, priority: 'low', colId: col, ts: Date.now(), archived: false })
+            await api.kanban.put(slug, b)
+            toast(`Cartão criado: "${title}"`)
+          } else toast('Sem colunas no kanban')
+        }
+        navigate('/w/' + slug)
+      } catch (e: any) { toast('Erro: ' + e.message) }
+    },
   })
 }
 
