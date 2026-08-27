@@ -97,7 +97,10 @@ async function launchHermes(slug: string, card: any) {
   await runGit(['worktree', 'prune'])
   await rmJunction(join(wt, 'node_modules'))
   await killWtLockers(wt)  // pane de run anterior tbm segura o wt -> EBUSY no rm abaixo
-  try { await rm(wt, { recursive: true, force: true }) } catch { /* EBUSY lefto? ignore, worktree add -B limpa */ }
+  // ponytail: worktree remove --force e o caminho git-native p/ desregistar uma worktree orfa (dir + reg + branch);
+  // rm() manual nao remove node_modules real (WinError 145) nem desregistar. --force cobre branch nao-merged + sujo.
+  try { await runGit(['worktree', 'remove', '--force', wt]) } catch { /* dir ja nao existe, ok */ }
+  try { await rm(wt, { recursive: true, force: true }) } catch { /* queda do node_modules real; add -B limpa */ }
   const addOut = await runGit(['worktree', 'add', '-B', branch, wt, 'dev'])
   if (!addOut.ok) { await fail('git worktree add falhou: ' + addOut.out); return }
   const linked = await addJunction(join(wt, 'node_modules'), join(ATLAS_REPO, 'node_modules'))
