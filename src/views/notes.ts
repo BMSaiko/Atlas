@@ -94,7 +94,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       if (!col) { toast('Sem colunas no kanban'); return }
       b.cards.push({ id: uid(), title: n.title, description: (n.text || '').trim(), priority: 'low', colId: col, ts: Date.now(), archived: false })
       api.kanban.put(slug, b)
-        .then(() => { refreshSideCount(); toast(`Cartão criado: "${n.title}"`) })
+        .then(() => { refreshSideCount(); refreshTabCounts(slug); toast(`Cartão criado: "${n.title}"`) })
         .catch(e => toast('Erro: ' + e.message))
     }).catch(e => toast('Erro: ' + e.message))
   }
