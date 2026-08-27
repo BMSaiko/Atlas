@@ -96,12 +96,22 @@ function bindKeydown() {
   if (keydownBound) return
   keydownBound = true
   window.addEventListener('keydown', e => {
-    if (!e.ctrlKey) return
     if (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return
     if (document.querySelector('.modal-backdrop')) return
-    if (e.key === 'k' || e.key === 'K') { e.preventDefault(); quickAdd(state.slug); return }
-    const n = parseInt(e.key); if (n >= 1 && n <= 9 && state.items[n - 1]) {
-      e.preventDefault(); setActive(state.items[n - 1].slug); navigate('/w/' + state.items[n - 1].slug)
+    if (e.ctrlKey) {
+      if (e.key === 'k' || e.key === 'K') { e.preventDefault(); quickAdd(state.slug); return }
+      const n = parseInt(e.key); if (n >= 1 && n <= 9 && state.items[n - 1]) {
+        e.preventDefault(); setActive(state.items[n - 1].slug); navigate('/w/' + state.items[n - 1].slug)
+      }
+      return
+    }
+    if (e.altKey) {
+      const cur = state.slug
+      if (!cur) return
+      const i = state.items.findIndex(it => it.slug === cur)
+      if (i < 0) return
+      if (e.key === 'ArrowUp' && i > 0) { e.preventDefault(); setActive(state.items[i - 1].slug); navigate('/w/' + state.items[i - 1].slug) }
+      else if (e.key === 'ArrowDown' && i < state.items.length - 1) { e.preventDefault(); setActive(state.items[i + 1].slug); navigate('/w/' + state.items[i + 1].slug) }
     }
   })
 }
