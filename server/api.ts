@@ -8,6 +8,7 @@ const DATA = join(process.cwd(), 'data')
 const SLUG = /^[a-z0-9-]+$/
 const INDEX = 'index.json'
 const WEZTERM = process.env.WEZTERM || 'C:\\Program Files\\WezTerm\\wezterm-gui.exe'
+const WEZTERM_CLI = process.env.WEZTERM_CLI || 'C:\\Program Files\\WezTerm\\wezterm.exe'
 const VENV_PY = process.env.HERMES_PY || 'C:\\Users\\bruno\\Documents\\hermes-agent\\.venv\\Scripts\\python.exe'
 const HERMES_CWD = process.env.HERMES_CWD || 'C:\\Users\\bruno\\Documents\\hermes-agent'
 const HERMES_HOME = process.env.HERMES_LIVE_HOME || 'C:\\Users\\bruno\\AppData\\Local\\hermes'
@@ -76,7 +77,16 @@ function launchHermes(slug: string, card: any) {
     '- Apos concluires, coloca o teu card na coluna "review" (colId "review") no kanban.json — a task executada vai para review final.',
     '- No fim, ATUALIZA o teu card com um campo `result`: um resumo breve do que fizeste.',
   ].join('\n')
-  const p = spawn(WEZTERM, ['--config', 'exit_behavior="Close"', 'start', '--', VENV_PY, '-m', 'hermes_cli.main', '-z', prompt],
+  // ponytail: global wezterm.lua forces exit_behavior=Hold; CLI --config override is unreliable when a GUI is already
+  // running. So the task pane closes ITS OWN window: wezterm injects WEZTERM_PANE into the pane env, and
+  // `wezterm cli kill-pane` (no --pane-id) targets that env pane. Only the associated terminal closes.
+  const autoclose = [
+    'import subprocess,sys',
+    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[1]])',
+    'subprocess.run([r"WEZTERM_CLI_PLACEHOLDER","cli","kill-pane"],capture_output=True)',
+    'sys.exit(rc)',
+  ].join(';')
+  const p = spawn(WEZTERM, ['start', '--', VENV_PY, '-c', autoclose.replace('WEZTERM_CLI_PLACEHOLDER', WEZTERM_CLI), prompt],
     { cwd: ATLAS_REPO, detached: true, stdio: 'ignore', env: { ...process.env, HERMES_HOME } })
   p.unref()
 }
