@@ -171,6 +171,19 @@ a.link:hover { color:var(--gold-soft); }
 .kresult-body{white-space:pre-wrap;max-height:6rem;overflow:hidden;position:relative;padding-top:4px;border-top:1px dashed var(--line)}
 .kresult-body:after{content:'...';position:absolute;right:4px;bottom:2px;background:var(--bg);padding:0 4px;font-weight:700}
 
-/* --- Keybind hint (Ctrl+K quick-add) --- */
-.kbdhint { display:inline-flex; align-items:center; gap:7px; color:var(--text-dim); font-size:.82rem; white-space:nowrap; align-self:center; }
+/* --- Keybind Hint (Ctrl+K quick-add) --- */
+.kbdhint { position:relative; display:inline-flex; align-items:center; align-self:center; }
+.kbdhint-kbd { display:inline-flex; align-items:center; gap:7px; color:var(--text-dim); font-size:.82rem; white-space:nowrap; cursor:help;
+  border-radius:6px; padding:4px 6px; margin:-4px -6px; }
 .kbdhint kbd { font-family:inherit; font-size:.72rem; line-height:1; padding:4px 6px; border-radius:5px; background:var(--bg-3); border:1px solid var(--line); border-bottom-width:2px; color:var(--text); }
+.kbdhint:focus-visible .kbdhint-kbd { outline:2px solid var(--gold); outline-offset:1px; border-radius:6px; }
+.kbdhint-kbd:hover { color:var(--text); background:color-mix(in srgb, var(--gold) 8%, transparent); }
+/* tooltip bubble: anchored to keycaps, reveals on hover/focus */
+.kbdhint-tip { position:absolute; top:calc(100% + 10px); right:0; z-index:80; white-space:normal; max-width:240px;
+  background:var(--bg-2); border:1px solid var(--gold); border-radius:8px; padding:8px 11px;
+  font-size:.78rem; line-height:1.5; color:var(--text); box-shadow:0 10px 30px rgba(0,0,0,.5);
+  opacity:0; visibility:hidden; transform:translateY(-4px); transition:opacity .15s ease, transform .15s ease, visibility .15s; pointer-events:none; }
+.kbdhint-tip::after { content:''; position:absolute; top:-6px; right:14px; width:10px; height:10px; background:var(--bg-2);
+  border-left:1px solid var(--gold); border-top:1px solid var(--gold); transform:rotate(45deg); }
+.kbdhint:hover .kbdhint-tip, .kbdhint:focus-visible .kbdhint-tip, .kbdhint:focus .kbdhint-tip { opacity:1; visibility:visible; transform:translateY(0); }
+@media (prefers-reduced-motion: reduce){ .kbdhint-tip { transition:none } }
