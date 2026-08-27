@@ -6,6 +6,7 @@
 import { icon } from './icons'
 import { openModal } from './modal'
 import { toast } from './toast'
+import { notify as notifyBrowser } from './notifs'
 
 type Mode = 'chrono' | 'pomo'
 type Phase = 'focus' | 'break'
@@ -69,10 +70,7 @@ function advancePhase() {
   st.phaseStart = now()
 }
 function notify(msg: string) {
-  toast(msg)
-  if ('Notification' in window && Notification.permission === 'granted') {
-    try { new Notification('Atlas · Foco', { body: msg }) } catch {}
-  }
+  notifyBrowser('Atlas · Foco', msg)
 }
 
 // ---------- pill (entrada discreta, sem bloat) ----------

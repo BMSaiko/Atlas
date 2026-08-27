@@ -4,6 +4,7 @@ import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
 import { navigate } from '../router'
 import { getTheme, setMode, shiftSchedule } from '../ui/theme'
+import { notifState, requestNotifs } from '../ui/notifs'
 
 export async function renderSettings(root: HTMLElement, slug: string) {
   const th = getTheme()
@@ -47,6 +48,11 @@ export async function renderSettings(root: HTMLElement, slug: string) {
           <button class="btn btn-primary" id="col-save">Guardar colunas</button>
         </div>
       </div>
+      <div class="card-block">
+        <h3>Notificações</h3>
+        <p class="muted" style="margin-bottom:12px">Notificações do navegador avisam quando um cartão entra em revisão e no fim do pomodoro.</p>
+        <button class="btn" id="notif-btn" type="button"></button>
+      </div>
       <div class="card-block danger-zone">
         <h3>Zona perigosa</h3>
         <p class="muted" style="margin-bottom:12px">Eliminar este workdir apaga todas as notas e cartões. Irreversível.</p>
@@ -87,6 +93,24 @@ export async function renderSettings(root: HTMLElement, slug: string) {
   // --- Tema: modo auto/manual (a escolha do tema fica no indicador da sidebar) ---
   root.querySelector('#th-mode')!.addEventListener('change', e => {
     setMode((e.target as HTMLSelectElement).value === 'manual' ? 'manual' : 'auto')
+  })
+
+  // --- Notificações: pedir permissão SÓ num user gesture (click) ---
+  const notifBtn = root.querySelector('#notif-btn') as HTMLButtonElement
+  const renderNotifBtn = () => {
+    const st = notifState()
+    const granted = st === 'granted'
+    const denied = st === 'denied'
+    notifBtn.innerHTML = `${icon(granted ? 'bell' : (denied ? 'bellOff' : 'bell'), 16)} ${granted ? 'Notificações ativadas' : (denied ? 'Bloqueadas no navegador' : 'Ativar notificações')}`
+    notifBtn.disabled = granted || denied
+    notifBtn.title = denied ? 'Desbloqueia nas definições de permissões do navegador' : ''
+  }
+  renderNotifBtn()
+  notifBtn.addEventListener('click', async () => {
+    const st = await requestNotifs()
+    renderNotifBtn()
+    if (st === 'granted') toast('Notificações ativadas')
+    else if (st === 'denied') toast('Notificações bloqueadas no navegador')
   })
 
   let selIcon = meta?.icon

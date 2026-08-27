@@ -3,6 +3,7 @@ import { icon } from '../ui/icons'
 import { openModal } from '../ui/modal'
 import { refreshTabCounts } from '../ui/counts'
 import { toast } from '../ui/toast'
+import { notify as notifyBrowser } from '../ui/notifs'
 import { confirmDialog } from '../ui/confirm'
 import { linkify } from '../ui/text'
 
@@ -300,9 +301,6 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
 
   render()
 
-  // ponytail: pede permissao de notificacao uma vez (default -> request); ignorado se ja decidida
-  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission()
-
   // ponytail: poll board while any card is in 'doing' so progress/result appears without manual refresh
   if (pollTimer) clearInterval(pollTimer)
   pollTimer = setInterval(async () => {
@@ -363,8 +361,7 @@ function resultHtml(r: string): string {
 function deindent(s: string): string { return s.replace(/^\s+/gm, '').replace(/\n{2,}/g, '\n').trim() }
 // ponytail: notificacao de browser quando um card entra em review (agente terminou noutro tab)
 function notifyCard(c: Card) {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return
-  try { new Notification(`Atlas · ${c.title}`, { body: 'Tarefa concluída — Review/Revisão' }) } catch { /* ctor ausente */ }
+  notifyBrowser(`Atlas · ${c.title}`, 'Tarefa concluída — Review/Revisão')
 }
 function fmtElapsed(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000))
