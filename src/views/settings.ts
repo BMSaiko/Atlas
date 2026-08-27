@@ -3,7 +3,7 @@ import { icon } from '../ui/icons'
 import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
 import { navigate } from '../router'
-import { getTheme, setMode } from '../ui/theme'
+import { getTheme, setMode, shiftSchedule } from '../ui/theme'
 
 export async function renderSettings(root: HTMLElement, slug: string) {
   const th = getTheme()
@@ -29,6 +29,8 @@ export async function renderSettings(root: HTMLElement, slug: string) {
       <div class="card-block">
         <h3>Tema</h3>
         <p class="muted" style="margin-bottom:12px">Em automático o tema segue a hora do dia. Em manual escolhes o tema no indicador da barra lateral (Dia / Entardecer / Noite), que se esconde quando voltas a automático.</p>
+
+        <div class="tema-sched" style="margin-bottom:12px;font-size:.85rem">${shiftSchedule().map(sd => `<span style="display:inline-block;margin-right:16px"><b>${esc(sd.label)}</b> ${sd.range}</span>`).join()}</div>
         <div class="field"><label for="th-mode">Troca automática</label>
           <select id="th-mode">
             <option value="auto" ${th.mode === 'auto' ? 'selected' : ''}>Automático — segue a hora do dia</option>

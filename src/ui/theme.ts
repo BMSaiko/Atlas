@@ -28,10 +28,26 @@ function write(t: Theme) {
   try { localStorage.setItem(KEY, JSON.stringify(t)) } catch {}
 }
 
+const SHIFT_NAMES: Record<Shift, string> = { day: 'Dia', dusk: 'Entardecer', night: 'Noite' }
+/** Marcos do tema automatico — fonte unica (autoShift deriva dele). */
+const SHIFT_TIMES: Array<{ shift: Shift; from: number }> = [
+  { shift: 'day', from: 7 },
+  { shift: 'dusk', from: 17 },
+  { shift: 'night', from: 20 },
+]
+const HH = (h: number) => `${String(h).padStart(2, '0')}:00`
 /** Shift que a hora atual implicaria, se estivesse em modo auto. */
 export function autoShift(now = new Date()): Shift {
   const h = now.getHours()
-  return h >= 7 && h < 17 ? 'day' : h >= 17 && h < 20 ? 'dusk' : 'night'
+  for (let i = SHIFT_TIMES.length - 1; i >= 0; i--) if (h >= SHIFT_TIMES[i].from) return SHIFT_TIMES[i].shift
+  return SHIFT_TIMES[SHIFT_TIMES.length - 1].shift
+}
+/** Horarios dos temas automaticos, prontos a mostrar na UI. */
+export function shiftSchedule(): Array<{ shift: Shift; label: string; range: string }> {
+  return SHIFT_TIMES.map((s, i) => {
+    const next = SHIFT_TIMES[(i + 1) % SHIFT_TIMES.length].from
+    return { shift: s.shift, label: SHIFT_NAMES[s.shift], range: `${HH(s.from)} – ${HH(next)}` }
+  })
 }
 
 export function applyShift(s: Shift) {
