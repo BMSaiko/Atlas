@@ -7,7 +7,12 @@ import { linkify } from '../ui/text'
 
 export async function renderKanban(root: HTMLElement, slug: string) {
   let board = await api.kanban.get(slug).catch(() => ({ columns: [], cards: [] } as Board))
-  const save = async () => { await api.kanban.put(slug, board); refreshSideCount() }
+  const save = async () => {
+    const now = Date.now()
+    // ponytail: qualquer card em doing sem startedAt comeca o timer agora (cobre dnd/modal de entrada em doing)
+    for (const c of board.cards) if (c.colId === 'doing' && !c.startedAt) c.startedAt = now
+    await api.kanban.put(slug, board); refreshSideCount()
+  }
   // ponytail: sidebar count computed once at renderShell; keep in sync on every board mutation
   function refreshSideCount() {
     const n = board.cards.filter(c => !c.archived && c.colId !== 'done').length
@@ -90,7 +95,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       return `<article class="kcard${c.result ? ' has-output' : ''}" draggable="true" tabindex="0" data-id="${c.id}">
         <div class="ktitle"><h5>${esc(c.title)}</h5><span class="kdate">${fmtDate(c.ts)}</span></div>
         ${c.description ? `<div class="kdesc">${linkify(c.description)}</div>` : ''}
-        ${c.colId === 'doing' && !c.result ? kdoing() : ''}
+        ${c.colId === 'doing' && !c.result ? kdoing(c) : ''}
         ${c.result ? `${resultHtml(c.result)}` : ''}
         ${c.colId === 'review' ? `<div class="kreview">
           <button class="btn btn-primary btn-sm" data-act="approve">${icon('check', 14)} Aprovar</button>
@@ -144,7 +149,7 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cardId: c.id }),
     }).then(r => r.json()).then((d: any) => {
-      if (d && d.ok) { c.colId = 'doing'; save().then(render) }
+      if (d && d.ok) { c.colId = 'doing'; c.startedAt = Date.now(); save().then(render) }
       else toast((d && d.error) || 'Erro ao executar')
     }).catch(() => toast('Falha ao abrir Hermes'))
   }
@@ -297,14 +302,24 @@ setInterval(() => {
     el.classList.add('kfade')
   })
 }, 8000)
+// ponytail: tick de 1s atualiza os .ktimer do doing (elapsed desde startedAt) sem re-render do board
+setInterval(() => {
+  const now = Date.now()
+  document.querySelectorAll<HTMLElement>('.ktimer').forEach(el => {
+    const start = parseInt(el.dataset.start || '0', 10)
+    if (!start) return
+    el.textContent = fmtElapsed(now - start)
+  })
+}, 1000)
 
 const KDOING_WORDS = ['doing', 'a trabalhar', 'em curso', 'a processar', 'ajustando', 'a pensar', 'a fazer']
 let kdoingIdx = 0
 // ponytail: rotaciona palavras (nao so 'doing') + 3 pontos animados (CSS kdblink)
 // a palavra rodada em tempo real por um interval de 3s (ver renderKanban)
-function kdoing(): string {
+function kdoing(c: Card): string {
   const w = KDOING_WORDS[kdoingIdx % KDOING_WORDS.length]
-  return `<div class="kdoing"><span class="kword">${w}</span><span class="kdot" style="--i:0"></span><span class="kdot" style="--i:1"></span><span class="kdot" style="--i:2"></span></div>`
+  const start = c.startedAt || c.ts
+  return `<div class="kdoing"><span class="kword">${w}</span><span class="kdot" style="--i:0"></span><span class="kdot" style="--i:1"></span><span class="kdot" style="--i:2"></span><span class="ktimer" data-start="${start}">${fmtElapsed(Date.now() - start)}</span></div>`
 }
 function resultHtml(r: string): string {
   // ponytail: primeira linha = destaque (ex. 'Task cumprida: ...'); corpo separado
@@ -318,6 +333,13 @@ function deindent(s: string): string { return s.replace(/^\s+/gm, '').replace(/\
 function notifyCard(c: Card) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return
   try { new Notification(`Atlas · ${c.title}`, { body: 'Tarefa concluída — Review/Revisão' }) } catch { /* ctor ausente */ }
+}
+function fmtElapsed(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60
+  if (h > 0) return `h\u00e1 ${h}h ${String(m).padStart(2, '0')}m`
+  if (m > 0) return `h\u00e1 ${m}m ${String(sec).padStart(2, '0')}s`
+  return `h\u00e1 ${sec}s`
 }
 function fmtDate(ts: number): string {
   return new Date(ts).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' })

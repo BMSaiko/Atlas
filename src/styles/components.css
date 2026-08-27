@@ -177,6 +177,7 @@ a.link:hover { color:var(--gold-soft); }
 @keyframes kdblink{0%,100%{opacity:.2}30%{opacity:1}}
 @keyframes kfade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion: reduce){.kdoing .kdot{animation:none;opacity:.5}.kfade{animation:none}}
+.ktimer{margin-left:6px;padding:0 5px;border:1px solid var(--line);border-radius:4px;font-size:.68rem;font-weight:600;letter-spacing:.02em;color:var(--muted);font-variant-numeric:tabular-nums;text-transform:none}
 .kresult{margin:6px 2px 4px;padding:6px 8px;border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:6px;font-size:.78rem;color:var(--muted)}
 .kcard.has-output .kresult{background:color-mix(in srgb,var(--gold) 6%, transparent);border-color:var(--gold)}
 .kresult-title{font-weight:400;color:var(--muted);font-size:.95rem;margin-bottom:2px}
