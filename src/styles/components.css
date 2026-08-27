@@ -70,6 +70,7 @@
 
 .foco-ov { position:fixed; inset:0; z-index:1500; background:rgba(3,5,10,.68); backdrop-filter:blur(8px);
   display:flex; align-items:center; justify-content:center; padding:var(--s4); animation:foco-fade .25s ease; }
+.foco-ov[hidden] { display:none } /* hidden attr vence display:flex — fecha via escape/backdrop */
 .foco-card { text-align:center; width:100%; max-width:440px; }
 .foco-seg { display:inline-flex; gap:2px; background:var(--bg-3); border:1px solid var(--line); border-radius:999px;
   padding:3px; margin-bottom:var(--s6); }
