@@ -16,6 +16,7 @@ export const api = {
   workdirs: () => j<Workdir[]>('/api/workdirs'),
   createWorkdir: (name: string, description?: string) => j<Workdir>('/api/workdirs', 'POST', { name, description }),
   patchWorkdir: (slug: string, patch: { name?: string; description?: string; icon?: string }) => j<Workdir>(`/api/workdirs/${slug}`, 'PATCH', patch),
+  reorderWorkdirs: (order: string[]) => j<Workdir[]>('/api/workdirs', 'PUT', { order }),
   icons: () => j<{ icons: string[] }>('/api/icons').then(r => r.icons),
   deleteWorkdir: (slug: string) => j<{ ok: boolean }>(`/api/workdirs/${slug}`, 'DELETE'),
   meta: (slug: string) => j<WorkdirMeta>(`/api/w/${slug}`),
