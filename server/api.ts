@@ -68,6 +68,19 @@ function addJunction(dir: string, target: string): Promise<boolean> {
     c.on('close', (code) => res(code === 0)); c.on('error', () => res(false))
   })
 }
+// killWtLockers: o rm() da worktree rebenta em EBUSY (Windows) se uma pane WezTerm de um
+// run anterior ainda tiver cwd/handles la dentro. Matar por cmdline que referencia o wt —
+// e o unico hook fiavel (o spawn do WezTerm carrega o path do wt nos args, e o OpenConsole filho herda).
+// ponytail: taskkill /T /F reapa a arvore (pane + OpenConsole + eventuais filhos).
+function killWtLockers(wt: string): Promise<void> {
+  return new Promise((res) => {
+    const esc = wt.replace(/[\\']/g, '\\$&')
+    const ps = `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '${esc}' } | ForEach-Object { taskkill /PID $_.ProcessId /T /F *> $null }`
+    const c = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true, stdio: 'ignore' })
+    c.on('close', () => res()); c.on('error', () => res())
+  })
+}
+
 async function launchHermes(slug: string, card: any) {
   const branch = `feature/${slug}-${card.id}`
   const wt = join(WT_ROOT, slug, card.id)
@@ -83,7 +96,8 @@ async function launchHermes(slug: string, card: any) {
   // limpa junction/node_modules ANTES do rm recursivo (senao rm segue o junction e apaga o node_modules base).
   await runGit(['worktree', 'prune'])
   await rmJunction(join(wt, 'node_modules'))
-  await rm(wt, { recursive: true, force: true })
+  await killWtLockers(wt)  // pane de run anterior tbm segura o wt -> EBUSY no rm abaixo
+  try { await rm(wt, { recursive: true, force: true }) } catch { /* EBUSY lefto? ignore, worktree add -B limpa */ }
   const addOut = await runGit(['worktree', 'add', '-B', branch, wt, 'dev'])
   if (!addOut.ok) { await fail('git worktree add falhou: ' + addOut.out); return }
   const linked = await addJunction(join(wt, 'node_modules'), join(ATLAS_REPO, 'node_modules'))
@@ -126,18 +140,21 @@ async function launchHermes(slug: string, card: any) {
     'wt=sys.argv[1]; branch=sys.argv[2]; base=sys.argv[3]',
     'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[4]])',
     'if rc==0:',
-    '\x20\x20\x20\x20os.chdir(base)',
-    '\x20\x20\x20\x20mg=subprocess.run([r"GITBIN","merge",branch,"--no-edit"],capture_output=True)',
-    '\x20\x20\x20\x20if mg.returncode==0:',
-    '\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","push","origin","dev"],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20nj=os.path.join(wt,"node_modules")',
-    '\x20\x20\x20\x20\x20\x20\x20\x20try: os.rmdir(nj)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20except OSError: shutil.rmtree(nj,ignore_errors=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","worktree","remove","--force",wt],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","branch","-D",branch],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"WEZTERM_CLI_PLACEHOLDER","cli","kill-pane"],capture_output=True)',
-    '    else:',
-    '\x20\x20\x20\x20\x20\x20\x20\x20print("MERGE dev<-"+branch+" FALHOU (conflito?) — worktree mantido, verifica.")',
+    '\x20\x20\x20\x20try:',
+    '\x20\x20\x20\x20\x20\x20\x20\x20os.chdir(base)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20mg=subprocess.run([r"GITBIN","merge",branch,"--no-edit"],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20if mg.returncode==0:',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","push","origin","dev"],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20nj=os.path.join(wt,"node_modules")',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20try: os.rmdir(nj)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20except OSError: shutil.rmtree(nj,ignore_errors=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","worktree","remove","--force",wt],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","branch","-D",branch],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"WEZTERM_CLI_PLACEHOLDER","cli","kill-pane"],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20else:',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20print("MERGE dev<-"+branch+" FALHOU (conflito?) - worktree mantido, verifica.")',
+    '    except Exception as e:',
+    '\x20\x20\x20\x20\x20\x20\x20\x20print("AUTO-CLEANUP FALHOU: %r - push/merge incompleto. Worktree e branch mantidas p/ inspecao." % (e,))',
     'sys.exit(rc)',
   ].join('\n').replace('WEZTERM_CLI_PLACEHOLDER', WEZTERM_CLI)
   const p = spawn(WEZTERM, ['start', '--', VENV_PY, '-c', wrapper.replace('GITBIN', GIT), wt, branch, ATLAS_REPO, prompt],
