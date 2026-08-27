@@ -1,6 +1,7 @@
-// Cronómetro + Pomodoro — sessões de foco no sidebar.
+// Sessão de foco — o Foco é uma experiência imersiva a pedido (overlay), não um widget fixo no sidebar.
 // Sem libs: estado a nível de módulo (sobrevive à navegação), um único interval de tick,
-// DOM atualizado por data-attributes (sem re-render). Durações persistidas em localStorage.
+// DOM por data-attributes (sem re-render). Durações persistidas em localStorage.
+// Cronómetro = satélite a orbitar; Pomodoro = anel que se esvazia. Escape/backdrop fecha.
 
 import { icon } from './icons'
 import { openModal } from './modal'
@@ -9,13 +10,11 @@ import { toast } from './toast'
 type Mode = 'chrono' | 'pomo'
 type Phase = 'focus' | 'break'
 
-interface PomodoroState {
+interface FocusState {
   mode: Mode
   running: boolean
-  // cronómetro (conta para cima)
-  chronoTotal: number       // ms acumulados (excluindo a fração corrente)
+  chronoTotal: number       // ms acumulados do cronómetro
   chronoStart: number       // Date.now() quando running; 0 senão
-  // pomodoro (conta para baixo)
   phase: Phase
   cycle: number             // pomodoros completos
   phaseLeft: number         // ms restantes na fase atual
@@ -24,165 +23,221 @@ interface PomodoroState {
   breakMin: number
 }
 
-const LSK = 'atlas.pomo'
-const def = { focusMin: 25, breakMin: 5 }
+const LSK = 'atlas.foco'
+const C = { focusMin: 25, breakMin: 5 }
+const CIRC = 540 // 2*PI*86, raio do anel em viewBox
 
 function loadCfg(): { focusMin: number; breakMin: number } {
   try {
-    const raw = localStorage.getItem(LSK)
-    if (!raw) return { ...def }
-    const p = JSON.parse(raw)
-    return { focusMin: clamp(+p.focusMin || def.focusMin, 1, 120), breakMin: clamp(+p.breakMin || def.breakMin, 1, 60) }
-  } catch { return { ...def } }
+    const p = JSON.parse(localStorage.getItem(LSK) || '')
+    return { focusMin: clamp(+p.focusMin || C.focusMin, 1, 120), breakMin: clamp(+p.breakMin || C.breakMin, 1, 60) }
+  } catch { return { ...C } }
 }
 function clamp(n: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, n)) }
 function saveCfg() { try { localStorage.setItem(LSK, JSON.stringify({ focusMin: st.focusMin, breakMin: st.breakMin })) } catch {} }
 
-// ponytail: estado de módulo — sobrevive a re-renders do shell/navegação
-const st: PomodoroState = { mode: 'chrono', running: false, chronoTotal: 0, chronoStart: 0, phase: 'focus', cycle: 0, phaseLeft: loadCfg().focusMin * 60000, phaseStart: 0, focusMin: loadCfg().focusMin, breakMin: loadCfg().breakMin }
+// ponytail: state de módulo — sobrevive a re-renders do shell/navegação
+const st: FocusState = {
+  mode: 'chrono', running: false, chronoTotal: 0, chronoStart: 0,
+  phase: 'focus', cycle: 0, phaseLeft: loadCfg().focusMin * 60000, phaseStart: 0,
+  focusMin: loadCfg().focusMin, breakMin: loadCfg().breakMin,
+}
 
-function now() { return Date.now() }
-let starter = 0
+let ticker = 0
 function bootTick() {
-  if (starter) return
-  starter = window.setInterval(render, 250)
+  if (ticker) return
+  ticker = window.setInterval(tick, 250)
 }
-function render() {
-  const disp = document.getElementById('pomo-display')
-  if (!disp) return
-  if (st.mode === 'chrono') {
-    const total = st.chronoTotal + (st.running ? now() - st.chronoStart : 0)
-    disp.textContent = fmtChrono(total)
-  } else {
-    let left = st.phaseLeft - (st.running ? now() - st.phaseStart : 0)
-    if (left <= 0 && st.running) advanceAny()
-    disp.textContent = fmtCount(left)
-  }
-  const sub = document.getElementById('pomo-sub')
-  if (sub) sub.textContent = subLabel()
-  setBtn()
+function tick() {
+  renderPill()
+  if (document.getElementById('foco-ov')?.hidden === false) renderOverlay()
 }
 
-function advanceAny() {
-  // foco terminado? pausa terminada? avança automático e reinicia o countdown
-  const dir = st.phase === 'focus' ? 1 : -1
+function elElapsed(): number { return st.chronoTotal + (st.running ? now() - st.chronoStart : 0) }
+function countLeft(): number {
+  let left = st.phaseLeft - (st.running ? now() - st.phaseStart : 0)
+  if (left <= 0 && st.running) advancePhase()
+  return Math.max(0, left)
+}
+function now() { return Date.now() }
+
+function advancePhase() {
   if (st.phase === 'focus') { st.cycle++; notify(`Foco concluído — pausa de ${st.breakMin} min`) }
   else notify('Pausa terminada — de volta ao foco')
-  st.phase = dir === 1 ? 'break' : 'focus'
+  st.phase = st.phase === 'focus' ? 'break' : 'focus'
   st.phaseLeft = (st.phase === 'focus' ? st.focusMin : st.breakMin) * 60000
   st.phaseStart = now()
 }
 function notify(msg: string) {
   toast(msg)
   if ('Notification' in window && Notification.permission === 'granted') {
-    try { new Notification('Atlas · Pomodoro', { body: msg }) } catch {}
+    try { new Notification('Atlas · Foco', { body: msg }) } catch {}
   }
 }
-function subLabel(): string {
-  if (st.mode === 'chrono') return 'Cronómetro'
-  const label = st.phase === 'focus' ? 'Foco' : 'Pausa'
-  return `${label} · ciclo ${st.cycle}`
-}
-function setBtn() {
-  const b = document.getElementById('pomo-toggle')
-  if (!b) return
-  // ponytail: rótulo pelo estado; para pomodoro em contagem decrescente até 0, pausa
-  const iconname = st.running ? 'pause' : 'play'
-  b.innerHTML = `${icon(iconname, 14)} ${st.running ? 'Pausar' : 'Iniciar'}`
-}
-function fmtChrono(ms: number): string {
-  const h = Math.floor(ms/3600000), m = Math.floor(ms/60000)%60, s = Math.floor(ms/1000)%60
-  return h>0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`
-}
-function fmtCount(ms: number): string {
-  const m = Math.max(0, Math.floor(ms/60000)), s = Math.max(0, Math.floor(ms/1000)%60)
-  return `${pad(m)}:${pad(s)}`
-}
-function pad(n: number) { return String(n).padStart(2, '0') }
 
-// ---- mount: injeta o widget no container e liga eventos (chamado em cada render do shell) ----
-export function pomoMount(root: HTMLElement) {
-  root.innerHTML = `
-    <div class="pomo" id="pomo">
-      <div class="pomo-head">
-        <span class="pomo-title">${icon('timer', 14)} Foco</span>
-        <div class="pomo-seg" id="pomo-seg" role="tablist" aria-label="Modo temporizador">
-          <button class="pomo-seg-btn" data-pmode="chrono" role="tab" aria-selected="true">Cronómetro</button>
-          <button class="pomo-seg-btn" data-pmode="pomo" role="tab">Pomodoro</button>
+// ---------- pill (entrada discreta, sem bloat) ----------
+export function mountFocus(root: HTMLElement) {
+  root.innerHTML = `<button class="foco-launch" id="foco-launch" aria-label="Sessão de foco" title="Abrir sessão de foco">
+      <span class="foco-li">${icon('timer', 16)}</span><span class="foco-lbl" id="foco-lbl">Foco</span><span class="foco-meta" id="foco-meta"></span></button>`
+  root.querySelector('#foco-launch')!.addEventListener('click', () => openOverlay())
+  bootTick()
+}
+
+// ---------- overlay imersivo ----------
+let built = false
+function buildOverlay() {
+  if (built) return
+  built = true
+  const el = document.createElement('div')
+  el.id = 'foco-ov'; el.className = 'foco-ov'; el.hidden = true
+  el.innerHTML = `
+    <div class="foco-card" role="dialog" aria-modal="true" aria-label="Sessão de foco">
+      <div class="foco-seg" id="foco-seg">
+        <button class="foco-seg-btn" data-fmode="chrono">Cronómetro</button>
+        <button class="foco-seg-btn" data-fmode="pomo">Pomodoro</button>
+      </div>
+      <div class="foco-ring">
+        <svg viewBox="0 0 200 200" aria-hidden="true">
+          <circle class="orb" cx="100" cy="100" r="86"/>
+          <circle class="orb" cx="100" cy="100" r="76"/>
+          <circle class="arc" id="foco-arc" cx="100" cy="100" r="86" transform="rotate(-90 100 100)"
+            stroke-dasharray="${CIRC}" stroke-dashoffset="0"/>
+        </svg>
+        <div class="foco-sat" id="foco-sat"><i></i></div>
+        <div class="foco-num-wrap">
+          <div class="foco-num" id="foco-num">00:00</div>
+          <div class="foco-sub" id="foco-sub">Cronómetro</div>
         </div>
       </div>
-      <div class="pomo-display" id="pomo-display" aria-live="off">00:00</div>
-      <div class="pomo-sub" id="pomo-sub"></div>
-      <div class="pomo-ctrl">
-        <button class="btn btn-primary btn-sm" id="pomo-toggle">${icon('play', 14)} Iniciar</button>
-        <button class="btn-icon btn-ghost" id="pomo-reset" aria-label="Reiniciar" title="Reiniciar">${icon('reset', 15)}</button>
-        <button class="btn-icon btn-ghost" id="pomo-settings" aria-label="Definir durações" title="Durações">${icon('gear', 15)}</button>
+      <div class="foco-ctrl">
+        <button class="btn btn-primary" id="foco-toggle">${icon('play', 16)} Iniciar</button>
+        <button class="btn-icon btn-ghost" id="foco-reset" aria-label="Reiniciar" title="Reiniciar">${icon('reset', 18)}</button>
+        <button class="btn-icon btn-ghost" id="foco-settings" aria-label="Durações" title="Durações">${icon('gear', 18)}</button>
       </div>
+      <div class="foco-hint">Escape para fechar</div>
     </div>`
+  document.body.appendChild(el)
 
-  root.querySelectorAll<HTMLElement>('.pomo-seg-btn').forEach(b => b.addEventListener('click', () => {
-    st.mode = b.dataset.pmode as Mode
+  el.querySelectorAll<HTMLElement>('.foco-seg-btn').forEach(b => b.addEventListener('click', () => {
+    st.mode = b.dataset.fmode as Mode
     st.running = false
-    if (st.mode === 'chrono') { st.chronoStart = 0 }
+    if (st.mode === 'chrono') st.chronoStart = 0
     else { st.phaseStart = 0; if (st.phaseLeft <= 0) st.phaseLeft = st.focusMin * 60000 }
-    refreshSegment(); toggleLabel()
+    refreshSegment(); renderOverlay(); renderPill()
   }))
 
-  root.querySelector('#pomo-toggle')!.addEventListener('click', () => {
+  el.querySelector('#foco-toggle')!.addEventListener('click', () => {
     st.running = !st.running
     const t = now()
     if (st.running) {
       if (st.mode === 'chrono') st.chronoStart = t
       else { if (st.phaseLeft <= 0) st.phaseLeft = st.focusMin * 60000; st.phaseStart = t }
+      const sat = document.getElementById('foco-sat'); if (sat) { sat.style.animationDuration = '60s'; sat.style.animationPlayState = 'running' }
     } else {
       if (st.mode === 'chrono') st.chronoTotal += t - st.chronoStart
       else st.phaseLeft = Math.max(0, st.phaseLeft - (t - st.phaseStart))
       st.chronoStart = st.phaseStart = 0
+      const sat = document.getElementById('foco-sat'); if (sat) sat.style.animationPlayState = 'paused'
     }
-    toggleLabel()
+    renderOverlay(); renderPill()
   })
 
-  root.querySelector('#pomo-reset')!.addEventListener('click', () => {
+  el.querySelector('#foco-reset')!.addEventListener('click', () => {
     st.running = false
     st.chronoTotal = 0; st.chronoStart = 0
     st.phase = 'focus'; st.cycle = 0
     st.phaseLeft = st.focusMin * 60000; st.phaseStart = 0
-    toggleLabel(); const d = document.getElementById('pomo-display'); if (d) d.textContent = st.mode==='chrono' ? '00:00' : fmtCount(st.phaseLeft)
+    const sat = document.getElementById('foco-sat'); if (sat) sat.style.animationPlayState = 'paused'
+    renderOverlay(); renderPill()
   })
 
-  root.querySelector('#pomo-settings')!.addEventListener('click', () => {
+  el.querySelector('#foco-settings')!.addEventListener('click', () => {
     openModal({
       title: 'Durações do Pomodoro', submitText: 'Guardar',
       body: () => `<div class="field"><label for="p-focus">Foco (minutos)</label><input id="p-focus" name="focus" type="number" min="1" max="120" value="${st.focusMin}"></div>
         <div class="field"><label for="p-break">Pausa (minutos)</label><input id="p-break" name="break" type="number" min="1" max="60" value="${st.breakMin}"></div>`,
       onSubmit: () => {
         const form = document.querySelector('.modal form') as HTMLFormElement
-        const f = clamp(parseInt((form.querySelector('[name=focus]') as HTMLInputElement).value) || def.focusMin, 1, 120)
-        const b = clamp(parseInt((form.querySelector('[name=break]') as HTMLInputElement).value) || def.breakMin, 1, 60)
+        const f = clamp(parseInt((form.querySelector('[name=focus]') as HTMLInputElement).value) || C.focusMin, 1, 120)
+        const b = clamp(parseInt((form.querySelector('[name=break]') as HTMLInputElement).value) || C.breakMin, 1, 60)
         st.focusMin = f; st.breakMin = b
         if (!st.running && st.mode === 'pomo' && st.cycle === 0 && st.phase === 'focus') st.phaseLeft = f * 60000
-        saveCfg(); refreshSegment(); const d = document.getElementById('pomo-display'); if (d) d.textContent = fmtCount(st.phaseLeft)
+        saveCfg(); refreshSegment(); renderOverlay(); renderPill()
         toast('Durações guardadas')
       },
     })
   })
 
-  refreshSegment(); toggleLabel()
-  bootTick()
-  const d = document.getElementById('pomo-display'); if (d) d.textContent = st.mode==='chrono' ? fmtChrono(st.chronoTotal) : fmtCount(st.phaseLeft)
+  el.addEventListener('click', e => { if (e.target === el) { el.hidden = true; renderPill() } })
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !el.hidden) { el.hidden = true; renderPill() }
+  })
+}
+
+function openOverlay() {
+  buildOverlay()
+  const el = document.getElementById('foco-ov')!
+  el.hidden = false
+  refreshSegment(); renderOverlay()
 }
 
 function refreshSegment() {
-  const seg = document.getElementById('pomo-seg'); if (!seg) return
-  seg.querySelectorAll<HTMLElement>('.pomo-seg-btn').forEach(b => {
-    const active = b.dataset.pmode === st.mode
-    b.classList.toggle('active', active); if (active) b.setAttribute('aria-selected','true'); else b.removeAttribute('aria-selected')
+  const seg = document.getElementById('foco-seg'); if (!seg) return
+  seg.querySelectorAll<HTMLElement>('.foco-seg-btn').forEach(b => {
+    const active = b.dataset.fmode === st.mode
+    b.classList.toggle('active', active); if (active) b.setAttribute('aria-selected', 'true'); else b.removeAttribute('aria-selected')
   })
 }
-function toggleLabel() {
-  const d = document.getElementById('pomo-display')
-  if (!d) return
-  if (st.mode === 'chrono') d.textContent = fmtChrono(st.chronoTotal + (st.running ? now() - st.chronoStart : 0))
-  else d.textContent = fmtCount(st.phaseLeft - (st.running ? now() - st.phaseStart : 0))
-  const sub = document.getElementById('pomo-sub'); if (sub) sub.textContent = subLabel()
+
+// ---------- render ----------
+function phaseLabel(): string {
+  const p = st.phase === 'focus' ? 'Foco' : 'Pausa'
+  return `${p} · ciclo ${st.cycle}`
+}
+function fmtChrono(ms: number): string {
+  const h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60, s = Math.floor(ms / 1000) % 60
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`
+}
+function fmtClock(ms: number): string {
+  const m = Math.max(0, Math.floor(ms / 60000)), s = Math.max(0, Math.floor(ms / 1000) % 60)
+  return `${pad(m)}:${pad(s)}`
+}
+function pad(n: number) { return String(n).padStart(2, '0') }
+
+function renderOverlay() {
+  const num = document.getElementById('foco-num'), sub = document.getElementById('foco-sub')
+  const arc = document.getElementById('foco-arc') as SVGCircleElement | null
+  const sat = document.getElementById('foco-sat') as HTMLElement | null
+  const tg = document.getElementById('foco-toggle'); if (tg) tg.innerHTML = `${icon(st.running ? 'pause' : 'play', 16)} ${st.running ? 'Pausar' : 'Iniciar'}`
+  if (!num || !sub) return
+  if (st.mode === 'chrono') {
+    num.textContent = fmtChrono(elElapsed())
+    sub.textContent = 'Cronómetro'
+    if (arc) { arc.style.opacity = '0'; arc.setAttribute('stroke-dashoffset', String(CIRC)) }
+    if (sat) { sat.style.opacity = '1'; }
+  } else {
+    const left = countLeft()
+    num.textContent = fmtClock(left)
+    sub.textContent = phaseLabel()
+    const total = (st.phase === 'focus' ? st.focusMin : st.breakMin) * 60000
+    const frac = total > 0 ? left / total : 0
+    if (arc) { arc.style.opacity = '1'; arc.setAttribute('stroke-dashoffset', String(CIRC * (1 - frac))) }
+    if (sat) sat.style.opacity = '0'
+  }
+}
+
+function renderPill() {
+  const pill = document.getElementById('foco-launch'), lbl = document.getElementById('foco-lbl'), meta = document.getElementById('foco-meta')
+  if (!pill || !lbl) return
+  pill.classList.toggle('running', st.running)
+  if (st.mode === 'pomo' && st.running) {
+    lbl.textContent = 'Pomodoro'
+    if (meta) meta.textContent = fmtClock(countLeft())
+  } else if (st.mode === 'chrono' && st.running) {
+    lbl.textContent = 'Cronómetro'
+    if (meta) meta.textContent = fmtChrono(elElapsed())
+  } else {
+    lbl.textContent = 'Foco'
+    if (meta) meta.textContent = ''
+  }
 }
