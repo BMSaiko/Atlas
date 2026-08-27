@@ -16,3 +16,12 @@ input, textarea, select { font: inherit; color: var(--text); }
 ::placeholder { color: var(--text-dim); opacity: .7; }
 .skip-link { position:absolute; left:-9999px; top:0; }
 .skip-link:focus { left: 8px; top:8px; z-index:1000; background: var(--bg-2); padding:8px 12px; border-radius:8px; }
+
+/* --------- Scrollbars: themed, native --------- */
+html { scrollbar-width: thin; scrollbar-color: var(--gold) var(--bg-2); }
+* { scrollbar-width: thin; scrollbar-color: var(--gold) var(--bg-2); }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: var(--bg-1); }
+::-webkit-scrollbar-thumb { background: var(--bg-3); border: 3px solid var(--bg-1); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gold); }
+::-webkit-scrollbar-corner { background: transparent; }
