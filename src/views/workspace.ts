@@ -38,6 +38,29 @@ export async function renderWorkspace(panel: HTMLElement, slug: string, isSettin
   bindNav(panel)
   let tab: 'notes' | 'kanban' = 'notes'
   const content = panel.querySelector('#ws-content') as HTMLElement
+  // ponytail: badges de contagem nos tabs (notas ativas + cartões ativos); refresca a cada show() (switch)
+  async function refreshTabCounts() {
+    const [notes, board] = await Promise.all([
+      api.notes.get(slug).catch(() => [] as { archived?: boolean }[]),
+      api.kanban.get(slug).catch(() => ({ cards: [] as { archived?: boolean }[] })),
+    ])
+    const set = (id: string, n: number) => {
+      const el = panel.querySelector<HTMLElement>('#' + id)
+      if (!el) return
+      el.querySelector('.side-count')?.remove()
+      if (n > 0) el.insertAdjacentHTML('beforeend', `<span class="side-count">${n}</span>`)
+    }
+    set('tab-notes', notes.filter(n => !n.archived).length)
+    set('tab-kanban', board.cards.filter(c => !c.archived).length)
+  }
+  const show = async () => {
+    panel.querySelectorAll('.ws-tab').forEach(t => t.classList.toggle('active', t.getAttribute('data-tab') === tab))
+    if (tab === 'notes') await renderNotes(content, slug); else await renderKanban(content, slug)
+    await refreshTabCounts()
+  }
+  show()
+  panel.querySelectorAll('.ws-tab').forEach(t => t.addEventListener('click', () => { tab = t.getAttribute('data-tab') as any; show() }))
+  const content = panel.querySelector('#ws-content') as HTMLElement
   const show = async () => {
     panel.querySelectorAll('.ws-tab').forEach(t => t.classList.toggle('active', t.getAttribute('data-tab') === tab))
     if (tab === 'notes') await renderNotes(content, slug); else await renderKanban(content, slug)
