@@ -121,10 +121,17 @@ async function launchHermes(slug: string, card: any) {
   await runGit(['worktree', 'prune'])
   await rmJunction(join(wt, 'node_modules'))
   await killWtLockers(wt)  // pane de run anterior tbm segura o wt -> EBUSY no rm abaixo
-  // ponytail: worktree remove --force e o caminho git-native p/ desregistar uma worktree orfa (dir + reg + branch);
-  // rm() manual nao remove node_modules real (WinError 145) nem desregistar. --force cobre branch nao-merged + sujo.
-  try { await runGit(['worktree', 'remove', '--force', wt]) } catch { /* dir ja nao existe, ok */ }
-  try { await rm(wt, { recursive: true, force: true }) } catch { /* queda do node_modules real; add -B limpa */ }
+  // ponytail: re-tentar remove+rm p/ vencer EBUSY do Windows. O taskkill e assincrono e a pane
+  // do run anterior pode ainda segurar handles; o antigo `try{rm}` era catch-&-silent -> dir + registo
+  // orfaos sobreviviam e o `worktree add` a seguir rebentava em 'already exists'. Aqui removemos com retry
+  // e fazemos `prune` DEPOIS do dir sumir (prune so limpa registos cujo dir ja nao existe).
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await runGit(['worktree', 'prune'])
+    await runGit(['worktree', 'remove', '--force', wt])  // desregistar a worktree orfa (git-native)
+    try { await rm(wt, { recursive: true, force: true }); break }  // limpa residuo do dir, se sobrar
+    catch { await new Promise(r => setTimeout(r, 500)) }  // lock da pane ainda nao solto -> retry
+  }
+  await runGit(['worktree', 'prune'])  // limpa qualquer registo orfao residuo antes de recriar
   const addOut = await runGit(['worktree', 'add', '-B', branch, wt, 'dev'])
   if (!addOut.ok) { await fail('git worktree add falhou: ' + addOut.out); return }
   const linked = await addJunction(join(wt, 'node_modules'), join(ATLAS_REPO, 'node_modules'))
