@@ -36,6 +36,9 @@ export async function renderKanban(root: HTMLElement, slug: string) {
   }
   const PRIO: Record<Prioridade, string> = { low:'low', medium:'medium', high:'high' }
   const showArchived = false
+  // ponytail: bulk — selecao de multiplos cards; selMode liga checkboxes, barra bulk no topo
+  let selMode = false
+  let sel = new Set<string>()
   const P: Record<Prioridade, number> = { low: 0, medium: 1, high: 2 }
   type SortKey = 'pos'|'prio'|'date'|'title'
   let sortKey: SortKey = (localStorage.getItem(`atlas.kbsort.${slug}`) as SortKey) || 'pos'
@@ -60,6 +63,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
         <button class="btn btn-primary kbdhint" id="kadd" aria-describedby="kadd-tip">${icon('plus', 16)} Novo cartão<span class="kbdhint-tip" id="kadd-tip" role="tooltip"><kbd>Ctrl</kbd>+<kbd>K</kbd></span></button>
         <button class="btn btn-ghost" id="karch">${icon('archive', 16)} Arquivados</button>
         <button class="btn btn-ghost" id="kimport" title="Importar tarefas de um roadmap (markdown)">${icon('forward', 16)} Importar</button>
+        <button class="btn btn-ghost" id="ksel" title="Selecionar vários cartões para operações em bulk" style="${selMode?'color:var(--gold)':''}">${icon('check', 16)} ${selMode ? 'Concluir' : 'Bulk'}</button>
         <span class="kb-right">
           <span class="muted" style="font-size:.85rem">${board.cards.filter(c=>!c.archived).length} cartões</span>
           <label class="muted" style="font-size:.85rem;display:flex;align-items:center;gap:6px">Ordenar
@@ -72,6 +76,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
         </label>
         </span>
       </div>
+      ${selMode ? bulkBar() : ''}
       <div class="kanban" id="kboard">${board.columns.map(col => `
         <section class="kcol" data-col="${col.id}">
           <h4>${esc(col.name)} <span class="muted" style="font-size:.78rem">${count(col.id)}</span></h4>
@@ -88,6 +93,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     })
     root.querySelector('#karch')!.addEventListener('click', showArchivedModal)
     root.querySelector('#kimport')!.addEventListener('click', importRoadmap)
+    root.querySelector('#ksel')!.addEventListener('click', () => { selMode = !selMode; if (!selMode) sel.clear(); render() })
     const boardEl = root.querySelector('#kboard') as HTMLElement
     boardEl.addEventListener('keydown', e => {
       const tEl = e.target as HTMLElement
@@ -97,6 +103,15 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       }
     })
     bindDnd(boardEl)
+    // ponytail: bulk bar handlers (elemento fora do #kboard)
+    const kb = root.querySelector('#kbulkbar')
+    if (kb) {
+      kb.querySelector('#bulk-col')!.addEventListener('change', workBulkCol)
+      kb.querySelector('#bulk-prio')!.addEventListener('change', workBulkPrio)
+      kb.querySelector('#bulk-arch')!.addEventListener('click', workBulkArch)
+      kb.querySelector('#bulk-del')!.addEventListener('click', workBulkDel)
+      kb.querySelector('#bulk-clear')!.addEventListener('click', () => { sel.clear(); render() })
+    }
 
   }
 
@@ -107,8 +122,9 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     return board.cards.filter(c => c.colId === colId && !c.archived).sort(cmp).map(c => {
       const idx = board.columns.findIndex(x => x.id === c.colId)
       const prev = board.columns[idx-1]?.id, next = board.columns[idx+1]?.id
-      return `<article class="kcard${c.result ? ' has-output' : ''}" draggable="true" tabindex="0" data-id="${c.id}">
-        <div class="ktitle"><h5>${esc(c.title)}</h5><span class="kdate">${fmtDate(c.ts)}</span></div>
+      const isSel = sel.has(c.id)
+      return `<article class="kcard${c.result ? ' has-output' : ''}${isSel ? ' sel' : ''}" draggable="true" tabindex="0" data-id="${c.id}">
+        <div class="ktitle">${selMode ? `<input type="checkbox" class="kselbox" data-sel="${c.id}" ${isSel ? 'checked' : ''} aria-label="Selecionar ${esc(c.title)}">` : ''}<h5>${esc(c.title)}</h5><span class="kdate">${fmtDate(c.ts)}</span></div>
         ${c.description ? `<div class="kdesc">${linkify(c.description)}</div>` : ''}
         ${c.colId === 'doing' && !c.result ? kdoing(c) : ''}
         ${c.result ? `${resultHtml(c.result)}` : ''}
@@ -131,18 +147,74 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     }).join('')
   }
 
+  // ponytail: barra de operacoes em bulk — aparece quando selMode ativo
+  function bulkBar() {
+    const cols = board.columns.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('')
+    return `<div class="bulkbar" id="kbulkbar">
+        <span class="muted" style="font-size:.85rem"><span id="bulkcount">${sel.size}</span> selecionados</span>
+        <select id="bulk-col" title="Mover para coluna" ${sel.size===0?'disabled':''}><option value="">Mover para coluna…</option>${cols}</select>
+        <select id="bulk-prio" title="Mudar prioridade" ${sel.size===0?'disabled':''}><option value="">Prioridade…</option>
+          <option value="low">Baixa</option><option value="medium">Média</option><option value="high">Alta</option>
+        </select>
+        <button class="btn btn-ghost" id="bulk-arch" ${sel.size===0?'disabled':''}>${icon('archive',15)} Arquivar</button>
+        <button class="btn btn-danger" id="bulk-del" ${sel.size===0?'disabled':''}>${icon('trash',15)} Eliminar</button>
+        <button class="btn btn-ghost" id="bulk-clear" ${sel.size===0?'disabled':''}>Limpar</button>
+      </div>`
+  }
+
+  function refreshBulk() {
+    const n = sel.size
+    const pre = document.getElementById('bulkcount'); if (pre) pre.textContent = String(n)
+    const bar = document.getElementById('kbulkbar'); if (!bar) return
+    // baseline elements atualizam estado disabled + re-render quando muda (render() re-cria bar)
+    ;['#bulk-col','#bulk-prio','#bulk-arch','#bulk-del','#bulk-clear'].forEach(sel2 => {
+      const el = bar.querySelector(sel2) as HTMLButtonElement|HTMLSelectElement|null
+      if (el) (el as HTMLButtonElement).disabled = n === 0
+    })
+    // re-render para atualizar checkboxes .sel
+    // ponytail: so re-render quando a barra existe (selMode ligado)
+    if (bar) render()
+  }
+  function currentSel() { return board.cards.filter(c => sel.has(c.id)) }
+  function workBulkCol(e: Event) {
+    const col = (e.target as HTMLSelectElement).value; if (!col) return
+    const n = sel.size; currentSel().forEach(c => c.colId = col); sel.clear(); save().then(render); toast(`Movidos ${n} cartões`)
+  }
+  function workBulkPrio(e: Event) {
+    const p2 = (e.target as HTMLSelectElement).value as Prioridade; if (!p2) return
+    const n = sel.size; currentSel().forEach(c => c.priority = p2); sel.clear(); save().then(render); toast(`Prioridade atualizada (${n})`)
+  }
+  function workBulkArch() {
+    const n = sel.size; currentSel().forEach(c => c.archived = true); sel.clear(); save().then(render); toast(`Arquivados ${n} cartões`)
+  }
+  function workBulkDel() {
+    const n = sel.size
+    confirmDialog({ title: 'Eliminar cartões', message: `Apagar ${n} cartões selecionados?` }).then(ok => {
+      if (!ok) return; const ids = new Set(sel); board.cards = board.cards.filter(x => !ids.has(x.id)); sel.clear(); save().then(render); toast('Eliminados')
+    })
+  }
+
   function bind() {
     const boardEl = root.querySelector('#kboard') as HTMLElement
     boardEl.addEventListener('click', e => {
+      const chk = (e.target as HTMLElement).closest('.kselbox') as HTMLElement | null
       const btn = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null
+      const cardEl = (e.target as HTMLElement).closest('.kcard') as HTMLElement | null
+      // ponytail: modo bulk — clique no cartao toggles selecao, nao abre modal
+      if (selMode && !btn && cardEl) {
+        const id = cardEl.dataset.id!
+        if (sel.has(id)) sel.delete(id); else sel.add(id)
+        refreshBulk()
+        return
+      }
+      if (chk) { const id = chk.dataset.sel!; if (sel.has(id)) sel.delete(id); else sel.add(id); refreshBulk(); return }
       if (!btn) {
-        const cardEl = (e.target as HTMLElement).closest('.kcard') as HTMLElement | null
         const c = cardEl ? board.cards.find(x => x.id === cardEl.dataset.id) : null
         if (c) viewModal(c)
         return
       }
-      const cardEl = btn.closest('.kcard') as HTMLElement | null
-      const c = cardEl ? board.cards.find(x => x.id === (cardEl.dataset as { id?: string }).id) : null
+      const cardEl2 = btn.closest('.kcard') as HTMLElement | null
+      const c = cardEl2 ? board.cards.find(x => x.id === (cardEl2.dataset as { id?: string }).id) : null
       const act = btn.dataset.act
       if (act === 'edit' && c) { cardModal(c); return }
       if (act === 'del' && c) { confirmDialog({ title: 'Eliminar cartão', message: 'Apagar este cartão?' }).then(ok => { if (!ok) return; board.cards = board.cards.filter(x => x.id !== c.id); save().then(render); toast('Eliminado') }); return }
