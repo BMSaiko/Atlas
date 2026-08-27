@@ -1,5 +1,5 @@
 import type { Plugin, Connect } from 'vite'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { readFile, writeFile, rm } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { join, normalize, extname, relative, sep } from 'node:path'
@@ -29,6 +29,19 @@ function syncVault() { // ponytail: git commit fire-and-forget a cada escrita (n
 const ATLAS_REPO = process.env.ATLAS_REPO || 'C:\\Users\\bruno\\Documents\\Second-Brain\\knowledge\\projects\\atlas\\code'
 const WT_ROOT = join(ATLAS_REPO, 'data', '.wt')  // ponytail: worktrees por card -> N cards em paralelo sem colidir no checkout
 const nid = () => Math.random().toString(36).slice(2, 10)  // id curto p/ notas/cards
+// catalog de icons por workdir -> cada tab da sidebar mostra um icon diferente.
+function iconCatalog(): string[] {
+  const dir = join(process.cwd(), 'public', 'icons')
+  try { return readdirSync(dir).filter(f => f.endsWith('.svg')).sort() } catch { return [] }
+}
+// icon distinto por workdir: escolhe o primeiro ainda nao usado (cai para hash se todos ocupados)
+function pickIcon(idx: WD[]): string {
+  const cat = iconCatalog()
+  if (!cat.length) return ''
+  const used = new Set(idx.map(w => w.icon).filter(Boolean))
+  const free = cat.find(c => !used.has(c))
+  return free || cat[idx.length % cat.length]
+}
 
 
 function initIndex() {
@@ -199,7 +212,7 @@ async function launchHermes(slug: string, card: any) {
 function body(req: any) { return new Promise<any>(res => { let d=''; req.on('data', (c: Buffer)=>d+=c); req.on('end', ()=>{ try{res(JSON.parse(d||'null'))}catch{res(null)} }) }) }
 async function readJ(p: string) { try { return JSON.parse(await readFile(p,'utf8')) } catch { return null } }
 async function writeJ(p: string, v: any) { await writeFile(p, JSON.stringify(v,null,2), 'utf8'); syncVault() }
-interface WD { slug: string; name: string; description: string; createdAt: number }
+interface WD { slug: string; name: string; description: string; createdAt: number; icon?: string }
 async function readIdx(): Promise<WD[]> { return (await readJ(join(DATA, INDEX))) || [] }
 
 export default function atlasApi(): Plugin {
@@ -212,6 +225,8 @@ export default function atlasApi(): Plugin {
       if (!p.startsWith('/api/')) return next()   // static handled by vite, preview fallback below
       const parts = p.replace(/^\/api\//,'').split('/').filter(Boolean)
 
+      // catalog de icons disponiveis para o picker/sidebar
+      if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { icons: iconCatalog() }); return }
       // workdirs list / create
       if (parts[0] === 'workdirs' && parts.length === 1) {
         if (m === 'GET') { send(200, await readIdx()); return }
@@ -221,10 +236,10 @@ export default function atlasApi(): Plugin {
           const idx = await readIdx()
           let slug = toSlug(b.name) || 'workdir'; let base = slug, i = 1
           while (idx.some(w => w.slug === base)) base = `${slug}-${i++}`
-          const wd = { slug: base, name: b.name.trim(), description: (b.description||'').trim(), createdAt: Date.now() }
+          const wd = { slug: base, name: b.name.trim(), description: (b.description||'').trim(), icon: pickIcon(idx), createdAt: Date.now() }
           idx.push(wd); await writeJ(join(DATA, INDEX), idx)
           const d = join(DATA, base); mkdirSync(d, { recursive: true })
-          await writeJ(join(d,'meta.json'), { slug: base, name: wd.name, description: wd.description, createdAt: wd.createdAt })
+          await writeJ(join(d,'meta.json'), { slug: base, name: wd.name, description: wd.description, icon: wd.icon, createdAt: wd.createdAt })
           await writeJ(join(d,'notes.json'), [])
           await writeJ(join(d,'kanban.json'), { columns:[{id:'todo',name:'To Do'},{id:'doing',name:'Em Curso'},{id:'review',name:'Review/Revisão'},{id:'done',name:'Concluído'}], cards:[] })
           send(201, wd); return
@@ -239,9 +254,11 @@ export default function atlasApi(): Plugin {
           const b = await body(req) || {}
           if (typeof b.name === 'string' && b.name.trim()) wd.name = b.name.trim()
           if (typeof b.description === 'string') wd.description = b.description.trim()
+          if (typeof b.icon === 'string' && iconCatalog().includes(b.icon)) wd.icon = b.icon
           await writeJ(join(DATA, INDEX), idx)
           const meta = (await readJ(join(dir,'meta.json'))) || {}
           meta.name = wd.name; meta.description = wd.description
+          if (wd.icon) meta.icon = wd.icon
           await writeJ(join(dir,'meta.json'), meta)
           send(200, wd); return
         }

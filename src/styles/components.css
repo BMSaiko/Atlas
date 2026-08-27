@@ -270,3 +270,12 @@ a.link:hover { color:var(--gold-soft); }
   border-left:1px solid var(--gold); border-top:1px solid var(--gold); transform:rotate(45deg); }
 .kbdhint:hover .kbdhint-tip, .kbdhint:focus-visible .kbdhint-tip, .kbdhint:focus .kbdhint-tip { opacity:1; visibility:visible; transform:translateY(0); }
 @media (prefers-reduced-motion: reduce){ .kbdhint-tip { transition:none } }
+
+/* ---- workdir icons ---- */
+.side-orb { width:20px; height:20px; flex-shrink:0; border-radius:6px; }
+.side-item.active .side-orb { }
+.icon-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(44px,1fr)); gap:8px; margin-top:6px; }
+.icon-cell { background:var(--bg-2); border:1px solid var(--line); border-radius:var(--r1); padding:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:border-color .15s,box-shadow .15s; }
+.icon-cell img { width:30px; height:30px; display:block; }
+.icon-cell:hover { border-color:var(--gold); }
+.icon-cell.sel { border-color:var(--gold); box-shadow:0 0 0 2px color-mix(in srgb, var(--gold) 40%, transparent); }

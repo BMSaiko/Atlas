@@ -3,8 +3,8 @@ export interface Nota { id: string; title: string; text: string; ts: number; arc
 export interface Card { id: string; colId: string; title: string; description: string; priority: Prioridade; ts: number; archived: boolean; result?: string; reviewed?: boolean; startedAt?: number }
 export interface Coluna { id: string; name: string }
 export interface Board { columns: Coluna[]; cards: Card[] }
-export interface Workdir { slug: string; name: string; description?: string; createdAt: number }
-export interface WorkdirMeta { slug: string; name: string; description: string; createdAt: number }
+export interface Workdir { slug: string; name: string; description?: string; createdAt: number; icon?: string }
+export interface WorkdirMeta { slug: string; name: string; description: string; createdAt: number; icon?: string }
 
 async function j<T>(url: string, method = 'GET', body?: unknown): Promise<T> {
   const r = await fetch(url, { method, headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined, body: body !== undefined ? JSON.stringify(body) : undefined })
@@ -15,7 +15,8 @@ async function j<T>(url: string, method = 'GET', body?: unknown): Promise<T> {
 export const api = {
   workdirs: () => j<Workdir[]>('/api/workdirs'),
   createWorkdir: (name: string, description?: string) => j<Workdir>('/api/workdirs', 'POST', { name, description }),
-  patchWorkdir: (slug: string, patch: { name?: string; description?: string }) => j<Workdir>(`/api/workdirs/${slug}`, 'PATCH', patch),
+  patchWorkdir: (slug: string, patch: { name?: string; description?: string; icon?: string }) => j<Workdir>(`/api/workdirs/${slug}`, 'PATCH', patch),
+  icons: () => j<{ icons: string[] }>('/api/icons').then(r => r.icons),
   deleteWorkdir: (slug: string) => j<{ ok: boolean }>(`/api/workdirs/${slug}`, 'DELETE'),
   meta: (slug: string) => j<WorkdirMeta>(`/api/w/${slug}`),
   notes: {

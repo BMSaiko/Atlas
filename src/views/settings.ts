@@ -18,6 +18,11 @@ export async function renderSettings(root: HTMLElement, slug: string) {
         <form id="meta-form">
           <div class="field"><label for="s-name">Nome</label><input id="s-name" name="name" value="${esc(meta?.name || '')}" required></div>
           <div class="field"><label for="s-desc">Descrição</label><textarea id="s-desc" name="description">${esc(meta?.description || '')}</textarea></div>
+          <div class="field"><label>Icon do workdir</label>
+            <div class="icon-grid" id="icon-grid">${(await api.icons()).map(n =>
+              `<button type="button" class="icon-cell${n === (meta?.icon || '') ? ' sel' : ''}" data-icon="${n}" aria-label="${n.replace(/\.svg$/,'')}"><img src="/icons/${n}" alt=""></button>`).join('')}
+            </div>
+          </div>
           <button class="btn btn-primary" type="submit">Guardar</button>
         </form>
       </div>
@@ -82,13 +87,21 @@ export async function renderSettings(root: HTMLElement, slug: string) {
     setMode((e.target as HTMLSelectElement).value === 'manual' ? 'manual' : 'auto')
   })
 
+  let selIcon = meta?.icon
+  const grid = root.querySelector('#icon-grid') as HTMLElement
+  grid.addEventListener('click', e => {
+    const btn = (e.target as HTMLElement).closest('[data-icon]') as HTMLElement | null
+    if (!btn) return
+    selIcon = btn.dataset.icon
+    grid.querySelectorAll('[data-icon]').forEach(b => b.classList.toggle('sel', b === btn))
+  })
   root.querySelector('#meta-form')!.addEventListener('submit', async e => {
     e.preventDefault()
     const form = e.target as HTMLFormElement
     const name = (form.querySelector('[name=name]') as HTMLInputElement).value.trim()
     const description = (form.querySelector('[name=description]') as HTMLTextAreaElement).value
     if (!name) { toast('Nome obrigatório'); return }
-    try { await api.patchWorkdir(slug, { name, description }); toast('Guardado'); navigate('/w/' + slug) }
+    try { await api.patchWorkdir(slug, { name, description, icon: selIcon }); toast('Guardado'); navigate('/w/' + slug) }
     catch (err: any) { toast('Erro: ' + err.message) }
   })
 

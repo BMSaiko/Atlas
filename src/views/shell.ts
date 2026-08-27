@@ -23,7 +23,8 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
   const workdirs = await api.workdirs()
   let activeSlug = slug && workdirs.some(w => w.slug === slug) ? slug : null
   if (!activeSlug) { const p = active(); if (p && workdirs.some(w => w.slug === p)) activeSlug = p }
-  const items = await Promise.all(workdirs.map(async w => ({ ...w, open: (await counts(w.slug)).open })))
+  const catalog = await api.icons().catch(() => [] as string[])
+  const items = await Promise.all(workdirs.map(async (w, i) => ({ ...w, icon: w.icon || catalog[i % Math.max(catalog.length, 1)], open: (await counts(w.slug)).open })))
   state.slug = activeSlug; state.items = items
 
   root.innerHTML = `
@@ -33,7 +34,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
         <div class="side-head"><a class="logo logo-sm" href="/" data-nav="/">ATLAS</a><span class="shift-ind" id="shift-ind" title="Luminosidade do dia"></span></div>
         <nav class="side-nav" aria-label="Workdirs">
           ${items.map(w => `<a class="side-item${w.slug === activeSlug ? ' active' : ''}" data-slug="${w.slug}" href="/w/${w.slug}">
-            <span class="side-icon">${icon('sphere', 18)}</span>
+            <img class="side-orb" src="/icons/${w.icon}" alt="" aria-hidden="true" ${w.icon ? '' : 'hidden'}>
             <span class="side-label">${esc(w.name)}</span>
             ${w.open ? `<span class="side-count">${w.open}</span>` : ''}</a>`).join('')}
         </nav>
@@ -96,7 +97,7 @@ function watchShift() {
   mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-shift'] })
 }
 
-let state: { slug: string | null; items: Array<{ slug: string }> } = { slug: null, items: [] }
+let state: { slug: string | null; items: Array<{ slug: string; icon?: string }> } = { slug: null, items: [] }
 let keydownBound = false
 function bindKeydown() {
   if (keydownBound) return

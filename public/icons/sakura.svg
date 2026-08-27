@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <radialGradient id="sakura.svg" cx="35%" cy="30%" r="80%">
+      <stop offset="0%" stop-color="#e5678d"/>
+      <stop offset="55%" stop-color="#992648"/>
+      <stop offset="100%" stop-color="#470317"/>
+    </radialGradient>
+  </defs>
+  <circle cx="32" cy="32" r="20" fill="url(#sakura.svg)"/>
+  <path d="M12 32 a20 20 0 0 1 40 0" stroke="#ffffff" stroke-width="1.5" fill="none" opacity=".5" transform="rotate(30 32 32)"/>
+  
+</svg>
