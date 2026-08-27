@@ -5,7 +5,7 @@ import { toast } from '../ui/toast'
 import { navigate } from '../router'
 import { renderWorkspace } from './workspace'
 import { startClockWidget } from '../ui/clock'
-import { getTheme, setManual, Shift } from '../ui/theme'
+import { getTheme, setManual, autoShift, Shift } from '../ui/theme'
 import { mountFocus } from '../ui/pomodoro'
 
 const ACTIVE_KEY = 'atlas.active'
@@ -75,21 +75,20 @@ function renderShift() {
   const el = document.getElementById('shift-ind')
   if (!el) return
   const t = getTheme()
-  // Em modo auto o tema segue a hora; o botão sai da barra lateral.
-  if (t.mode === 'auto') { el.style.display = 'none'; return }
-  el.style.display = ''
-  const s: Shift = t.shift
-  el.innerHTML = icon(SHIFT_ICON[s] || 'moon', 16) +
-    `<span class="shift-label">${SHIFT_LABEL[s] || 'Noite'}</span>`
+  const auto = t.mode === 'auto'
+  const s: Shift = auto ? autoShift() : t.shift
+  el.innerHTML = (auto ? icon('timer', 16) : icon(SHIFT_ICON[s] || 'moon', 16)) +
+    `<span class="shift-label">${auto ? 'Auto' : (SHIFT_LABEL[s] || 'Noite')}</span>`
   el.setAttribute('data-shift', s)
+  el.title = auto ? 'Tema automático — segue a hora do dia' : 'Tema manual — clicar alterna o tema'
 }
 function watchShift() {
   renderShift()
   const el = document.getElementById('shift-ind')
-  // O botão só é clicável em modo manual (o modo manual fixa o tema).
+  // Botão clicável sempre: em auto muda para manual, em manual cicla o tema.
   el?.addEventListener('click', () => {
     const t = getTheme()
-    if (t.mode === 'auto') return
+    if (t.mode === 'auto') { setManual(((document.documentElement.dataset.shift) as Shift) || autoShift()); return }
     const next = CYCLE[(CYCLE.indexOf(t.shift) + 1) % CYCLE.length]
     setManual(next)
   })
