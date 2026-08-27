@@ -156,7 +156,7 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
         if (!path) return
         api.importRoadmap(slug, path)
           .then(d => { toast(`Importados ${d.addedCards} cartões + ${d.addedNotes} notas (${d.skipped} já existiam)`); return api.kanban.get(slug) })
-          .then(fresh => { board = fresh; render() })
+          .then(fresh => { board = fresh; render(); refreshTabCounts(slug) })
           .catch(e => toast('Erro: ' + e.message))
       },
     })
