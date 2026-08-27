@@ -9,6 +9,16 @@ export async function renderNotes(root: HTMLElement, slug: string) {
   let notes = await api.notes.get(slug).catch(() => [] as Nota[])
   const save = async () => { await api.notes.put(slug, notes); }
   const fmt = (ts: number) => new Date(ts).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  // ponytail: ao converter nota->cartao (tocanban) o board muda fora de kanban.ts; re-sync sidebar aqui
+  function refreshSideCount() {
+    api.kanban.get(slug).then(b => {
+      const n = b.cards.filter(c => !c.archived && c.colId !== 'done').length
+      const item = document.querySelector<HTMLElement>(`.side-item[data-slug="${slug}"]`)
+      if (!item) return
+      item.querySelector('.side-count')?.remove()
+      if (n) item.insertAdjacentHTML('beforeend', `<span class="side-count">${n}</span>`)
+    }).catch(() => {})
+  }
 
   root.innerHTML = `
     <div class="notes-toolbar">
@@ -57,7 +67,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       if (!col) { toast('Sem colunas no kanban'); return }
       b.cards.push({ id: uid(), title: n.title, description: (n.text || '').trim(), priority: 'low', colId: col, ts: Date.now(), archived: false })
       api.kanban.put(slug, b)
-        .then(() => toast(`Cartão criado: "${n.title}"`))
+        .then(() => { refreshSideCount(); toast(`Cartão criado: "${n.title}"`) })
         .catch(e => toast('Erro: ' + e.message))
     }).catch(e => toast('Erro: ' + e.message))
   }
