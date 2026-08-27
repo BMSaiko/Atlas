@@ -428,3 +428,11 @@ a.link:hover { color:var(--gold-soft); }
 @media (prefers-reduced-motion: reduce) {
   .proj-ring .pr-fill, .pleg { transition:none }
 }
+
+/* === Bulk selection (kanban + notes) === */
+.kselbox, .nselbox { width:16px; height:16px; accent-color:var(--gold); cursor:pointer; flex:none; }
+.kcard.sel, .note-card.sel { border-color:var(--gold); box-shadow:0 0 0 1px var(--gold), 0 6px 18px rgba(0,0,0,.3); }
+.kcard.sel { cursor:pointer; }
+.bulkbar { display:flex; gap:var(--s3); align-items:center; padding:10px 14px; margin-bottom:14px; background:var(--bg-2); border:1px solid var(--gold); border-radius:var(--r2); flex-wrap:wrap; }
+.bulkbar select { padding:8px 10px; border-radius:var(--r1); background:var(--bg-3); border:1px solid var(--line); color:var(--text); font-size:.85rem; cursor:pointer; }
+.bulkbar select:disabled, .bulkbar .btn:disabled { opacity:.5; cursor:not-allowed; }
