@@ -230,6 +230,18 @@ export default function atlasApi(): Plugin {
       // workdirs list / create
       if (parts[0] === 'workdirs' && parts.length === 1) {
         if (m === 'GET') { send(200, await readIdx()); return }
+        if (m === 'PUT') {
+          const b = await body(req) || {}
+          const order = Array.isArray(b.order) ? b.order.filter((x: any) => typeof x === 'string') : null
+          if (!order) { send(400,{error:'order required'}); return }
+          const idx = await readIdx()
+          const bySlug = new Map(idx.map(w => [w.slug, w]))
+          const next: WD[] = []
+          for (const sl of order) { const w = bySlug.get(sl); if (w && !next.includes(w)) next.push(w) }
+          for (const w of idx) if (!next.includes(w)) next.push(w)
+          await writeJ(join(DATA, INDEX), next)
+          send(200, next); return
+        }
         if (m === 'POST') {
           const b = await body(req)
           if (!b || typeof b.name !== 'string' || !b.name.trim()) { send(400,{error:'name required'}); return }

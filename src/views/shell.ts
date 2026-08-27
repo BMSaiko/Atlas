@@ -33,12 +33,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
     <div class="shell" id="shell">
       <aside class="side" id="side">
         <div class="side-head"><a class="logo logo-sm" href="/" data-nav="/">ATLAS</a><span class="shift-ind" id="shift-ind" title="Luminosidade do dia"></span></div>
-        <nav class="side-nav" aria-label="Workdirs">
-          ${items.map(w => `<a class="side-item${w.slug === activeSlug ? ' active' : ''}" data-slug="${w.slug}" href="/w/${w.slug}">
-            <img class="side-orb" src="/icons/${w.icon}" alt="" aria-hidden="true" ${w.icon ? '' : 'hidden'}>
-            <span class="side-label">${esc(w.name)}</span>
-            ${w.open ? `<span class="side-count">${w.open}</span>` : ''}</a>`).join('')}
-        </nav>
+        <nav class="side-nav" aria-label="Workdirs"></nav>
         <div class="side-clock" id="clock">
           <div class="clock-time" data-clock="time">--:--:--</div>
           <div class="clock-sub"><span class="clock-date" data-clock="date"></span> · <span class="clock-tz" data-clock="tz" id="clock-tz" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-label="Fuso horário">PT</span></div>
@@ -51,16 +46,47 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
       <main class="panel" id="panel"></main>
     </div>`
 
+  const shell = root.querySelector('#shell') as HTMLElement
+  const nav = root.querySelector('.side-nav') as HTMLElement
+  let dragSlug: string | null = null
+  const renderNav = () => {
+    nav.innerHTML = items.map(w => `<a class="side-item${w.slug === activeSlug ? ' active' : ''}" data-slug="${w.slug}" draggable="true" href="/w/${w.slug}">
+      <img class="side-orb" src="/icons/${w.icon}" alt="" aria-hidden="true" ${w.icon ? '' : 'hidden'}>
+      <span class="side-label">${esc(w.name)}</span>
+      ${w.open ? `<span class="side-count">${w.open}</span>` : ''}</a>`).join('')
+    nav.querySelectorAll<HTMLElement>('.side-item').forEach(el => el.addEventListener('click', e => {
+      e.preventDefault(); setActive(el.getAttribute('data-slug')!); shell.classList.remove('side-open'); navigate('/w/' + el.getAttribute('data-slug'))
+    }))
+    nav.querySelectorAll<HTMLElement>('.side-item').forEach(el => el.addEventListener('dragstart', (e: DragEvent) => {
+      dragSlug = el.getAttribute('data-slug'); el.classList.add('dragging')
+      try { e.dataTransfer?.setData('text/plain', dragSlug || '') } catch {}
+    }))
+    nav.querySelectorAll<HTMLElement>('.side-item').forEach(el => {
+      el.addEventListener('dragend', () => { el.classList.remove('dragging'); nav.querySelectorAll<HTMLElement>('.side-item').forEach(x => x.classList.remove('dragover')); dragSlug = null })
+      el.addEventListener('dragover', e => { if (dragSlug && el.getAttribute('data-slug') !== dragSlug) { e.preventDefault(); el.classList.add('dragover') } })
+      el.addEventListener('dragleave', () => el.classList.remove('dragover'))
+      el.addEventListener('drop', e => {
+        e.preventDefault(); el.classList.remove('dragover')
+        if (!dragSlug) return
+        const from = items.findIndex(w => w.slug === dragSlug)
+        const to = items.findIndex(w => w.slug === el.getAttribute('data-slug'))
+        if (from < 0 || to < 0 || from === to) { dragSlug = null; return }
+        const [moved] = items.splice(from, 1)
+        items.splice(to, 0, moved)
+        dragSlug = null
+        state.items = [...items]
+        renderNav()
+        api.reorderWorkdirs(items.map(w => w.slug)).catch(() => toast('Erro ao guardar ordem'))
+      })
+    })
+  }
+  renderNav()
   const panel = root.querySelector('#panel') as HTMLElement
   if (activeSlug) { setActive(activeSlug); await renderWorkspace(panel, activeSlug, isSettings) }
   else if (items.length) await renderDashboard(panel, items)
   else renderEmpty(panel, items, root)
 
-  const shell = root.querySelector('#shell') as HTMLElement
   root.querySelector('#hamb')!.addEventListener('click', () => shell.classList.toggle('side-open'))
-  root.querySelectorAll('.side-item').forEach(el => el.addEventListener('click', e => {
-    e.preventDefault(); setActive(el.getAttribute('data-slug')!); shell.classList.remove('side-open'); navigate('/w/' + el.getAttribute('data-slug'))
-  }))
   root.querySelectorAll('[data-nav]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); navigate(el.getAttribute('data-nav')!) }))
   root.querySelector('#side-new')!.addEventListener('click', () => newWorkdir())
   bindKeydown()

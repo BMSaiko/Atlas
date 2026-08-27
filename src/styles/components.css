@@ -54,6 +54,10 @@
 .side-label { flex:1; font-weight:500; font-size:.95rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .side-count { background:var(--bg-3); color:var(--text-dim); font-size:.72rem; font-weight:600; padding:2px 8px; border-radius:999px; min-width:20px; text-align:center; }
 .side-item.active .side-count { background:rgba(0,0,0,.16); color:#1a1508; }
+.side-item[draggable='true'] { cursor:grab; }
+.side-item.dragging { opacity:.4; }
+.side-item.dragover { background:var(--gold); color:#1a1508; }
+.side-item.dragover .side-count { background:rgba(0,0,0,.16); color:#1a1508; }
 .side-foot { padding: var(--s3); border-top:1px solid var(--line); }
 .btn-block { width:100%; justify-content:center; }
 
