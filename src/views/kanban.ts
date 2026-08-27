@@ -80,8 +80,9 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       const idx = board.columns.findIndex(x => x.id === c.colId)
       const prev = board.columns[idx-1]?.id, next = board.columns[idx+1]?.id
       return `<article class="kcard" draggable="true" tabindex="0" data-id="${c.id}">
-        <h5>${esc(c.title)}</h5>
+        <div class="ktitle"><h5>${esc(c.title)}</h5><span class="kdate">${fmtDate(c.ts)}</span></div>
         ${c.description ? `<div class="kdesc">${linkify(c.description)}</div>` : ''}
+        ${c.colId === 'doing' && !c.result ? kdoing() : ''}
         ${c.result ? `${resultHtml(c.result)}` : ''}
         <div class="kfoot">
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
@@ -182,12 +183,15 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
 
   function viewModal(c: Card) {
     const col = board.columns.find(x => x.id === c.colId)?.name || ''
-    openModal({
-      title: 'Cartão', submitText: 'Editar',
+    const m = openModal({
+      title: c.title, submitText: 'Editar',
       body: () => `
         <div style="font-size:.95rem;margin-bottom:8px">
+          <button type="button" class="kcopy" data-id="${c.id}" title="Copiar ID"
+            style="font-family:monospace;font-size:.8rem;background:none;border:1px solid var(--line);border-radius:4px;color:var(--muted);text-decoration:underline dotted;cursor:pointer;padding:1px 6px;margin-right:8px">#${c.id}</button>
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
           <span class="muted"> · ${esc(col)}</span>
+          <span class="muted"> · criado ${fmtDate(c.ts)}</span>
         </div>
         ${c.description
           ? `<div class="kdesc" style="font-size:1rem;white-space:pre-wrap">${esc(c.description)}</div>`
@@ -197,6 +201,10 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
           : ''}`
       ,
       onSubmit: () => cardModal(c),
+    })
+    m.root.querySelector('.kcopy')?.addEventListener('click', e => {
+      e.stopPropagation()
+      navigator.clipboard.writeText(c.id).then(() => toast('ID copiado: ' + c.id)).catch(() => toast('Falha ao copiar'))
     })
   }
 
@@ -228,6 +236,28 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
     if (JSON.stringify(board) !== JSON.stringify(fresh)) { board = fresh; render() }
   }, 4000)
 }
+// ponytail: roda a palavra do doing de 8 em 8s no DOM com fade fluido (sem re-render do board)
+setInterval(() => {
+  const els = document.querySelectorAll('.kdoing .kword')
+  if (!els.length) return
+  kdoingIdx++
+  const w = KDOING_WORDS[kdoingIdx % KDOING_WORDS.length]
+  els.forEach(el => {
+    el.classList.remove('kfade')
+    void (el as HTMLElement).offsetWidth // reinicia animacao CSS
+    el.textContent = w
+    el.classList.add('kfade')
+  })
+}, 8000)
+
+const KDOING_WORDS = ['doing', 'a trabalhar', 'em curso', 'a processar', 'ajustando', 'a pensar', 'a fazer']
+let kdoingIdx = 0
+// ponytail: rotaciona palavras (nao so 'doing') + 3 pontos animados (CSS kdblink)
+// a palavra rodada em tempo real por um interval de 3s (ver renderKanban)
+function kdoing(): string {
+  const w = KDOING_WORDS[kdoingIdx % KDOING_WORDS.length]
+  return `<div class="kdoing"><span class="kword">${w}</span><span class="kdot" style="--i:0"></span><span class="kdot" style="--i:1"></span><span class="kdot" style="--i:2"></span></div>`
+}
 function resultHtml(r: string): string {
   // ponytail: primeira linha = destaque (ex. 'Task cumprida: ...'); corpo separado
   const nl = r.indexOf('\n')
@@ -236,4 +266,7 @@ function resultHtml(r: string): string {
   return `<div class="kresult"><div class="kresult-title">${esc(title)}</div>${body ? `<div class="kresult-body">${esc(deindent(body))}</div>` : ''}</div>`
 }
 function deindent(s: string): string { return s.replace(/^\s+/gm, '').replace(/\n{2,}/g, '\n').trim() }
+function fmtDate(ts: number): string {
+  return new Date(ts).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' })
+}
 function esc(s: string) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
