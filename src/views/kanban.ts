@@ -6,6 +6,11 @@ import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
 import { linkify } from '../ui/text'
 
+// ponytail: handle unico do poll — renderKanban re-corre em cada navegacao e criava
+// um setInterval novo por chamada => intervals acumulados disparavam notifyCard
+// varias vezes quando um card entrava em review. Limpa o anterior antes de criar.
+let pollTimer: ReturnType<typeof setInterval> | undefined
+
 export async function renderKanban(root: HTMLElement, slug: string) {
   let board = await api.kanban.get(slug).catch(() => ({ columns: [], cards: [] } as Board))
   const save = async () => {
@@ -292,7 +297,8 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission()
 
   // ponytail: poll board while any card is in 'doing' so progress/result appears without manual refresh
-  setInterval(async () => {
+  if (pollTimer) clearInterval(pollTimer)
+  pollTimer = setInterval(async () => {
     if (!document.getElementById('kboard')) return
     const hasDoing = board.cards.some(c => !c.archived && c.colId === 'doing')
     if (!hasDoing) return
