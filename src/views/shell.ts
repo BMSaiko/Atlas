@@ -24,7 +24,6 @@ async function counts(slug: string) {
 export async function renderShell(root: HTMLElement, slug: string | null, isSettings: boolean) {
   const workdirs = await api.workdirs()
   let activeSlug = slug && workdirs.some(w => w.slug === slug) ? slug : null
-  if (!activeSlug) { const p = active(); if (p && workdirs.some(w => w.slug === p)) activeSlug = p }
   const catalog = await api.icons().catch(() => [] as string[])
   const items = await Promise.all(workdirs.map(async (w, i) => ({ ...w, icon: w.icon || catalog[i % Math.max(catalog.length, 1)], open: (await counts(w.slug)).open })))
   state.slug = activeSlug; state.items = items
