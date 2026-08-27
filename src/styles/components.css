@@ -39,8 +39,6 @@
 .shift-ind[data-shift="day"] { color:var(--gold); }
 .shift-ind[data-shift="dusk"] { color:var(--prio-med); }
 .shift-ind[data-shift="night"] { color:var(--sky); }
-.shift-ind .shift-mode { display:inline-block; padding:1px 5px; border-radius:999px;
-  background:var(--bg-3); color:var(--gold-soft); font-size:.6rem; font-weight:700; letter-spacing:.02em; }
 
 
 /* --- App shell (sidebar + panel) --- */

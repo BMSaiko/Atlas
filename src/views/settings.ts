@@ -3,7 +3,7 @@ import { icon } from '../ui/icons'
 import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
 import { navigate } from '../router'
-import { getTheme, setAuto, setManual, Shift } from '../ui/theme'
+import { getTheme, setMode } from '../ui/theme'
 
 export async function renderSettings(root: HTMLElement, slug: string) {
   const th = getTheme()
@@ -23,17 +23,11 @@ export async function renderSettings(root: HTMLElement, slug: string) {
       </div>
       <div class="card-block">
         <h3>Tema</h3>
-        <p class="muted" style="margin-bottom:12px">O tema pode seguir a hora do dia automaticamente, ou ficar fixo num manual (mudável a qualquer momento no indicador, à esquerda).</p>
+        <p class="muted" style="margin-bottom:12px">Em automático o tema segue a hora do dia. Em manual escolhes o tema no indicador da barra lateral (Dia / Entardecer / Noite), que se esconde quando voltas a automático.</p>
         <div class="field"><label for="th-mode">Troca automática</label>
           <select id="th-mode">
             <option value="auto" ${th.mode === 'auto' ? 'selected' : ''}>Automático — segue a hora do dia</option>
             <option value="manual" ${th.mode === 'manual' ? 'selected' : ''}>Manual — fico fixo no meu tema</option>
-          </select></div>
-        <div class="field" id="th-shift-wrap" style="display:${th.mode === 'manual' ? '' : 'none'}"><label for="th-shift">Tema fixo</label>
-          <select id="th-shift">
-            <option value="day" ${th.shift === 'day' ? 'selected' : ''}>Dia</option>
-            <option value="dusk" ${th.shift === 'dusk' ? 'selected' : ''}>Entardecer</option>
-            <option value="night" ${th.shift === 'night' ? 'selected' : ''}>Noite</option>
           </select></div>
       </div>
       <div class="card-block">
@@ -83,17 +77,10 @@ export async function renderSettings(root: HTMLElement, slug: string) {
   })
   root.querySelector('#col-save')!.addEventListener('click', async () => { await saveBoard(); toast('Colunas guardadas') })
 
-  // --- Tema: modo auto/manual ---
-  const thMode = root.querySelector('#th-mode') as HTMLSelectElement
-  const thShift = root.querySelector('#th-shift') as HTMLSelectElement
-  const thShiftWrap = root.querySelector('#th-shift-wrap') as HTMLElement
-  thMode.addEventListener('change', () => {
-    const manual = thMode.value === 'manual'
-    thShiftWrap.style.display = manual ? '' : 'none'
-    if (manual) setManual(thShift.value as Shift)
-    else setAuto()
+  // --- Tema: modo auto/manual (a escolha do tema fica no indicador da sidebar) ---
+  root.querySelector('#th-mode')!.addEventListener('change', e => {
+    setMode((e.target as HTMLSelectElement).value === 'manual' ? 'manual' : 'auto')
   })
-  thShift.addEventListener('change', () => setManual(thShift.value as Shift))
 
   root.querySelector('#meta-form')!.addEventListener('submit', async e => {
     e.preventDefault()

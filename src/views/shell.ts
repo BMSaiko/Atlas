@@ -75,11 +75,12 @@ function renderShift() {
   const el = document.getElementById('shift-ind')
   if (!el) return
   const t = getTheme()
-  const s = t.mode === 'auto' ? document.documentElement.dataset.shift || 'night' : t.shift
-  const auto = t.mode === 'auto'
+  // Em modo auto o tema segue a hora; o botão sai da barra lateral.
+  if (t.mode === 'auto') { el.style.display = 'none'; return }
+  el.style.display = ''
+  const s: Shift = t.shift
   el.innerHTML = icon(SHIFT_ICON[s] || 'moon', 16) +
-    `<span class="shift-label">${SHIFT_LABEL[s] || 'Noite'}</span>` +
-    (auto ? `<span class="shift-mode">auto</span>` : '')
+    `<span class="shift-label">${SHIFT_LABEL[s] || 'Noite'}</span>`
   el.setAttribute('data-shift', s)
 }
 function watchShift() {

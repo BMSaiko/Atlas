@@ -53,6 +53,14 @@ export function setManual(shift: Shift) {
   applyShift(shift)
 }
 
+/** Alterna entre automático e manual mantendo o tema visualmente estável. */
+export function setMode(mode: ThemeMode) {
+  const cur: Shift = (document.documentElement.dataset.shift as Shift) || read().shift
+  const shift = mode === 'auto' ? autoShift() : cur
+  write({ mode, shift })
+  applyShift(shift)
+}
+
 export function setAuto() {
   const shift = autoShift()
   write({ mode: 'auto', shift })
