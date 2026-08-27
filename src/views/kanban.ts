@@ -11,7 +11,14 @@ export async function renderKanban(root: HTMLElement, slug: string) {
   const save = async () => {
     const now = Date.now()
     // ponytail: qualquer card em doing sem startedAt comeca o timer agora (cobre dnd/modal de entrada em doing)
-    for (const c of board.cards) if (c.colId === 'doing' && !c.startedAt) c.startedAt = now
+    for (const c of board.cards) {
+      if (c.colId === 'doing') {
+        if (!c.startedAt) c.startedAt = now
+        // ponytail: voltar para doing (dnd/review/done) limpa resultado e revisao anteriores
+        delete c.result
+        delete c.reviewed
+      }
+    }
     await api.kanban.put(slug, board); refreshSideCount(); refreshTabCounts(slug)
   }
   // ponytail: sidebar count computed once at renderShell; keep in sync on every board mutation

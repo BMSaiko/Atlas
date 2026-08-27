@@ -286,6 +286,9 @@ export default function atlasApi(): Plugin {
         if (card.colId === 'done' || card.archived) { send(409, { error: 'card done or archived' }); return }
         card.colId = 'doing'
         card.startedAt = Date.now()
+        // ponytail: re-come쀎7ar a tarefa limpa o output anterior — doing nao deve carregar resultado passado
+        delete card.result
+        delete card.reviewed
         await writeJ(file, board)
         await launchHermes(slug, card)
         send(200, { ok: true })
