@@ -1,6 +1,7 @@
 import { api, Nota, uid } from '../api'
 import { icon } from '../ui/icons'
 import { openModal } from '../ui/modal'
+import { refreshTabCounts } from '../ui/counts'
 import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
 import { linkify } from '../ui/text'
@@ -8,7 +9,7 @@ import { linkify } from '../ui/text'
 export async function renderNotes(root: HTMLElement, slug: string) {
   let notes = await api.notes.get(slug).catch(() => [] as Nota[])
   let showArch = false
-  const save = async () => { await api.notes.put(slug, notes); }
+  const save = async () => { await api.notes.put(slug, notes); refreshTabCounts(slug) }
   const fmt = (ts: number) => new Date(ts).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
   const archCount = () => notes.filter(n => n.archived).length
   // ponytail: ao converter nota->cartao (tocanban) o board muda fora de kanban.ts; re-sync sidebar aqui

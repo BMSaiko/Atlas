@@ -1,6 +1,7 @@
 import { api, Board, Card, Coluna, Prioridade, uid } from '../api'
 import { icon } from '../ui/icons'
 import { openModal } from '../ui/modal'
+import { refreshTabCounts } from '../ui/counts'
 import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
 import { linkify } from '../ui/text'
@@ -11,7 +12,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     const now = Date.now()
     // ponytail: qualquer card em doing sem startedAt comeca o timer agora (cobre dnd/modal de entrada em doing)
     for (const c of board.cards) if (c.colId === 'doing' && !c.startedAt) c.startedAt = now
-    await api.kanban.put(slug, board); refreshSideCount()
+    await api.kanban.put(slug, board); refreshSideCount(); refreshTabCounts(slug)
   }
   // ponytail: sidebar count computed once at renderShell; keep in sync on every board mutation
   function refreshSideCount() {
