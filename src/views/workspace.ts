@@ -37,7 +37,8 @@ export async function renderWorkspace(panel: HTMLElement, slug: string, isSettin
       <div id="ws-content"></div>
     </div>`
   bindNav(panel)
-  let tab: 'notes' | 'kanban' = 'notes'
+  const tabKey = `atlas.tab.\${slug}`
+  let tab: 'notes' | 'kanban' = (() => { try { return localStorage.getItem(tabKey) === 'kanban' ? 'kanban' : 'notes' } catch { return 'notes' } })()
   const content = panel.querySelector('#ws-content') as HTMLElement
   const show = async () => {
     panel.querySelectorAll('.ws-tab').forEach(t => t.classList.toggle('active', t.getAttribute('data-tab') === tab))
@@ -45,7 +46,7 @@ export async function renderWorkspace(panel: HTMLElement, slug: string, isSettin
     await refreshTabCounts(slug)
   }
   show()
-  panel.querySelectorAll('.ws-tab').forEach(t => t.addEventListener('click', () => { tab = t.getAttribute('data-tab') as any; show() }))
+  panel.querySelectorAll('.ws-tab').forEach(t => t.addEventListener('click', () => { tab = t.getAttribute('data-tab') as any; try { localStorage.setItem(tabKey, tab) } catch {}; show() }))
 }
 
 function bindNav(root: HTMLElement) {
