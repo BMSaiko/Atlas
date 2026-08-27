@@ -374,3 +374,54 @@ a.link:hover { color:var(--gold-soft); }
   .sess-dot { animation:none }
   .pipe-seg, .mini-seg { transition:none }
 }
+
+/* ── Dashboard · órbita, estrelas, pipeline-stepper ── */
+.stat { position:relative; }
+.stat::before { content:''; position:absolute; top:0; left:var(--s3); right:0; height:2px; border-radius:2px; background:linear-gradient(90deg, var(--accent, var(--gold)), transparent 85%); }
+.stat-body { min-width:0; }
+.dash-stars { position:absolute; inset:0; pointer-events:none; opacity:.85;
+  background-image:
+    radial-gradient(circle, rgba(255,244,214,.9) 1px, transparent 1px),
+    radial-gradient(circle, rgba(255,244,214,.5) 1px, transparent 1px),
+    radial-gradient(circle, rgba(255,255,255,.75) 1.4px, transparent 1.4px),
+    radial-gradient(circle, rgba(255,244,214,.6) 1px, transparent 1px),
+    radial-gradient(circle, rgba(255,255,255,.5) 1.2px, transparent 1.2px),
+    radial-gradient(circle, rgba(255,244,214,.45) 1px, transparent 1px);
+  background-position: 22% 16%, 38% 62%, 56% 20%, 72% 70%, 84% 32%, 12% 78%;
+  background-repeat: no-repeat; }
+.dash-head-title { position:relative; z-index:1; }
+
+/* pipeline — stepper cósmico etapa a etapa */
+.pipe-legend { display:flex; align-items:center; flex-wrap:wrap; gap:var(--s2); margin-top:var(--s4); }
+.pleg { display:flex; align-items:center; gap:9px; background:var(--bg-3); border:1px solid color-mix(in srgb, var(--stg, var(--line)) 50%, var(--line)); border-radius:999px; padding:7px 13px; transition:border-color .15s, transform .15s, box-shadow .15s; }
+.pleg:hover { border-color:var(--stg, var(--gold)); box-shadow:0 4px 18px color-mix(in srgb, var(--stg, transparent) 22%, transparent); transform:translateY(-1px); }
+.pleg-dot { width:9px; height:9px; border-radius:50%; background:var(--stg, var(--text-dim)); box-shadow:0 0 10px var(--stg, transparent); flex-shrink:0; }
+.pleg-n { display:flex; align-items:baseline; gap:5px; font-variant-numeric:tabular-nums; }
+.pleg-n b { font-family:var(--font-disp); font-size:1.3rem; font-weight:700; line-height:1; color:var(--stg, var(--text)); }
+.pleg-n em { font-style:normal; font-size:.7rem; color:var(--text-dim); }
+.pleg-l { font-size:.62rem; text-transform:uppercase; letter-spacing:.09em; color:var(--text-dim); }
+.pleg-flow { width:16px; height:2px; position:relative; background:var(--line); flex-shrink:0; opacity:.7; }
+.pleg-flow::after { content:''; position:absolute; right:-1px; top:-3px; border:4px solid transparent; border-left-color:var(--line); }
+.p-todo { --stg: var(--pipe-todo); }
+.p-doing { --stg: var(--pipe-doing); }
+.p-review { --stg: var(--pipe-review); }
+.p-done { --stg: var(--pipe-done); }
+.p-arch { --stg: var(--text-dim); opacity:.75; }
+
+/* projetos — anel orbital de conclusão */
+.proj-orbit { position:relative; width:52px; height:52px; flex-shrink:0; }
+.proj-ring { position:absolute; inset:0; width:52px; height:52px; }
+.pr-track { fill:none; stroke:var(--bg-3); stroke-width:2.5; }
+.pr-fill { fill:none; stroke:var(--pipe-done); stroke-width:2.5; stroke-linecap:round; transition:stroke-dasharray .4s ease; }
+.proj-orb-wrap { position:absolute; inset:5px; display:flex; align-items:center; justify-content:center; }
+.proj-body { min-width:0; }
+.proj-body .proj-desc { margin-top:2px; }
+.proj-pct { margin-left:auto; color:var(--pipe-done); font-weight:600; font-variant-numeric:tabular-nums; }
+
+/* sessões ativas — contador */
+.sess-count { display:inline-flex; align-items:center; gap:6px; font-size:.78rem; font-weight:600; color:var(--pipe-doing); margin-bottom:var(--s2); }
+.sess-count::before { content:''; width:8px; height:8px; border-radius:50%; background:var(--pipe-doing); box-shadow:0 0 10px var(--pipe-doing); }
+
+@media (prefers-reduced-motion: reduce) {
+  .proj-ring .pr-fill, .pleg { transition:none }
+}

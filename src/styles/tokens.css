@@ -23,10 +23,10 @@
   --sky: #e0a860;
   --focus: #e8c97a;
   --danger: #e05252;
-  --pipe-todo: #5b8def;   /* aguardando — azul sereno */
-  --pipe-doing: #d6a83f; /* em curso — ouro aceso */
-  --pipe-review: #b475e0; /* em review — violeta cósmico */
-  --pipe-done: #46c98a;   /* concluido — jade aurora */
+  --pipe-todo: #62a1fa;   /* aguardando — azul sereno */
+  --pipe-doing: #f0a63a; /* em curso — ouro aceso */
+  --pipe-review: #a97ff0; /* em review — violeta cósmico */
+  --pipe-done: #3ecf8f;   /* concluido — jade aurora */
 }
 [data-shift="day"] {
   --bg-0: #101a30; --bg-1: #141f3b; --bg-2: #1c2b4c; --bg-3: #25355a;
@@ -34,7 +34,7 @@
   --text: #f3f6fc; --text-dim: #a9badb;
   --gold: #cfb87a; --gold-soft: #f0e6c2; --marble: #e2dcc9;
   --sky: #5b8def; --focus: #9dbcff;
-    --pipe-todo:#5b8def; --pipe-do:#cfb87a; --pipe-review:#9d6bd6; --pipe-done:#37b57e;
+    --pipe-todo:#5f8def; --pipe-doing:#f2b452; --pipe-review:#9c7ae8; --pipe-done:#38c08a;
 }
 [data-shift="dusk"] {
   --bg-0: #1a1320; --bg-1: #201831; --bg-2: #281f38; --bg-3: #322844;
@@ -42,7 +42,7 @@
   --text: #f7efdd; --text-dim: #c4b2a4;
   --gold: #efc477; --gold-soft: #f5deb0; --marble: #e6d7bd;
   --sky: #d89a6a; --focus: #f0cf9a;
-  --pipe-todo:#6fa8ff; --pipe-do:#e8c477; --pipe-review:#b07bde; --pipe-done:#3ecb8e;
+  --pipe-todo:#6fa8ff; --pipe-doing:#f0c477; --pipe-review:#b07bde; --pipe-done:#4bcb8e;
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }

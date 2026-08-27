@@ -9,7 +9,7 @@ interface Tally {
   todo: number; doing: number; review: number; done: number; arch: number
 }
 const COL_LABEL: Record<string, string> = { todo: 'To Do', doing: 'Em Curso', review: 'Review', done: 'Concluído' }
-const COL_ORDER = ['todo', 'doing', 'review', 'done']
+const COL_ORDER: Array<'todo' | 'doing' | 'review' | 'done'> = ['todo', 'doing', 'review', 'done']
 
 function tally(rows: Row[]): { total: Tally; byWd: Map<string, Tally> } {
   const total: Tally = { notes: 0, notesArch: 0, todo: 0, doing: 0, review: 0, done: 0, arch: 0 }
@@ -35,19 +35,27 @@ function tally(rows: Row[]): { total: Tally; byWd: Map<string, Tally> } {
 function openCards(t: Tally) { return t.todo + t.doing + t.review }
 
 function pipeline(total: Tally): string {
-  const segs = COL_ORDER.map(id => ({ id, n: total[id as 'todo'] }))
-  const grand = segs.reduce((a, s) => a + s.n, 0) || 1
-  const bar = segs.map(s => `<span class="pipe-seg pipe-${s.id}" style="width:${(s.n / grand) * 100}%" title="${COL_LABEL[s.id]}: ${s.n}"></span>`).join('')
-  const cells = segs.map(s => `
-    <span class="pipe-cell pipe-${s.id}">
-      <span class="pipe-n">${s.n}</span>
-      <span class="pipe-l">${COL_LABEL[s.id]}</span>
-    </span>`).join('')
+  const segs = COL_ORDER.map(id => ({ id, n: total[id] }))
+  const grand = segs.reduce((a, s) => a + s.n, 0)
+  const denom = grand || 1
+  const bar = segs.map(s => `<span class="pipe-seg pipe-${s.id}" style="width:${(s.n / denom) * 100}%" title="${COL_LABEL[s.id]}: ${s.n}"></span>`).join('')
+  const pctOf = (n: number) => (grand ? Math.round((n / grand) * 100) : 0)
+  const steps = segs.map((s, i) => `
+    <div class="pleg p-${s.id}" title="${COL_LABEL[s.id]}: ${s.n}">
+      <span class="pleg-dot" aria-hidden="true"></span>
+      <span class="pleg-n"><b>${s.n}</b><em>${pctOf(s.n)}%</em></span>
+      <span class="pleg-l">${COL_LABEL[s.id]}</span>
+    </div>${i < segs.length - 1 ? '<span class="pleg-flow" aria-hidden="true"></span>' : ''}`).join('')
   return `
     <div class="pipe">
       <div class="pipe-track">${bar}</div>
-      <div class="pipe-cols">${cells}
-        <span class="pipe-cell pipe-arch"><span class="pipe-n">${total.arch}</span><span class="pipe-l">Arquivados</span></span>
+      <div class="pipe-legend">${steps}
+        <span class="pleg-flow" aria-hidden="true"></span>
+        <div class="pleg p-arch" title="Arquivados: ${total.arch}">
+          <span class="pleg-dot" aria-hidden="true"></span>
+          <span class="pleg-n"><b>${total.arch}</b><em>··</em></span>
+          <span class="pleg-l">Arquivados</span>
+        </div>
       </div>
     </div>`
 }
@@ -55,15 +63,47 @@ function pipeline(total: Tally): string {
 function sessions(rows: Row[]): string {
   const act = rows.flatMap(r => r.board.cards.filter(c => !c.archived && c.colId === 'doing').map(c => ({ wd: r.wd, c })))
   if (!act.length) return `<div class="dash-none">${icon('pause', 16)} Sem sessões ativas — as tarefas em «Em Curso» são terminais a correr.</div>`
-  return `<ul class="sess-list">
-    ${act.map(a => `
-      <li class="sess">
-        <span class="sess-dot" aria-hidden="true"></span>
-        ${a.wd.icon ? `<img class="sess-orb" src="/icons/${a.wd.icon}" alt="">` : ''}
-        <a class="sess-card" href="/w/${a.wd.slug}" data-nav="/w/${a.wd.slug}">${esc(a.c.title)}</a>
-        <span class="sess-wd">${esc(a.wd.name)}</span>
-      </li>`).join('')}
-  </ul>`
+  return `
+    <span class="sess-count">${act.length} a decorrer</span>
+    <ul class="sess-list">
+      ${act.map(a => `
+        <li class="sess">
+          <span class="sess-dot" aria-hidden="true"></span>
+          ${a.wd.icon ? `<img class="sess-orb" src="/icons/${a.wd.icon}" alt="">` : ''}
+          <a class="sess-card" href="/w/${a.wd.slug}" data-nav="/w/${a.wd.slug}">${esc(a.c.title)}</a>
+          <span class="sess-wd">${esc(a.wd.name)}</span>
+        </li>`).join('')}
+    </ul>`
+}
+
+function projCard(wd: Wd, t: Tally): string {
+  const tg = t.todo + t.doing + t.review + t.done
+  const doneFrac = tg ? t.done / tg : 0
+  const C = 2 * Math.PI * 20 // r=20 (viewBox 48) -> circunferência para o anel de órbita
+  const dash = `${(doneFrac * C).toFixed(1)} ${(C).toFixed(1)}`
+  const orb = wd.icon ? `<img class="proj-orb" src="/icons/${wd.icon}" alt="">` : icon('sphere', 26)
+  return `
+    <a class="proj" href="/w/${wd.slug}" data-nav="/w/${wd.slug}">
+      <div class="proj-top">
+        <div class="proj-orbit" title="${Math.round(doneFrac * 100)}% concluído">
+          <svg class="proj-ring" viewBox="0 0 48 48" aria-hidden="true">
+            <circle class="pr-track" cx="24" cy="24" r="20"/>
+            <circle class="pr-fill" cx="24" cy="24" r="20" style="stroke-dasharray:${dash}" transform="rotate(-90 24 24)"/>
+          </svg>
+          <span class="proj-orb-wrap">${orb}</span>
+        </div>
+        <div class="proj-body">
+          <div class="proj-name">${esc(wd.name)}</div>
+          ${wd.description ? `<div class="proj-desc">${esc(wd.description)}</div>` : ''}
+        </div>
+      </div>
+      <div class="proj-stats">
+        <span><b>${t.notes - t.notesArch}</b> notas</span>
+        ${t.notesArch ? `<span><b>${t.notesArch}</b> arq.</span>` : ''}
+        <span><b>${openCards(t)}</b> em aberto</span>
+        <span class="proj-pct">${Math.round(doneFrac * 100)}%</span>
+      </div>
+    </a>`
 }
 
 export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
@@ -76,64 +116,48 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
     rows.push({ wd, notes, board })
   }
   const { total, byWd } = tally(rows)
+  const first = items[0]
 
   const stat = (label: string, val: string, sub: string, ico: Parameters<typeof icon>[0], hue?: string) => `
-    <div class="stat">
-      <div class="stat-ico" style="${hue ? `color:${hue};border-color:color-mix(in srgb,${hue} 45%,transparent);background:color-mix(in srgb,${hue} 13%,transparent)` : ''}">${icon(ico, 18)}</div>
-      <div class="stat-body"><div class="stat-val" style="${hue ? `color:${hue}` : ''}">${val}</div><div class="stat-lbl">${label}</div><div class="stat-sub">${sub}</div></div>
+    <div class="stat" style="--accent:${hue || 'var(--gold)'}">
+      <div class="stat-ico" style="color:${hue || 'var(--gold)'};border-color:color-mix(in srgb,${hue || 'var(--gold)'} 45%,transparent);background:color-mix(in srgb,${hue || 'var(--gold)'} 13%,transparent)">${icon(ico, 18)}</div>
+      <div class="stat-body"><div class="stat-val" style="color:${hue || 'var(--gold)'}">${val}</div><div class="stat-lbl">${label}</div><div class="stat-sub">${sub}</div></div>
     </div>`
-
-  const projCards = items.map(wd => {
-    const t = byWd.get(wd.slug)!
-    const open = openCards(t)
-    const g = (t.todo + t.doing + t.review + t.done) || 1
-    const mb = COL_ORDER.map(id => `<span class="mini-seg mini-${id}" style="width:${(t[id as 'todo'] / g) * 100}%"></span>`).join('')
-    return `
-      <a class="proj" href="/w/${wd.slug}" data-nav="/w/${wd.slug}">
-        <div class="proj-top">${wd.icon ? `<img class="proj-orb" src="/icons/${wd.icon}" alt="">` : icon('sphere', 20)}<div class="proj-name">${esc(wd.name)}</div></div>
-        ${wd.description ? `<div class="proj-desc">${esc(wd.description)}</div>` : ''}
-        <div class="mini-bar">${mb}</div>
-        <div class="proj-stats">
-          <span><b>${t.notes - t.notesArch}</b> notas</span>
-          ${t.notesArch ? `<span><b>${t.notesArch}</b> arq.</span>` : ''}
-          <span><b>${open}</b> em aberto</span>
-        </div>
-      </a>`
-  }).join('')
 
   panel.innerHTML = `
     <div class="dash">
       <header class="dash-head">
+        <div class="dash-stars" aria-hidden="true"></div>
         <div class="orb-rings" aria-hidden="true"><span class="ring ring-a"></span><span class="ring ring-b"></span></div>
         <div class="dash-head-title">
-          <span class="dash-kicker">${icon('sphere', 13)} Atlas</span>
-          <h1>Visão Geral</h1>
-          <p class="dash-sub">O cosmos do Atlas — todos os mundos, num só olhar.</p>
+          <span class="dash-kicker">${icon('sphere', 13)} Atlas · o ombro do céu</span>
+          <h1>Visão geral</h1>
+          <p class="dash-sub">Cada projeto, o seu próprio mundo — todos sob o mesmo céu.</p>
         </div>
         <div class="dash-actions">
-          <a class="btn btn-ghost" href="/w/${items[0]?.slug || ''}">${icon('sphere', 16)} Ir para o mundo ativo</a>
+          ${first ? `<a class="btn btn-ghost" href="/w/${first.slug}" data-nav="/w/${first.slug}">${icon('sphere', 16)} Ir para o mundo ativo</a>` : ''}
         </div>
       </header>
 
       <div class="stat-grid">
-    ${stat('Projetos', String(items.length), items.length ? 'mundos criados' : 'sem projetos', 'sphere', 'var(--gold)')}
-    ${stat('Notas', String(total.notes), total.notesArch ? `${total.notesArch} arquivadas` : 'nenhuma arquivada', 'note', 'var(--pipe-done)')}
-    ${stat('Cartões em aberto', String(openCards(total)), `${total.todo} todo · ${total.doing} a decorrer`, 'board', 'var(--pipe-todo)')}
-    ${stat('Sessões ativas', String(total.doing), total.doing ? 'terminais a correr' : 'nenhuma a correr', 'aura', 'var(--pipe-doing)')}
+        ${stat('Projetos', String(items.length), items.length ? 'mundos criados' : 'sem projetos', 'sphere', 'var(--gold)')}
+        ${stat('Notas', String(total.notes), total.notesArch ? `${total.notesArch} arquivadas` : 'nenhuma arquivada', 'note', 'var(--pipe-done)')}
+        ${stat('Cartões em aberto', String(openCards(total)), `${total.todo} por fazer · ${total.review} em review`, 'board', 'var(--pipe-todo)')}
+        ${stat('Sessões ativas', String(total.doing), total.doing ? 'terminais a correr' : 'nenhuma a correr', 'aura', 'var(--pipe-doing)')}
       </div>
 
       <section class="dash-sec">
-        <h2>Pipeline de trabalho</h2>
+        <h2>${icon('forward', 16)} Pipeline de trabalho</h2>
         ${pipeline(total)}
       </section>
 
       <section class="dash-sec">
-        <h2>Projetos</h2>
-        <div class="proj-grid">${projCards}</div>
+        <h2>${icon('sphere', 16)} Projetos</h2>
+        <div class="proj-grid">${items.map(wd => projCard(wd, byWd.get(wd.slug)!)).join('')}</div>
       </section>
 
       <section class="dash-sec">
-        <h2>Sessões / terminais ativos</h2>
+        <h2>${icon('aura', 16)} Sessões / terminais ativos</h2>
         ${sessions(rows)}
       </section>
     </div>`
@@ -141,4 +165,4 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
   panel.querySelectorAll('[data-nav]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); navigate(a.getAttribute('data-nav')!) }))
 }
 
-function esc(s: unknown) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
+function esc(s: unknown) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;') }
