@@ -8,14 +8,17 @@ export function openModal(opts: ModalOpts): { root: HTMLElement; close: () => vo
   </div></form></div>`
   document.body.appendChild(backdrop)
   const form = backdrop.querySelector('form')!
+  let closed = false
+  const onCancel = () => { if (closed) return; closed = true; opts.onCancel?.(); close() }
   const close = () => { backdrop.remove() }
-  backdrop.addEventListener('click', e => { if (e.target === backdrop) close() })
-  backdrop.querySelector('[data-act=cancel]')!.addEventListener('click', () => { opts.onCancel?.(); close() })
+  const onDocKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
+  document.addEventListener('keydown', onDocKey)
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) onCancel() })
+  backdrop.querySelector('[data-act=cancel]')!.addEventListener('click', () => onCancel())
   form.addEventListener('submit', e => {
     e.preventDefault()
     opts.onSubmit?.(); close()
   })
-  // focus first input
   const fi = form.querySelector('input, textarea, select') as HTMLElement | null
   fi?.focus()
   return { root: backdrop, close }
