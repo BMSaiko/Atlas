@@ -6,37 +6,37 @@
   /* type */
   --font-ui: 'Space Grotesk', system-ui, sans-serif;
   --font-disp: 'Fraunces', Georgia, serif;
-  /* night default */
-  --bg-0: #05070d;
-  --bg-1: #0a0f1e;
-  --bg-2: #101830;
-  --bg-3: #16203d;
-  --line: rgba(216,200,180,.14);
-  --text: #eae6dc;
-  --text-dim: #9aa3bd;
-  --gold: #d4a53d;
-  --gold-soft: #e8d39a;
+  /* NOITE (default) — cosmos acolhedor, quente, menos azul (DR) */
+  --bg-0: #050403;
+  --bg-1: #0a0806;
+  --bg-2: #0f0c09;
+  --bg-3: #16100a;
+  --line: rgba(230,180,120,.20);
+  --text: #f1e9dc;
+  --text-dim: #aca291;
+  --gold: #d6a83f;
+  --gold-soft: #eacf96;
   --marble: #d8cfc0;
-  --prio-low: #d4a53d;
+  --prio-low: #d6a83f;
   --prio-med: #e0892e;
   --prio-high: #e05252;
-  --sky: #5b8def;
-  --focus: #e8d39a;
+  --sky: #e0a860;
+  --focus: #e8c97a;
   --danger: #e05252;
 }
 [data-shift="day"] {
-  --bg-0: #050b16; --bg-1: #0b1226; --bg-2: #101c38; --bg-3: #16233f;
-  --line: rgba(140,170,220,.18);
-  --text: #eef0f6; --text-dim: #a6b0ca;
-  --gold: #c8b06a; --gold-soft: #efe2b8; --marble: #dfd8c6;
-  --sky: #5b8def; --focus: #7fa8ff;
+  --bg-0: #101a30; --bg-1: #141f3b; --bg-2: #1c2b4c; --bg-3: #25355a;
+  --line: rgba(150,178,230,.30);
+  --text: #f3f6fc; --text-dim: #a9badb;
+  --gold: #cfb87a; --gold-soft: #f0e6c2; --marble: #e2dcc9;
+  --sky: #5b8def; --focus: #9dbcff;
 }
 [data-shift="dusk"] {
-  --bg-0: #08080f; --bg-1: #0e0e1e; --bg-2: #16162e; --bg-3: #1e1e3a;
-  --line: rgba(224,200,160,.16);
-  --text: #efe9dc; --text-dim: #a49cb4;
-  --gold: #dfb256; --gold-soft: #f0e0b8; --marble: #dccfb8;
-  --sky: #7a8ff0; --focus: #e8cf8f;
+  --bg-0: #1a1320; --bg-1: #201831; --bg-2: #281f38; --bg-3: #322844;
+  --line: rgba(235,186,120,.26);
+  --text: #f7efdd; --text-dim: #c4b2a4;
+  --gold: #efc477; --gold-soft: #f5deb0; --marble: #e6d7bd;
+  --sky: #d89a6a; --focus: #f0cf9a;
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
