@@ -39,7 +39,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
     if (list.length === 0) { grid.innerHTML = `<div class="empty">${showArch ? 'Sem notas arquivadas.' : notes.length === 0 ? 'Sem notas ainda. Cria a primeira.' : 'Sem resultados.'}</div>`; return }
     const unhide = (print: string) => `<span class="note-arch">${print}</span>`
     grid.innerHTML = list.map(n => `
-      <article class="${n.archived ? 'note-card archived' : 'note-card'}" data-id="${n.id}">
+      <article class="${n.archived ? 'note-card archived' : 'note-card'}" data-id="${n.id}" tabindex="0">
         <h4>${esc(n.title)}</h4>
         <div class="note-text">${linkify(n.text)}</div>
         <div class="note-date">${showArch ? unhide('Arquivada') : ''}${fmt(n.ts)}</div>
@@ -68,11 +68,16 @@ export async function renderNotes(root: HTMLElement, slug: string) {
   })
 
   root.querySelector('#nadd')!.addEventListener('click', () => noteModal(null))
+  grid.addEventListener('keydown', e => {
+    const t = e.target as HTMLElement
+    if (t.classList.contains('note-card') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); const n = notes.find(x => x.id === t.dataset.id); if (n) noteView(n) }
+  })
   grid.addEventListener('click', e => {
     const btn = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null
-    if (!btn) return
-    const card = btn.closest('.note-card') as HTMLElement
-    const n = notes.find(x => x.id === card.dataset.id)!
+    const card = (e.target as HTMLElement).closest('.note-card') as HTMLElement | null
+    const n = card ? notes.find(x => x.id === card.dataset.id) : undefined
+    if (!btn && n && !(e.target as HTMLElement).closest('a')) { noteView(n); return }
+    if (!btn || !n) return
     if (btn.dataset.act === 'del') {
       confirmDialog({ title: 'Eliminar nota', message: showArch ? 'Eliminar esta nota arquivada?' : 'Apagar esta nota?' }).then(ok => { if (!ok) return; notes = notes.filter(x => x.id !== n.id); save().then(()=>doRender()); toast('Nota eliminada') })
     }
@@ -91,6 +96,15 @@ export async function renderNotes(root: HTMLElement, slug: string) {
         .then(() => { refreshSideCount(); toast(`Cartão criado: "${n.title}"`) })
         .catch(e => toast('Erro: ' + e.message))
     }).catch(e => toast('Erro: ' + e.message))
+  }
+
+  function noteView(n: Nota) {
+    openModal({
+      title: n.title, submitText: 'Editar',
+      body: () => `<div style="font-size:.85rem;color:var(--text-dim);margin-bottom:10px">${fmt(n.ts)}${n.archived ? ' <span style="color:var(--gold)">· Arquivada</span>' : ''}</div>
+        <div class="note-view-text">${linkify(n.text)}</div>`,
+      onSubmit: () => noteModal(n),
+    })
   }
 
   function noteModal(n: Nota | null) {
