@@ -190,6 +190,8 @@ a.link:hover { color:var(--gold-soft); }
 .kresult-title{font-weight:400;color:var(--muted);font-size:.95rem;margin-bottom:2px}
 .kresult-body{white-space:pre-wrap;max-height:6rem;overflow:hidden;position:relative;padding-top:4px;border-top:1px dashed var(--line)}
 .kresult-body:after{content:'...';position:absolute;right:4px;bottom:2px;background:var(--bg);padding:0 4px;font-weight:700}
+.modal-body .kresult-body{max-height:none;overflow:visible}
+.modal-body .kresult-body:after{content:none}
 
 /* --- Keybind Hint (Ctrl+K quick-add) --- */
 .kbdhint { position:relative; display:inline-flex; align-items:center; align-self:center; }
