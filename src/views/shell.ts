@@ -21,6 +21,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
   let activeSlug = slug && workdirs.some(w => w.slug === slug) ? slug : null
   if (!activeSlug) { const p = active(); if (p && workdirs.some(w => w.slug === p)) activeSlug = p }
   const items = await Promise.all(workdirs.map(async w => ({ ...w, open: (await counts(w.slug)).open })))
+  state.slug = activeSlug; state.items = items
 
   root.innerHTML = `
     <div class="orb-bg"></div>
@@ -50,13 +51,21 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
   }))
   root.querySelectorAll('[data-nav]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); navigate(el.getAttribute('data-nav')!) }))
   root.querySelector('#side-new')!.addEventListener('click', () => newWorkdir())
+  bindKeydown()
+}
+
+let state: { slug: string | null; items: Array<{ slug: string }> } = { slug: null, items: [] }
+let keydownBound = false
+function bindKeydown() {
+  if (keydownBound) return
+  keydownBound = true
   window.addEventListener('keydown', e => {
     if (!e.ctrlKey) return
     if (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return
     if (document.querySelector('.modal-backdrop')) return
-    if (e.key === 'k' || e.key === 'K') { e.preventDefault(); quickAdd(activeSlug); return }
-    const n = parseInt(e.key); if (n >= 1 && n <= 9 && items[n - 1]) {
-      e.preventDefault(); setActive(items[n - 1].slug); navigate('/w/' + items[n - 1].slug)
+    if (e.key === 'k' || e.key === 'K') { e.preventDefault(); quickAdd(state.slug); return }
+    const n = parseInt(e.key); if (n >= 1 && n <= 9 && state.items[n - 1]) {
+      e.preventDefault(); setActive(state.items[n - 1].slug); navigate('/w/' + state.items[n - 1].slug)
     }
   })
 }

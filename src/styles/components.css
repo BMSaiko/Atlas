@@ -170,3 +170,7 @@ a.link:hover { color:var(--gold-soft); }
 .kresult-title{font-weight:400;color:var(--muted);font-size:.95rem;margin-bottom:2px}
 .kresult-body{white-space:pre-wrap;max-height:6rem;overflow:hidden;position:relative;padding-top:4px;border-top:1px dashed var(--line)}
 .kresult-body:after{content:'...';position:absolute;right:4px;bottom:2px;background:var(--bg);padding:0 4px;font-weight:700}
+
+/* --- Keybind hint (Ctrl+K quick-add) --- */
+.kbdhint { display:inline-flex; align-items:center; gap:7px; color:var(--text-dim); font-size:.82rem; white-space:nowrap; align-self:center; }
+.kbdhint kbd { font-family:inherit; font-size:.72rem; line-height:1; padding:4px 6px; border-radius:5px; background:var(--bg-3); border:1px solid var(--line); border-bottom-width:2px; color:var(--text); }
