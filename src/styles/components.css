@@ -56,26 +56,53 @@
 .side-foot { padding: var(--s3); border-top:1px solid var(--line); }
 .btn-block { width:100%; justify-content:center; }
 
-/* --- Pomodoro / Cronómetro (widget de foco no sidebar) --- */
-.side-pomo { padding: var(--s1) var(--s4) var(--s2); }
-.pomo { background:var(--bg-2); border:1px solid var(--line); border-radius:var(--r2); padding:var(--s3);
-  display:flex; flex-direction:column; gap:8px; }
-.pomo-head { display:flex; align-items:center; justify-content:space-between; gap:6px; }
-.pomo-title { display:inline-flex; align-items:center; gap:5px; font-size:.68rem; font-weight:600;
-  text-transform:uppercase; letter-spacing:.05em; color:var(--gold); }
-.pomo-seg { display:flex; gap:2px; background:var(--bg-3); border-radius:999px; padding:2px; }
-.pomo-seg-btn { border:none; background:none; color:var(--text-dim); font-size:.66rem; font-weight:600;
-  padding:3px 8px; border-radius:999px; cursor:pointer; min-height:24px; transition:background .15s,color .15s; }
-.pomo-seg-btn.active { background:var(--gold); color:#1a1508; }
-.pomo-seg-btn:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
-.pomo-display { font-family:var(--font-disp); font-size:1.7rem; font-weight:600; text-align:center;
+/* --- Foco (sessão imersiva a pedido, sem bloat permanente) --- */
+.side-focus { padding: var(--s2) var(--s4) var(--s3); }
+.foco-launch { width:100%; display:flex; align-items:center; gap:8px; min-height:40px; padding:6px 14px;
+  border-radius:999px; border:1px solid var(--line); background:var(--bg-2); color:var(--text-dim); cursor:pointer;
+  font-size:.8rem; font-weight:600; letter-spacing:.02em; transition:color .2s, border-color .2s, background .2s; }
+.foco-launch:hover { border-color:var(--gold); background:var(--bg-3); color:var(--text); }
+.foco-launch .foco-li { display:inline-flex; }
+.foco-launch .foco-lbl { flex:1; text-align:left; }
+.foco-launch .foco-meta { font-family:var(--font-ui); font-variant-numeric:tabular-nums; color:var(--gold); font-size:.74rem; white-space:nowrap; }
+.foco-launch.running { border-color:var(--gold); background:color-mix(in srgb, var(--gold) 8%, transparent); color:var(--text); }
+.foco-launch.running .foco-li { color:var(--gold); animation:foco-pulse 1.6s infinite; }
+
+.foco-ov { position:fixed; inset:0; z-index:1500; background:rgba(3,5,10,.68); backdrop-filter:blur(8px);
+  display:flex; align-items:center; justify-content:center; padding:var(--s4); animation:foco-fade .25s ease; }
+.foco-card { text-align:center; width:100%; max-width:440px; }
+.foco-seg { display:inline-flex; gap:2px; background:var(--bg-3); border:1px solid var(--line); border-radius:999px;
+  padding:3px; margin-bottom:var(--s6); }
+.foco-seg-btn { border:none; background:none; color:var(--text-dim); font-size:.72rem; font-weight:600; padding:6px 16px;
+  border-radius:999px; cursor:pointer; min-height:30px; transition:background .15s, color .15s; }
+.foco-seg-btn.active { background:var(--gold); color:#1a1508; }
+.foco-seg-btn:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+
+.foco-ring { position:relative; width:min(300px, 72vw); margin:0 auto var(--s5); }
+.foco-ring svg { display:block; width:100%; height:auto; }
+.foco-ring .orb { fill:none; stroke:var(--line); }
+.foco-ring .arc { fill:none; stroke:var(--gold); stroke-linecap:round; transition:stroke-dashoffset .3s linear; }
+.foco-sat { position:absolute; inset:0; animation:foco-rev 60s linear infinite; animation-play-state:paused; pointer-events:none; }
+.foco-sat i { position:absolute; top:50%; left:50%; width:10px; height:10px; margin:-5px 0 0 -5px; border-radius:50%;
+  background:var(--gold); box-shadow:0 0 14px var(--gold); }
+.foco-num-wrap { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.foco-num { font-family:var(--font-disp); font-size:clamp(2.3rem, 9vw, 3.2rem); font-weight:600;
   font-variant-numeric:tabular-nums; color:var(--text); line-height:1; letter-spacing:.02em; }
-.pomo-sub { text-align:center; font-size:.66rem; color:var(--text-dim); text-transform:uppercase;
-  letter-spacing:.06em; min-height:1.1em; }
-.pomo-ctrl { display:flex; align-items:center; justify-content:center; gap:6px; }
-.pomo-ctrl .btn-primary { flex:1; justify-content:center; }
-.pomo-ctrl .btn-icon { min-height:34px; min-width:34px; padding:6px; }
-.pomo-ctrl .btn-icon svg { width:15px; height:15px; }
+.foco-sub { margin-top:8px; font-size:.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.14em; color:var(--text-dim); }
+.foco-ctrl { display:flex; align-items:center; justify-content:center; gap:10px; }
+.foco-ctrl .btn-primary { justify-content:center; min-width:150px; }
+.foco-ctrl .btn-icon { min-height:44px; min-width:44px; }
+.foco-hint { margin-top:var(--s5); font-size:.7rem; color:var(--text-dim); letter-spacing:.03em; }
+
+@keyframes foco-rev { to { transform:rotate(360deg) } }
+@keyframes foco-pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
+@keyframes foco-fade { from { opacity:0 } to { opacity:1 } }
+@media (prefers-reduced-motion: reduce) {
+  .foco-ov { animation:none }
+  .foco-sat { animation:none }
+  .foco-launch.running .foco-li { animation:none }
+  .foco-ring .arc { transition:none }
+}
 
 /* --- Relogio (hora PT, visivel em qualquer workdir) --- */
 .side-clock { padding: var(--s2) var(--s4) var(--s1); text-align:center; }
