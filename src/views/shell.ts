@@ -4,6 +4,7 @@ import { openModal } from '../ui/modal'
 import { toast } from '../ui/toast'
 import { navigate } from '../router'
 import { renderWorkspace } from './workspace'
+import { renderDashboard } from './dashboard'
 import { startClockWidget } from '../ui/clock'
 import { getTheme, setManual, autoShift, Shift } from '../ui/theme'
 import { TZ_LIST, getTz, setTz } from '../ui/timezones'
@@ -53,6 +54,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
 
   const panel = root.querySelector('#panel') as HTMLElement
   if (activeSlug) { setActive(activeSlug); await renderWorkspace(panel, activeSlug, isSettings) }
+  else if (items.length) await renderDashboard(panel, items)
   else renderEmpty(panel, items, root)
 
   const shell = root.querySelector('#shell') as HTMLElement
