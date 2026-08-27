@@ -6,9 +6,12 @@ import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
 import { linkify } from '../ui/text'
 
+const parseTags = (v: string) => Array.from(new Set(v.split(/[,\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean)))
+
 export async function renderNotes(root: HTMLElement, slug: string) {
   let notes = await api.notes.get(slug).catch(() => [] as Nota[])
   let showArch = false
+  let tagFilter = ''  // tag ativa para filtrar ('' = sem filtro)
   const save = async () => { await api.notes.put(slug, notes); refreshTabCounts(slug) }
   const fmt = (ts: number) => new Date(ts).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
   const archCount = () => notes.filter(n => n.archived).length
@@ -25,28 +28,42 @@ export async function renderNotes(root: HTMLElement, slug: string) {
 
   root.innerHTML = `
     <div class="notes-toolbar">
-      <input class="notes-search" id="nsearch" placeholder="Buscar notas…" aria-label="Buscar notas">
+      <input class="notes-search" id="nsearch" placeholder="Buscar notas ou tags…" aria-label="Buscar notas">
       <button class="btn btn-ghost" id="narch" aria-pressed="${showArch}" title="${showArch ? 'Ver ativas' : 'Ver arquivadas'}">${icon('archive', 16)} <span>Arquivadas</span><span class="side-count" id="narchcount">${archCount()}</span></button>
       <button class="btn btn-primary kbdhint" id="nadd" aria-describedby="nadd-tip">${icon('plus', 16)} Nova nota<span class="kbdhint-tip" id="nadd-tip" role="tooltip"><kbd>Ctrl</kbd>+<kbd>K</kbd></span></button>
     </div>
+    <div class="notes-tagbar" id="ntagbar"></div>
     <div class="notes-grid" id="ngrid"></div>`
   const grid = root.querySelector('#ngrid') as HTMLElement
 
+  const renderTagbar = () => {
+    const all = Array.from(new Set(notes.flatMap(n => n.tags || []))).sort()
+    const bar = root.querySelector('#ntagbar') as HTMLElement
+    bar.innerHTML = all.length ? all.map(t =>
+      `<button class="tag-chip${t === tagFilter ? ' on' : ''}" data-tag="${esc(t)}" aria-pressed="${t === tagFilter}">${icon('tag', 12)} ${esc(t)}</button>`
+    ).join('') : ''
+    bar.classList.toggle('active', all.length > 0)
+  }
+
   const doRender = (q = '') => {
+    const ql = q.toLowerCase()
     const list = notes.filter(n =>
       (showArch ? n.archived : !n.archived) &&
-      (!q || n.title.toLowerCase().includes(q) || n.text.toLowerCase().includes(q))
+      (!ql || n.title.toLowerCase().includes(ql) || n.text.toLowerCase().includes(ql) || (n.tags || []).some(t => t.includes(ql))) &&
+      (!tagFilter || (n.tags || []).includes(tagFilter))
     ).sort((a, b) => b.ts - a.ts)
+    renderTagbar()
     const badge = document.getElementById('narchcount')
     if (badge) badge.textContent = String(showArch ? notes.filter(n => !n.archived).length : notes.filter(n => n.archived).length)
     // ponytail: badge acima do early-return — arquivar a ultima nota ativa esvazia a grid e
     // return cedo deixava a contagem desatualizada (DI). Contagem atualiza sempre.
-    if (list.length === 0) { grid.innerHTML = `<div class="empty">${showArch ? 'Sem notas arquivadas.' : notes.length === 0 ? 'Sem notas ainda. Cria a primeira.' : 'Sem resultados.'}</div>`; return }
+    if (list.length === 0) { grid.innerHTML = `<div class="empty">${notes.length === 0 ? 'Sem notas ainda. Cria a primeira.' : (tagFilter ? `Não há notas com a tag «${tagFilter}».` : showArch ? 'Sem notas arquivadas.' : 'Sem resultados.')}</div>`; return }
     const unhide = (print: string) => `<span class="note-arch">${print}</span>`
     grid.innerHTML = list.map(n => `
       <article class="${n.archived ? 'note-card archived' : 'note-card'}" data-id="${n.id}" tabindex="0">
         <h4>${esc(n.title)}</h4>
         <div class="note-text">${linkify(n.text)}</div>
+        ${(n.tags && n.tags.length) ? `<div class="note-tags">${n.tags.map(t => `<button class="tag-chip" data-tag="${esc(t)}" aria-label="Filtrar por ${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}
         <div class="note-date">${showArch ? unhide('Arquivada') : ''}${fmt(n.ts)}</div>
         <div class="note-actions">
           <button class="btn-icon btn-ghost" data-act="tocanban" title="Converter para cartão" aria-label="Converter para cartão">${icon('board', 16)}</button>
@@ -59,7 +76,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
   doRender()
 
   const searchInput = root.querySelector('#nsearch') as HTMLInputElement
-  searchInput.addEventListener('input', () => doRender(searchInput.value.toLowerCase()))
+  searchInput.addEventListener('input', () => doRender(searchInput.value))
 
   const archBtn = root.querySelector('#narch') as HTMLButtonElement
   archBtn.addEventListener('click', () => {
@@ -67,8 +84,11 @@ export async function renderNotes(root: HTMLElement, slug: string) {
     archBtn.setAttribute('aria-pressed', String(showArch))
     archBtn.title = showArch ? 'Ver ativas' : 'Ver arquivadas'
     archBtn.querySelector('span')!.textContent = showArch ? 'Ativas' : 'Arquivadas'
-    doRender(searchInput.value.toLowerCase())
+    doRender(searchInput.value)
   })
+
+  const tickTag = (tag: string) => { tagFilter = tagFilter === tag ? '' : tag; doRender(searchInput.value) }
+  root.querySelector('#ntagbar')!.addEventListener('click', e => { const b = (e.target as HTMLElement).closest('[data-tag]') as HTMLElement | null; if (b) tickTag(b.dataset.tag!) })
 
   root.querySelector('#nadd')!.addEventListener('click', () => noteModal(null))
   grid.addEventListener('keydown', e => {
@@ -76,18 +96,20 @@ export async function renderNotes(root: HTMLElement, slug: string) {
     if (t.classList.contains('note-card') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); const n = notes.find(x => x.id === t.dataset.id); if (n) noteView(n) }
   })
   grid.addEventListener('click', e => {
+    const tagEl = (e.target as HTMLElement).closest('.tag-chip') as HTMLElement | null
     const btn = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null
     const card = (e.target as HTMLElement).closest('.note-card') as HTMLElement | null
     const n = card ? notes.find(x => x.id === card.dataset.id) : undefined
+    if (tagEl && n) { tickTag(tagEl.dataset.tag!); return }
     if (!btn && n && !(e.target as HTMLElement).closest('a')) { noteView(n); return }
     if (!btn || !n) return
     if (btn.dataset.act === 'del') {
-      confirmDialog({ title: 'Eliminar nota', message: showArch ? 'Eliminar esta nota arquivada?' : 'Apagar esta nota?' }).then(ok => { if (!ok) return; notes = notes.filter(x => x.id !== n.id); save().then(()=>doRender()); toast('Nota eliminada') })
+      confirmDialog({ title: 'Eliminar nota', message: showArch ? 'Eliminar esta nota arquivada?' : 'Apagar esta nota?' }).then(ok => { if (!ok) return; notes = notes.filter(x => x.id !== n.id); save().then(()=>doRender(searchInput.value)); toast('Nota eliminada') })
     }
     if (btn.dataset.act === 'edit') noteModal(n)
     if (btn.dataset.act === 'tocanban') toCard(n)
-    if (btn.dataset.act === 'arch') { n.archived = true; save().then(()=>doRender()); toast('Nota arquivada') }
-    if (btn.dataset.act === 'unarch') { delete n.archived; save().then(()=>doRender()); toast('Nota restaurada') }
+    if (btn.dataset.act === 'arch') { n.archived = true; save().then(()=>doRender(searchInput.value)); toast('Nota arquivada') }
+    if (btn.dataset.act === 'unarch') { delete n.archived; save().then(()=>doRender(searchInput.value)); toast('Nota restaurada') }
   })
 
   function toCard(n: Nota) {
@@ -105,6 +127,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
     openModal({
       title: n.title, submitText: 'Editar',
       body: () => `<div style="font-size:.85rem;color:var(--text-dim);margin-bottom:10px">${fmt(n.ts)}${n.archived ? ' <span style="color:var(--gold)">· Arquivada</span>' : ''}</div>
+        ${(n.tags && n.tags.length) ? `<div class="note-tags" style="margin-bottom:10px">${n.tags.map(t => `<span class="tag-chip on">${esc(t)}</span>`).join('')}</div>` : ''}
         <div class="note-view-text">${linkify(n.text)}</div>`,
       onSubmit: () => noteModal(n),
     })
@@ -114,15 +137,17 @@ export async function renderNotes(root: HTMLElement, slug: string) {
     openModal({
       title: n ? 'Editar nota' : 'Nova nota', submitText: n ? 'Guardar' : 'Criar',
       body: () => `<div class="field"><label for="nt-title">Título</label><input id="nt-title" name="title" required value="${esc(n?.title || '')}"></div>
-                   <div class="field"><label for="nt-text">Texto</label><textarea id="nt-text" name="text">${esc(n?.text || '')}</textarea></div>`,
+                   <div class="field"><label for="nt-text">Texto</label><textarea id="nt-text" name="text">${esc(n?.text || '')}</textarea></div>
+                   <div class="field"><label for="nt-tags">Tags</label><input id="nt-tags" name="tags" placeholder="separadas por espaço ou vírgula" value="${esc((n?.tags || []).join(', '))}"></div>`,
       onSubmit: () => {
         const form = document.querySelector('.modal form') as HTMLFormElement
         const title = (form.querySelector('[name=title]') as HTMLInputElement).value.trim()
         const text = (form.querySelector('[name=text]') as HTMLTextAreaElement).value
+        const tags = parseTags((form.querySelector('[name=tags]') as HTMLInputElement).value)
         if (!title) return
-        if (n) { n.title = title; n.text = text }
-        else notes.unshift({ id: uid(), title, text, ts: Date.now() })
-        save().then(() => { doRender(searchInput.value.toLowerCase()); toast(n ? 'Nota guardada' : 'Nota criada') })
+        if (n) { n.title = title; n.text = text; n.tags = tags }
+        else notes.unshift({ id: uid(), title, text, ts: Date.now(), tags })
+        save().then(() => { doRender(searchInput.value); toast(n ? 'Nota guardada' : 'Nota criada') })
       },
     })
   }

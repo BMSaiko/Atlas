@@ -160,6 +160,15 @@
 .note-actions { display:flex; gap:4px; margin-top:auto; justify-content:flex-end; }
 .note-actions .btn-icon { cursor:pointer; }
 .note-date { color:var(--text-dim); font-size:.78rem; }
+.notes-tagbar { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:var(--s4); }
+.tag-chip { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:999px; font-size:.74rem; background:var(--bg-2); border:1px solid var(--line); color:var(--text-dim); cursor:pointer; transition:border-color .15s,color .15s,background .15s; }
+.tag-chip:hover { border-color:var(--gold); color:var(--text); }
+.tag-chip.on { background:var(--gold); border-color:var(--gold); color:var(--bg-0); cursor:default; }
+.note-tags { display:flex; flex-wrap:wrap; gap:4px; }
+.note-card .note-tags { margin-top:0; }
+.note-tags .tag-chip { color:var(--gold); border-color:rgba(212,175,55,.35); cursor:pointer; }
+.note-tags .tag-chip:hover { background:rgba(212,175,55,.12); }
+
 .note-card.archived { opacity:.55; border-style:dashed; }
 .note-date .note-arch { margin-right:6px; color:var(--gold); font-weight:600; text-transform:uppercase; font-size:.68rem; letter-spacing:.04em; }
 .note-view-text { color:var(--text); font-size:1rem; line-height:1.55; white-space:pre-wrap; word-break:break-word; }

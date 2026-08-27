@@ -1,5 +1,5 @@
 export type Prioridade = 'low' | 'medium' | 'high'
-export interface Nota { id: string; title: string; text: string; ts: number; archived?: boolean }
+export interface Nota { id: string; title: string; text: string; ts: number; archived?: boolean; tags?: string[] }
 export interface Card { id: string; colId: string; title: string; description: string; priority: Prioridade; ts: number; archived: boolean; result?: string; reviewed?: boolean; startedAt?: number }
 export interface Coluna { id: string; name: string }
 export interface Board { columns: Coluna[]; cards: Card[] }

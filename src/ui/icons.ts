@@ -24,6 +24,7 @@ const I = {
   reset: '<path d="M4 12a8 8 0 1 1 2.3 5.6M4 12v4m0 0h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
   leaf: '<path d="M20 4c-8 0-14 5-14 10a11 11 0 0 0 12 0 8 8 0 0 0 7-7l2-1-1 1-1 3c-1 4-4 6-8 6l2 2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
   bell: '<path d="M12 4a6 6 0 0 1 6 6c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10a6 6 0 0 1 6-6zM9.5 19a2.6 2.6 0 0 0 5 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+  tag: '<path d="M3 11V5a2 2 0 0 1 2-2h6l10 10-7 7L3 11z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor"/>',
   bellOff: '<path d="M12 4a6 6 0 0 1 6 6c0 3 .8 4.6 1.3 5.3M4.5 15.5S6 14 6 10a6 6 0 0 1 .6-2.6M9.5 19a2.6 2.6 0 0 0 5 0M4 4l16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>'
 }
 export function icon(name: keyof typeof I, size = 20): string {
