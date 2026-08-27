@@ -50,6 +50,8 @@ export async function renderNotes(root: HTMLElement, slug: string) {
           <button class="btn-icon btn-ghost" data-act="del" aria-label="Eliminar">${icon('trash', 16)}</button>
         </div>
       </article>`).join('')
+    const badge = document.getElementById('narchcount')
+    if (badge) badge.textContent = String(showArch ? notes.filter(n => !n.archived).length : notes.filter(n => n.archived).length)
   }
   doRender()
 
