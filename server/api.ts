@@ -54,9 +54,21 @@ function runGit(args: string[]): Promise<{ ok: boolean; out: string }> {
   })
 }
 // ponytail: fast-forward-only merge dev->main (sem checkout -> nao choca com data/ sujo)
+async function resolveMainTip(): Promise<string | null> {
+  const lo = await runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/main'])
+  if (lo.ok) return lo.out
+  const lo2 = await runGit(['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main'])
+  return lo2.ok ? lo2.out : null
+}
+
 async function mergeDevToMain() {
-  const anc = await runGit(['merge-base', '--is-ancestor', 'main', 'dev'])
-  if (!anc.ok) return { ok: false, out: 'main e dev divergentes — merge manual necessario (dev deveria estar a frente de main)' }
+  // ponytail: local main pode NAO existir no clone (só nasce no update-ref do 1º approve) ->
+  // resolver o tip real (local || remote); sem tip, main nunca existiu -> ff trivial, deixar mergear.
+  const tip = await resolveMainTip()
+  if (tip) {
+    const anc = await runGit(['merge-base', '--is-ancestor', tip, 'dev'])
+    if (!anc.ok) return { ok: false, out: 'main e dev divergentes — merge manual necessario (dev deveria estar a frente de main)' }
+  }
   const devSha = await runGit(['rev-parse', 'dev'])
   if (!devSha.ok) return { ok: false, out: 'falha a obter dev' }
   const upd = await runGit(['update-ref', 'refs/heads/main', devSha.out])
