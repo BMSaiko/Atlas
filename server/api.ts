@@ -14,6 +14,18 @@ const VENV_PY = process.env.HERMES_PY || 'C:\\Users\\bruno\\Documents\\hermes-ag
 const HERMES_CWD = process.env.HERMES_CWD || 'C:\\Users\\bruno\\Documents\\hermes-agent'
 const HERMES_HOME = process.env.HERMES_LIVE_HOME || 'C:\\Users\\bruno\\AppData\\Local\\hermes'
 const GIT = process.env.GIT_BIN || 'C:\\Program Files\\Git\\bin\\git.exe'
+const VAULT = 'C:\\Users\\bruno\\Documents\\Second-Brain' // ponytail: datas locais (live-data) versionadas na vault -> auto-backup a cada escrita
+let vaultSyncing = false
+function syncVault() { // ponytail: git commit fire-and-forget a cada escrita (nao bloqueia a rota); .wt ignorado na vault
+  if (vaultSyncing) return; vaultSyncing = true
+  const c = spawn(GIT, ['-C', VAULT, 'add', '-A', 'knowledge/projects/atlas/live-data', '--'], { windowsHide: true, stdio: 'ignore' })
+  c.on('close', () => {
+    const d = spawn(GIT, ['-C', VAULT, 'commit', '--no-verify', '-m', 'atlas: live-data sync (data.json)', '--', 'knowledge/projects/atlas/live-data'], { windowsHide: true, stdio: 'ignore' })
+    d.on('close', () => { vaultSyncing = false })
+    d.on('error', () => { vaultSyncing = false })
+  })
+  c.on('error', () => { vaultSyncing = false })
+}
 const ATLAS_REPO = process.env.ATLAS_REPO || 'C:\\Users\\bruno\\Documents\\Second-Brain\\knowledge\\projects\\atlas\\code'
 const WT_ROOT = join(ATLAS_REPO, 'data', '.wt')  // ponytail: worktrees por card -> N cards em paralelo sem colidir no checkout
 const nid = () => Math.random().toString(36).slice(2, 10)  // id curto p/ notas/cards
@@ -167,7 +179,7 @@ async function launchHermes(slug: string, card: any) {
 }
 function body(req: any) { return new Promise<any>(res => { let d=''; req.on('data', (c: Buffer)=>d+=c); req.on('end', ()=>{ try{res(JSON.parse(d||'null'))}catch{res(null)} }) }) }
 async function readJ(p: string) { try { return JSON.parse(await readFile(p,'utf8')) } catch { return null } }
-async function writeJ(p: string, v: any) { await writeFile(p, JSON.stringify(v,null,2), 'utf8') }
+async function writeJ(p: string, v: any) { await writeFile(p, JSON.stringify(v,null,2), 'utf8'); syncVault() }
 interface WD { slug: string; name: string; description: string; createdAt: number }
 async function readIdx(): Promise<WD[]> { return (await readJ(join(DATA, INDEX))) || [] }
 
