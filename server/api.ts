@@ -14,6 +14,7 @@ const HERMES_CWD = process.env.HERMES_CWD || 'C:\\Users\\bruno\\Documents\\herme
 const HERMES_HOME = process.env.HERMES_LIVE_HOME || 'C:\\Users\\bruno\\AppData\\Local\\hermes'
 const GIT = process.env.GIT_BIN || 'C:\\Program Files\\Git\\bin\\git.exe'
 const ATLAS_REPO = process.env.ATLAS_REPO || 'C:\\Users\\bruno\\Documents\\Second-Brain\\knowledge\\projects\\atlas\\code'
+const WT_ROOT = join(ATLAS_REPO, 'data', '.wt')  // ponytail: worktrees por card -> N cards em paralelo sem colidir no checkout
 
 
 function initIndex() {
@@ -50,13 +51,29 @@ async function mergeDevToMain() {
   return { ok: true, out: 'main = dev (fast-forward); push ' + (push.ok ? 'ok' : ('falhou: ' + push.out)) }
 }
 
-function launchHermes(slug: string, card: any) {
+async function launchHermes(slug: string, card: any) {
+  const branch = `feature/${slug}-${card.id}`
+  const wt = join(WT_ROOT, slug, card.id)
+  // ponytail: no canvas de feedback quando NAO abre janela, o unico canal e o card -> grava ERRO em result
+  const fail = async (msg: string) => {
+    console.error(`[run:${slug}:${card.id}] ${msg}`)
+    const ff = join(DATA, slug, 'kanban.json')
+    const board = await readJ(ff)
+    const c = board?.cards?.find((x: any) => x.id === card.id)
+    if (c) { c.result = 'ERRO: ' + msg + ' — clica Correr para tentar de novo.'; await writeJ(ff, board) }
+  }
+  // ponytail: worktree isolado por card -> varios cards rodam em paralelo sem colidir no mesmo checkout.
+  // -B reseta a branch em re-runs; rmSync limpa worktree orfao.
+  await runGit(['worktree', 'prune'])
+  await rm(wt, { recursive: true, force: true })
+  const addOut = await runGit(['worktree', 'add', '-B', branch, wt, 'dev'])
+  if (!addOut.ok) { await fail('git worktree add falhou: ' + addOut.out); return }
   const prompt = [
     'Tu es um agente autonomo. Executa o trabalho abaixo do card de kanban e atualiza o estado.',
     `Workdir: ${slug}`,
     `Kanban JSON (em disco): ${join(DATA, slug, 'kanban.json')}`,
     `Kanban API (para updates): http://localhost:5173/api/w/${slug}/kanban`,
-    `Repo de codigo (source-tree): ${ATLAS_REPO} — o codigo do Atlas vive ai. Edita SO nesse repo.`,
+    `Repo de codigo (source-tree): ${wt} — working-tree isolada deste card. Edita SO nela (ja esta na branch ${branch}).`,
     '',
     `CARTAO: ${card.title}`,
     '',
@@ -64,11 +81,11 @@ function launchHermes(slug: string, card: any) {
     card.description || '(sem descricao)',
     '',
     'GIT WORKFLOW:',
-    '  - Parte da branch dev: cria feature/<slug>-<cardId> e checkouts.',
-    '  - Trabalha ai; a cada passo commit local.',
+    `  - Ja estas na branch ${branch} criada a partir de dev (worktree isolada). Nao mudes de branch nem checkout.`,
+    '  - Trabalha em ./ e a cada passo faz commit local.',
     '  - So termina depois de tsc --noEmit sem erros e vite build ok.',
-    '  - No fim leva a branch para dev (git checkout dev; git merge feature/...) e push origin dev.',
-    '  - NUNCA cometes para main nem merges para main — isso acontece so no approve do Review.',
+    `  - No fim leva a branch para dev: git checkout dev; git merge ${branch}; git push origin dev.`,
+    '  - NUNCA cometes para main nem merges para main — isso so no approve do Review.',
     '',
     'REGRAS:',
     '- A inicios marca o teu card como "doing" (ja feito) e mantem-no ai.',
@@ -77,17 +94,20 @@ function launchHermes(slug: string, card: any) {
     '- Apos concluires, coloca o teu card na coluna "review" (colId "review") no kanban.json — a task executada vai para review final.',
     '- No fim, ATUALIZA o teu card com um campo `result`: um resumo breve do que fizeste.',
   ].join('\n')
-  // ponytail: global wezterm.lua forces exit_behavior=Hold; CLI --config override is unreliable when a GUI is already
-  // running. So the task pane closes ITS OWN window: wezterm injects WEZTERM_PANE into the pane env, and
+  // ponytail: global wezterm.lua forces exit_behavior=Hold; CLI override is unreliable when a GUI is already running.
+  // So the task pane closes ITS OWN window: wezterm injects WEZTERM_PANE into the pane env, and
   // `wezterm cli kill-pane` (no --pane-id) targets that env pane. Only the associated terminal closes.
+  // autoclose so em sucesso (rc==0): falha deixa a pane aberta (Hold) para o BMS ver o erro.
   const autoclose = [
     'import subprocess,sys',
     'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[1]])',
-    'subprocess.run([r"WEZTERM_CLI_PLACEHOLDER","cli","kill-pane"],capture_output=True)',
+    'if rc==0:',
+    '\x20\x20\x20\x20subprocess.run([r"WEZTERM_CLI_PLACEHOLDER","cli","kill-pane"],capture_output=True)',
     'sys.exit(rc)',
-  ].join(';')
+  ].join('\n')
   const p = spawn(WEZTERM, ['start', '--', VENV_PY, '-c', autoclose.replace('WEZTERM_CLI_PLACEHOLDER', WEZTERM_CLI), prompt],
-    { cwd: ATLAS_REPO, detached: true, stdio: 'ignore', env: { ...process.env, HERMES_HOME } })
+    { cwd: wt, detached: true, stdio: 'ignore', env: { ...process.env, HERMES_HOME } })
+  p.on('error', e => { void fail('spawn wezterm falhou: ' + e.message) })
   p.unref()
 }
 function body(req: any) { return new Promise<any>(res => { let d=''; req.on('data', (c: Buffer)=>d+=c); req.on('end', ()=>{ try{res(JSON.parse(d||'null'))}catch{res(null)} }) }) }
@@ -171,7 +191,7 @@ export default function atlasApi(): Plugin {
           delete card.result
           delete card.reviewed
           await writeJ(file, board)
-          launchHermes(slug, card)
+          await launchHermes(slug, card)
           send(200, { ok: true }); return
         }
         // approve -> so de 'review'; merge dev->main antes de done
@@ -198,7 +218,7 @@ export default function atlasApi(): Plugin {
         if (card.colId === 'done' || card.archived) { send(409, { error: 'card done or archived' }); return }
         card.colId = 'doing'
         await writeJ(file, board)
-        launchHermes(slug, card)
+        await launchHermes(slug, card)
         send(200, { ok: true })
         return
       }
