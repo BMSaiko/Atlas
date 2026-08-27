@@ -198,7 +198,7 @@
 .prio.high { color:var(--prio-high); }
 
 /* --- Modal --- */
-.modal-backdrop { position:fixed; inset:0; background:rgba(3,5,10,.65); display:flex; align-items:center; justify-content:center; z-index:1000; padding:var(--s4); }
+.modal-backdrop { position:fixed; inset:0; background:rgba(3,5,10,.65); display:flex; align-items:center; justify-content:center; z-index:1800; padding:var(--s4); }
 .modal { width:100%; max-width:520px; background:var(--bg-2); border:1px solid var(--line); border-radius:var(--r3); padding:var(--s5); }
 .modal h3 { font-size:1.4rem; margin-bottom:var(--s4); }
 .field { display:flex; flex-direction:column; gap:6px; margin-bottom:var(--s4); }
