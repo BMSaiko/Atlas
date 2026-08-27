@@ -143,12 +143,17 @@ function bindKeydown() {
       return
     }
     if (e.altKey) {
+      const nav = [null, ...state.items.map(it => it.slug)]  // dashboard (null) + mundos, ordem da sidebar
       const cur = state.slug
-      if (!cur) return
-      const i = state.items.findIndex(it => it.slug === cur)
-      if (i < 0) return
-      if (e.key === 'ArrowUp' && i > 0) { e.preventDefault(); setActive(state.items[i - 1].slug); navigate('/w/' + state.items[i - 1].slug) }
-      else if (e.key === 'ArrowDown' && i < state.items.length - 1) { e.preventDefault(); setActive(state.items[i + 1].slug); navigate('/w/' + state.items[i + 1].slug) }
+      let i = cur ? nav.indexOf(cur) : 0
+      if (i < 0) i = 0
+      const delta = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0
+      if (delta) {
+        e.preventDefault()
+        const next = nav[(i + delta + nav.length) % nav.length]
+        if (next) { setActive(next); navigate('/w/' + next) }
+        else { setActive(''); navigate('/') }
+      }
     }
   })
 }
