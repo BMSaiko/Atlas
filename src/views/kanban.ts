@@ -466,6 +466,8 @@ function runCard(c: Card) {
 
   function viewModal(c: Card) {
     const col = board.columns.find(x => x.id === c.colId)?.name || ''
+    const vidx = board.columns.findIndex(x => x.id === c.colId)
+    const prev = board.columns[vidx - 1]?.id, next = board.columns[vidx + 1]?.id
     const m = openModal({
       title: c.title, submitText: 'Editar',
       body: () => `
@@ -479,13 +481,23 @@ function runCard(c: Card) {
         ${c.description
           ? `<div class="kdesc" style="font-size:1rem;white-space:pre-wrap">${esc(c.description)}</div>`
           : '<div class="muted">Sem descrição</div>'}
-        ${c.colId === 'todo' || c.colId === 'doing' ? `<div class="kmodal-actions" data-card-actions>
+        <div class="kmodal-actions" data-card-actions>
           ${c.colId === 'todo'
             ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="run">${icon('play',14)} Executar no Hermes</button>
                <button type="button" class="btn btn-ghost btn-sm" data-card-act="dp">${icon('doc',14)} Gerar DP</button>`
-            : `<button type="button" class="btn btn-primary btn-sm" data-card-act="run">${icon('reset',14)} Reiniciar execução</button>
-               <button type="button" class="btn btn-ghost btn-sm" data-card-act="term">${icon('term',14)} Ver terminal</button>`}
-        </div>` : ''}
+            : c.colId === 'doing'
+              ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="run">${icon('reset',14)} Reiniciar execução</button>
+                 <button type="button" class="btn btn-ghost btn-sm" data-card-act="term">${icon('term',14)} Ver terminal</button>`
+              : c.colId === 'review'
+                ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="approve">${icon('check',14)} Aprovar</button>
+                   <button type="button" class="btn btn-ghost btn-sm" data-card-act="reject">${icon('pencil',14)} Refinar</button>`
+                : ''}
+          <button type="button" class="btn-icon btn-ghost" data-card-act="move" data-dir="-1" ${prev?'':'disabled'} title="Mover atrás">${icon('back',15)}</button>
+          <button type="button" class="btn-icon btn-ghost" data-card-act="move" data-dir="1" ${next?'':'disabled'} title="Mover frente">${icon('forward',15)}</button>
+          <button type="button" class="btn-icon btn-ghost" data-card-act="edit" title="Editar">${icon('pencil',15)}</button>
+          <button type="button" class="btn-icon btn-ghost" data-card-act="arch" title="Arquivar">${icon('archive',15)}</button>
+          <button type="button" class="btn-icon btn-ghost" data-card-act="del" title="Eliminar" style="color:var(--danger)">${icon('trash',15)}</button>
+        </div>
         ${c.dp
           ? `<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--line)"><div class="muted" style="font-size:.8rem;font-weight:600;margin-bottom:6px;color:var(--gold)">DP (Design Plan)</div>${dpHtml(c.dp)}</div>`
           : ''}
@@ -507,6 +519,16 @@ function runCard(c: Card) {
       if (a === 'run') runCard(c)
       else if (a === 'dp') dpCard(c)
       else if (a === 'term') viewTerminal(c)
+      else if (a === 'approve') approveCard(c)
+      else if (a === 'reject') rejectCard(c)
+      else if (a === 'move') {
+        const dir = parseInt(actBtn.dataset.dir || '0'); const i = board.columns.findIndex(x => x.id === c.colId)
+        const target = board.columns[i + dir]; if (!target) return
+        c.colId = target.id; save().then(render)
+      }
+      else if (a === 'edit') cardModal(c)
+      else if (a === 'arch') { c.archived = true; save().then(render); toast('Arquivado') }
+      else if (a === 'del') { confirmDialog({ title: 'Eliminar cartão', message: 'Apagar este cartão?' }).then(ok => { if (!ok) return; board.cards = board.cards.filter(x => x.id !== c.id); save().then(render); toast('Eliminado') }) }
     })
     
   }
