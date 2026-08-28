@@ -210,9 +210,12 @@ async function launchHermes(slug: string, card: any) {
   const stPath = join(runsDir, card.id + '.status')
   const ws = createWriteStream(logPath, { flags: 'a' })
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
+  // ponytail: spawn com pipe e reencaminha p/ o log — evita a corrida do fd (WriteStream{fd:null} no stdio)
   const p = spawn(VENV_PY, ['-c', wrapper, wt, branch, ATLAS_REPO, prompt],
-    { cwd: wt, detached: true, windowsHide: true, stdio: ['ignore', ws, ws], env: { ...process.env, HERMES_HOME } })
-  p.on('error', e => { void fail('spawn headless falhou: ' + e.message) })
+    { cwd: wt, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
+  p.stdout?.on('data', d => ws.write(d))
+  p.stderr?.on('data', d => ws.write(d))
+  p.on('error', e => { ws.end(); void fail('spawn headless falhou: ' + e.message) })
   p.on('close', async (code) => {
     ws.end()
     await writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {})
