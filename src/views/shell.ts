@@ -7,7 +7,7 @@ import { renderWorkspace } from './workspace'
 import { parseTags, bindTagAutocomplete } from './notes'
 import { renderDashboard } from './dashboard'
 import { startClockWidget } from '../ui/clock'
-import { getTheme, setManual, autoShift, Shift } from '../ui/theme'
+import { getTheme, setManual, setSeason, autoShift, autoSeason, Shift, Season, SEASON_NAMES } from '../ui/theme'
 import { TZ_LIST, getTz, setTz } from '../ui/timezones'
 import { mountFocus } from '../ui/pomodoro'
 
@@ -33,7 +33,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
     <div class="orb-bg"></div>
     <div class="shell" id="shell">
       <aside class="side" id="side">
-        <div class="side-head"><a class="logo logo-sm" href="/" data-nav="/">ATLAS</a><span class="shift-ind" id="shift-ind" title="Luminosidade do dia"></span></div>
+        <div class="side-head"><a class="logo logo-sm" href="/" data-nav="/">ATLAS</a><span class="shift-ind" id="shift-ind" title="Luminosidade do dia"></span><span class="shift-ind" id="season-ind" title="Estação do ano"></span></div>
         <nav class="side-nav" aria-label="Workdirs"></nav>
         <div class="side-clock" id="clock">
           <div class="clock-time" data-clock="time">--:--:--</div>
@@ -92,6 +92,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
   root.querySelector('#side-new')!.addEventListener('click', () => newWorkdir())
   bindKeydown()
   watchShift()
+  watchSeason()
   startClockWidget(shell)
   bindClockTz(shell)
   mountFocus(root.querySelector('#foco') as HTMLElement)
@@ -126,6 +127,31 @@ function watchShift() {
   })
   const mo = new MutationObserver(renderShift)
   mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-shift'] })
+}
+
+const SEASON_CYCLE: Array<Season> = ['winter', 'spring', 'summer', 'autumn']
+function renderSeason() {
+  const el = document.getElementById('season-ind')
+  if (!el) return
+  const t = getTheme()
+  const auto = t.seasonMode === 'auto'
+  const s: Season = auto ? autoSeason() : t.season
+  el.innerHTML = (auto ? icon('timer', 16) : icon('leaf', 16)) +
+    `<span class="shift-label">${auto ? 'Auto' : (SEASON_NAMES[s] || 'Inverno')}</span>`
+  el.setAttribute('data-season', s)
+  el.title = auto ? 'Estação automática — segue o mês do ano' : 'Estação manual — clicar alterna a estação'
+}
+function watchSeason() {
+  renderSeason()
+  const el = document.getElementById('season-ind')
+  el?.addEventListener('click', () => {
+    const t = getTheme()
+    if (t.seasonMode === 'auto') { setSeason(((document.documentElement.dataset.season) as Season) || autoSeason()); return }
+    const next = SEASON_CYCLE[(SEASON_CYCLE.indexOf(t.season) + 1) % SEASON_CYCLE.length]
+    setSeason(next)
+  })
+  const mo = new MutationObserver(renderSeason)
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-season'] })
 }
 
 let state: { slug: string | null; items: Array<{ slug: string; icon?: string }> } = { slug: null, items: [] }

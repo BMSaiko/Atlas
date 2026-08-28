@@ -62,7 +62,7 @@ export function shiftSchedule(): Array<{ shift: Shift; label: string; range: str
   })
 }
 
-const SEASON_NAMES: Record<Season, string> = { winter: 'Inverno', spring: 'Primavera', summer: 'Verão', autumn: 'Outono' }
+export const SEASON_NAMES: Record<Season, string> = { winter: 'Inverno', spring: 'Primavera', summer: 'Verão', autumn: 'Outono' }
 /** Estação que o mês atual implicaria, em modo auto (hemisfério norte, PT). */
 export function autoSeason(now = new Date()): Season {
   const m = now.getMonth() // 0..11

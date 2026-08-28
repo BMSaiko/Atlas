@@ -473,7 +473,7 @@ async function launchDp(slug: string, card: any) {
 // nem meu no kanban: so corre git na repo base. O prompt forcA o ramo alvo explicitamente (a wrapper
 // launchHermes mergea na branch atual do base — aqui o agente corre git checkout dev/main por conta propria).
 async function launchGitOp(slug: string, op: string, title: string, task: string) {
-  const runsDir = join(WT_ROOT, 'runs', slug)
+  const runsDir = join(wtRoot(await repoDir(slug)), 'runs', slug)
   mkdirSync(runsDir, { recursive: true })
   const logPath = join(runsDir, op + '.log')
   const stPath = join(runsDir, op + '.status')
