@@ -1,4 +1,4 @@
-import { api, Nota, uid } from '../api'
+import { api, Nota, Prioridade, uid } from '../api'
 import { icon } from '../ui/icons'
 import { openModal } from '../ui/modal'
 import { refreshTabCounts } from '../ui/counts'
@@ -135,12 +135,34 @@ export async function renderNotes(root: HTMLElement, slug: string) {
 
   function toCard(n: Nota) {
     api.kanban.get(slug).then(b => {
-      const col = b.columns.find(c => c.id === 'todo' || c.id === 'doing')?.id || b.columns[0]?.id
-      if (!col) { toast('Sem colunas no kanban'); return }
-      b.cards.push({ id: uid(), title: n.title, description: (n.text || '').trim(), priority: 'low', colId: col, ts: Date.now(), archived: false })
-      api.kanban.put(slug, b)
-        .then(() => { refreshSideCount(); refreshTabCounts(slug); toast(`Cartão criado: "${n.title}"`) })
-        .catch(e => toast('Erro: ' + e.message))
+      if (!b.columns.length) { toast('Sem colunas no kanban'); return }
+      const cols = b.columns.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('')
+      openModal({
+        title: 'Novo cartão', submitText: 'Criar',
+        body: () => `<div class="field"><label for="nk-title">Título</label><input id="nk-title" name="title" required value="${esc(n.title)}"></div>
+                   <div class="field"><label for="nk-desc">Descrição</label><textarea id="nk-desc" name="description">${esc((n.text||'').trim())}</textarea></div>
+                   <div class="field"><label for="nk-prio">Prioridade</label><select id="nk-prio" name="priority">
+                     <option value="low" selected>Baixa</option>
+                     <option value="medium">Média</option>
+                     <option value="high">Alta</option>
+                   </select></div>
+                   <div class="field"><label for="nk-col">Coluna</label><select id="nk-col" name="colId">${cols}</select></div>`,
+        onSubmit: () => {
+          const form = document.querySelector('.modal form') as HTMLFormElement
+          const title = (form.querySelector('[name=title]') as HTMLInputElement).value.trim()
+          if (!title) return
+          b.cards.push({
+            id: uid(), title,
+            description: (form.querySelector('[name=description]') as HTMLTextAreaElement).value,
+            priority: (form.querySelector('[name=priority]') as HTMLSelectElement).value as Prioridade,
+            colId: (form.querySelector('[name=colId]') as HTMLSelectElement).value,
+            ts: Date.now(), archived: false,
+          })
+          api.kanban.put(slug, b)
+            .then(() => { refreshSideCount(); refreshTabCounts(slug); toast(`Criado: "${title}"`) })
+            .catch(e => toast('Erro: ' + e.message))
+        },
+      })
     }).catch(e => toast('Erro: ' + e.message))
   }
 
