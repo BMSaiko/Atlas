@@ -47,3 +47,25 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
 }
+
+/* ÉPOCA DO ANO (estação) — tint sazonal sobre a paleta de shift ativa.
+   Depois dos [data-shift]: tingem SÓ accentos (gold/sky/focus/marble); NÃO tocam
+   em --bg-* nem nas cores funcionais. A estrutura da hora do dia (dia/entardecer/
+   noite) mora no shift e mantém-se visível; a estação dá o toque sazonal em cima.
+   Desta forma o auto-shift diário continua a ter mudança e destaque. */
+[data-season="winter"] {
+  --gold: #9fb4d8; --gold-soft: #c6d6ef; --marble: #c9cfe0;
+  --sky: #7fa3e8; --focus: #aecbff;
+}
+[data-season="spring"] {
+  --gold: #bfd88f; --gold-soft: #e2eec2; --marble: #d3dec2;
+  --sky: #7fd0b0; --focus: #a8e8c8;
+}
+[data-season="summer"] {
+  --gold: #f0c05a; --gold-soft: #f7dd9a; --marble: #ead8b4;
+  --sky: #efab55; --focus: #ffd88a;
+}
+[data-season="autumn"] {
+  --gold: #e8a04a; --gold-soft: #f2c98a; --marble: #e3c6a8;
+  --sky: #e8864a; --focus: #f5b06a;
+}

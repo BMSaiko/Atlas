@@ -7,6 +7,7 @@ import { icon } from './icons'
 import { openModal } from './modal'
 import { toast } from './toast'
 import { notify as notifyBrowser } from './notifs'
+import { addFocus } from './stats'
 
 type Mode = 'chrono' | 'pomo'
 type Phase = 'focus' | 'break'
@@ -44,6 +45,14 @@ const st: FocusState = {
   focusMin: loadCfg().focusMin, breakMin: loadCfg().breakMin,
 }
 
+// flush do cronómetro em curso ao fechar o tab (≥60s, evita sessões-espuma)
+window.addEventListener('beforeunload', () => {
+  if (st.running && st.mode === 'chrono') {
+    const el = now() - st.chronoStart
+    if (el >= 60000) addFocus(el, false)
+  }
+})
+
 let ticker = 0
 function bootTick() {
   if (ticker) return
@@ -63,7 +72,11 @@ function countLeft(): number {
 function now() { return Date.now() }
 
 function advancePhase() {
-  if (st.phase === 'focus') { st.cycle++; notify(`Foco concluído — pausa de ${st.breakMin} min`) }
+  if (st.phase === 'focus') {
+    st.cycle++
+    addFocus(st.focusMin * 60000, true)   // pomodoro completo + sessão
+    notify(`Foco concluído — pausa de ${st.breakMin} min`)
+  }
   else notify('Pausa terminada — de volta ao foco')
   st.phase = st.phase === 'focus' ? 'break' : 'focus'
   st.phaseLeft = (st.phase === 'focus' ? st.focusMin : st.breakMin) * 60000
@@ -132,7 +145,11 @@ function buildOverlay() {
       else { if (st.phaseLeft <= 0) st.phaseLeft = st.focusMin * 60000; st.phaseStart = t }
       const sat = document.getElementById('foco-sat'); if (sat) { sat.style.animationDuration = '60s'; sat.style.animationPlayState = 'running' }
     } else {
-      if (st.mode === 'chrono') st.chronoTotal += t - st.chronoStart
+      if (st.mode === 'chrono') {
+        const el = t - st.chronoStart
+        st.chronoTotal += el
+        if (el >= 60000) addFocus(el, false)   // sessão de cronómetro real (ignora abrir/fechar)
+      }
       else st.phaseLeft = Math.max(0, st.phaseLeft - (t - st.phaseStart))
       st.chronoStart = st.phaseStart = 0
       const sat = document.getElementById('foco-sat'); if (sat) sat.style.animationPlayState = 'paused'

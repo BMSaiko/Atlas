@@ -4,57 +4,87 @@ import { openModal } from '../ui/modal'
 import { refreshTabCounts } from '../ui/counts'
 import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
-import { linkify } from '../ui/text'
+import { renderMd } from '../ui/text'
 import { navigate } from '../router'
 
 export const parseTags = (v: string) => Array.from(new Set(v.split(/[,\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean)))
-// Autocomplete de tags: completa o token atual (a palavra que o user está a escrever, após espaço/vírgula)
-// com tags já existentes. Navegação por ↑/↓, aceita com Enter ou Tab. DOM-based (testável headless).
 const existingTags = (notes: Nota[]) => Array.from(new Set(notes.flatMap(n => n.tags || []))).sort()
+// Autocomplete de tags: completa o token atual (ultima palavra apos espaco/virgula) com tags existentes.
+// Popover a nivel do body (position:fixed) — escapa ao overflow do .modal-body (era o que escondia as
+// sugestoes). Setas Arriba/Baixo mudam, Enter/Tab ou clique aceitam, Esc fecha.
 export function bindTagAutocomplete(inp: HTMLInputElement, existing: string[]) {
-  const box = inp.closest('.field')?.querySelector('.tag-sugg') as HTMLElement | null
-  if (!box) return
+  if (!existing.length) return
+  const box = document.createElement('div')
+  box.className = 'tag-sugg'
+  box.setAttribute('role', 'listbox')
+  document.body.appendChild(box)
   let items: string[] = []
   let idx = 0
   const curToken = (v: string) => { const m = v.match(/([^,\s]+)$/); return m ? m[1].toLowerCase() : '' }
-  const render = (focusIdx = false) => {
-    box.innerHTML = items.map((t, i) => `<button type="button" class="tag-sugg-item${i === idx ? ' on' : ''}" data-i="${i}">${esc(t)}</button>`).join('')
-    box.classList.toggle('open', items.length > 0)
-    if (focusIdx) box.querySelector<HTMLElement>('.on')?.scrollIntoView({ block: 'nearest' })
+  const close = (clear = true) => { box.classList.remove('open'); if (clear) box.innerHTML = '' }
+  const position = () => {
+    const r = inp.getBoundingClientRect()
+    const h = Math.min(200, box.scrollHeight || 200)
+    const gap = 5
+    if (r.bottom + gap + h > window.innerHeight && r.top > h + gap) box.style.top = `${r.top - h - gap}px`
+    else box.style.top = `${r.bottom + gap}px`
+    box.style.left = `${r.left}px`
+    box.style.width = `${r.width}px`
   }
-  const refresh = () => {
+  const render = (scroll = false) => {
     const tok = curToken(inp.value)
     items = tok ? existing.filter(t => t.startsWith(tok) && t !== tok).sort() : []
-    idx = 0
-    render()
-  }
-  inp.addEventListener('input', refresh)
-  inp.addEventListener('focus', refresh)
-  inp.addEventListener('keydown', e => {
+    close()
     if (!items.length) return
-    if (e.key === 'ArrowDown') { e.preventDefault(); idx = (idx + 1) % items.length; render(true) }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); idx = (idx - 1 + items.length) % items.length; render(true) }
-    else if (e.key === 'Enter' || e.key === 'Tab') {
-      // só aceita se o token atual não for já a tag completa e o user estiver no fim do campo
-      if (idx >= 0 && idx < items.length) {
-        e.preventDefault()
-        const tag = items[idx]
-        inp.value = inp.value.replace(/([^,\s]+)$/, tag)  // ponytail: troca o token atual pela tag
-        box.classList.remove('open')
-      }
+    box.innerHTML = items.map((t, i) => `<button type="button" class="tag-sugg-item${i === idx ? ' on' : ''}" data-i="${i}" role="option">${esc(t)}</button>`).join('')
+    box.classList.add('open')
+    if (scroll) box.querySelector<HTMLElement>('.on')?.scrollIntoView({ block: 'nearest' })
+    position()
+  }
+  const accept = (i: number) => {
+    const tag = items[i]; if (!tag) return
+    inp.value = inp.value.replace(/([^,\s]+)$/, tag)  // ponytail: troca o token atual pela tag completa
+    close(); inp.focus()
+  }
+  inp.addEventListener('input', () => { idx = 0; render() })
+  inp.addEventListener('focus', () => { idx = 0; render() })
+  inp.addEventListener('keydown', e => {
+    if (!box.classList.contains('open')) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); idx = 0; render() }
+      return
     }
-    else if (e.key === 'Escape') box.classList.remove('open')
+    switch (e.key) {
+      case 'ArrowDown': e.preventDefault(); idx = (idx + 1) % items.length; render(true); break
+      case 'ArrowUp': e.preventDefault(); idx = (idx - 1 + items.length) % items.length; render(true); break
+      case 'Enter': case 'Tab': e.preventDefault(); accept(idx); break
+      case 'Escape': close(); break
+    }
   })
+  box.addEventListener('mousedown', e => {  // mousedown (nao clique) para nao roubar o foco do input
+    const b = (e.target as HTMLElement).closest('.tag-sugg-item') as HTMLElement | null
+    if (b) { e.preventDefault(); accept(Number(b.dataset.i)) }
+  })
+  inp.addEventListener('blur', () => setTimeout(() => { if (!box.matches(':hover')) close() }, 120))
+  // limpa o popover quando o modal fechar
+  const backdrop = inp.closest('.modal-backdrop')
+  if (backdrop) {
+    const mo = new MutationObserver(() => { if (!backdrop.isConnected) { mo.disconnect(); box.remove() } })
+    mo.observe(backdrop, { childList: true, subtree: true })
+  }
 }
 
 export async function renderNotes(root: HTMLElement, slug: string) {
-  let notes = await api.notes.get(slug).catch(() => [] as Nota[])
+  // optimistic concurrency: guarda o `ver` que leu p/ o enviar no PUT (etag); 409 -> re-faz GET
+  const doc0 = await api.notes.get(slug).catch(() => null)
+  let notes: Nota[] = doc0?.items ?? []
+  let notesVer: number = doc0?.ver ?? 0
+  const adoptVer = (d: { ver?: number } | undefined) => { if (d && typeof d.ver === 'number') notesVer = d.ver }
   let showArch = false
   let tagFilter = ''  // tag ativa para filtrar ('' = sem filtro)
   // ponytail: bulk — selecao de multiplas notas
   let selMode = false
   let sel = new Set<string>()
-  const save = async () => { await api.notes.put(slug, notes); refreshTabCounts(slug) }
+  const save = async () => { adoptVer(await api.notes.put(slug, { ver: notesVer, items: notes })); refreshTabCounts(slug) }
   const fmt = (ts: number) => new Date(ts).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
   const archCount = () => notes.filter(n => n.archived).length
   // ponytail: ao converter nota->cartao (tocanban) o board muda fora de kanban.ts; re-sync sidebar aqui
@@ -73,6 +103,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       <input class="notes-search" id="nsearch" placeholder="Buscar notas ou tags…" aria-label="Buscar notas">
       <button class="btn btn-ghost" id="narch" aria-pressed="${showArch}" title="${showArch ? 'Ver ativas' : 'Ver arquivadas'}">${icon('archive', 16)} <span>Arquivadas</span><span class="side-count" id="narchcount">${archCount()}</span></button>
       <button class="btn btn-primary kbdhint" id="nadd" aria-describedby="nadd-tip">${icon('plus', 16)} Nova nota<span class="kbdhint-tip" id="nadd-tip" role="tooltip"><kbd>Ctrl</kbd>+<kbd>K</kbd></span></button>
+      <button class="btn btn-ghost" id="nexport" title="Exportar notas para markdown na vault (docs/notas.md)" aria-label="Exportar notas para markdown">${icon('doc', 16)} <span>Exportar</span></button>
       <button class="btn btn-ghost" id="nsel" title="Selecionar várias notas para operações em bulk" style="${selMode?'color:var(--gold)':''}">${icon('check', 16)} ${selMode ? 'Concluir' : 'Bulk'}</button>
       <button class="btn btn-ghost" id="nbrain" title="Brainstorm + SWOT do projeto (headless — cria notas novas)" aria-label="Brainstorm + SWOT do projeto">${icon('aura', 16)} Brainstorm</button>
     </div>
@@ -108,7 +139,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       <article class="${n.archived ? 'note-card archived' : 'note-card'}${sel.has(n.id) ? ' sel' : ''}" data-id="${n.id}" tabindex="0">
         ${selMode ? `<input type="checkbox" class="nselbox" data-sel="${n.id}" ${sel.has(n.id) ? 'checked' : ''} aria-label="Selecionar ${esc(n.title)}">` : ''}
         <h4>${esc(n.title)}</h4>
-        <div class="note-text">${linkify(n.text)}</div>
+        <div class="note-text">${renderMd(n.text)}</div>
         ${(n.tags && n.tags.length) ? `<div class="note-tags">${n.tags.map(t => `<button class="tag-chip" data-tag="${esc(t)}" aria-label="Filtrar por ${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}
         <div class="note-date">${showArch ? unhide('Arquivada') : ''}${fmt(n.ts)}</div>
         <div class="note-actions">
@@ -144,6 +175,9 @@ export async function renderNotes(root: HTMLElement, slug: string) {
   root.querySelector('#ntagbar')!.addEventListener('click', e => { const b = (e.target as HTMLElement).closest('[data-tag]') as HTMLElement | null; if (b) tickTag(b.dataset.tag!) })
 
   root.querySelector('#nadd')!.addEventListener('click', () => noteModal(null))
+  root.querySelector('#nexport')!.addEventListener('click', () => {
+    api.exportNotes(slug).then(r => toast(`Notas exportadas (${r.count})`)).catch(e => toast('Erro: ' + e.message))
+  })
   root.querySelector('#nsel')!.addEventListener('click', () => { selMode = !selMode; if (!selMode) sel.clear(); doRender(searchInput.value.toLowerCase()) })
   const brainBtn = root.querySelector('#nbrain') as HTMLButtonElement
   if (brainBtn) brainBtn.addEventListener('click', () => brainstorm(slug))
@@ -209,20 +243,24 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       title: n.title, submitText: 'Editar',
       body: () => `<div style="font-size:.85rem;color:var(--text-dim);margin-bottom:10px">${fmt(n.ts)}${n.archived ? ' <span style="color:var(--gold)">· Arquivada</span>' : ''}</div>
         ${(n.tags && n.tags.length) ? `<div class="note-tags" style="margin-bottom:10px">${n.tags.map(t => `<span class="tag-chip on">${esc(t)}</span>`).join('')}</div>` : ''}
-        <div class="note-view-text">${linkify(n.text)}</div>`,
+        <div class="note-view-text">${renderMd(n.text)}</div>`,
       onSubmit: () => noteModal(n),
     })
   }
 
   function noteModal(n: Nota | null) {
-    openModal({
+    const m = openModal({
       title: n ? 'Editar nota' : 'Nova nota', submitText: n ? 'Guardar' : 'Criar',
       body: () => `<div class="field"><label for="nt-title">Título</label><input id="nt-title" name="title" required value="${esc(n?.title || '')}"></div>
-                   <div class="field"><label for="nt-text">Texto</label><textarea id="nt-text" name="text">${esc(n?.text || '')}</textarea></div>
-                   <div class="field"><label for="nt-tags">Tags</label><input id="nt-tags" name="tags" placeholder="separadas por espaço ou vírgula" value="${esc((n?.tags || []).join(', '))}">
-                   <div class="tag-sugg" id="nt-tags-sugg"></div></div>`,
+                   <div class="md-tabs">
+                     <button type="button" class="md-tab on" data-tab="edit">Editar</button>
+                     <button type="button" class="md-tab" data-tab="preview">Pré-visualização</button>
+                   </div>
+                   <div class="field md-pane md-pane-edit"><label for="nt-text">Texto</label><textarea id="nt-text" name="text">${esc(n?.text || '')}</textarea></div>
+                   <div class="field md-pane md-pane-preview" style="display:none"><label>Pré-visualização</label><div class="md-preview"></div></div>
+                   <div class="field"><label for="nt-tags">Tags</label><input id="nt-tags" name="tags" placeholder="separadas por espaço ou vírgula" value="${esc((n?.tags || []).join(', '))}"></div>`,
       onSubmit: () => {
-        const form = document.querySelector('.modal form') as HTMLFormElement
+        const form = m.root.querySelector('form') as HTMLFormElement
         const title = (form.querySelector('[name=title]') as HTMLInputElement).value.trim()
         const text = (form.querySelector('[name=text]') as HTMLTextAreaElement).value
         const tags = parseTags((form.querySelector('[name=tags]') as HTMLInputElement).value)
@@ -232,7 +270,23 @@ export async function renderNotes(root: HTMLElement, slug: string) {
         save().then(() => { doRender(searchInput.value); toast(n ? 'Nota guardada' : 'Nota criada') })
       },
     })
-    bindTagAutocomplete(document.querySelector('.modal [name=tags]') as HTMLInputElement, existingTags(notes))
+    const ta = m.root.querySelector('[name=text]') as HTMLTextAreaElement
+    const preview = m.root.querySelector('.md-preview') as HTMLElement
+    // ponytail: tab-switch local no corpo do modal (modal.ts nao tem tabs): Editar | Pré-visualização
+    const show = (side: string) => {
+      m.root.querySelectorAll<HTMLElement>('.md-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === side))
+      const edit = m.root.querySelector('.md-pane-edit') as HTMLElement
+      const prev = m.root.querySelector('.md-pane-preview') as HTMLElement
+      edit.style.display = side === 'edit' ? '' : 'none'
+      prev.style.display = side === 'preview' ? '' : 'none'
+      if (side === 'edit') ta.focus()
+      else preview.innerHTML = renderMd(ta.value)
+    }
+    m.root.querySelectorAll<HTMLElement>('.md-tab').forEach(b => b.addEventListener('click', () => show(b.dataset.tab!)))
+    ta.addEventListener('input', () => {
+      if ((m.root.querySelector('.md-tab.on') as HTMLElement).dataset.tab === 'preview') preview.innerHTML = renderMd(ta.value)
+    })
+    bindTagAutocomplete(m.root.querySelector('[name=tags]') as HTMLInputElement, existingTags(notes))
   }
 
   // ponytail: bulk — barra + handlers (arquivar/restaurar consoante a vista)

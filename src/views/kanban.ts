@@ -1,18 +1,21 @@
-import { api, Board, Card, Coluna, Prioridade, uid } from '../api'
+import { api, Board, Card, Coluna, Prioridade, uid, BoardDoc } from '../api'
 import { icon } from '../ui/icons'
 import { openModal } from '../ui/modal'
 import { refreshTabCounts } from '../ui/counts'
 import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
-import { linkify } from '../ui/text'
+import { renderMd } from '../ui/text'
 
 // ponytail: handle unico do poll — renderKanban re-corre em cada navegacao e criava um
 // setInterval novo por chamada. Limpa o anterior antes de criar. O poll so faz refresh
 // ao vivo do board; as notificacoes de review sao globais (main.ts), não dependem do poll.
 let pollTimer: ReturnType<typeof setInterval> | undefined
+// ponitail: pollers de DP que sobrevivem ao fecho do modal p/ notificar conclusao
+const dpPollers: Record<string, { timer?: ReturnType<typeof setInterval> }> = {}
 
 export async function renderKanban(root: HTMLElement, slug: string) {
-  let board = await api.kanban.get(slug).catch(() => ({ columns: [], cards: [] } as Board))
+  let board: BoardDoc = await api.kanban.get(slug).catch(() => ({ ver: 0, columns: [], cards: [] } as BoardDoc))
+  const adopt = (d: { ver?: number } | undefined) => { if (d && typeof d.ver === 'number') board.ver = d.ver }  // mantem etag local em sync apos PUT
   const save = async () => {
     const now = Date.now()
     // ponytail: qualquer card em doing sem startedAt comeca o timer agora (cobre dnd/modal de entrada em doing)
@@ -24,7 +27,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
         delete c.reviewed
       }
     }
-    await api.kanban.put(slug, board); refreshSideCount(); refreshTabCounts(slug)
+    adopt(await api.kanban.put(slug, board)); refreshSideCount(); refreshTabCounts(slug)
   }
   // ponytail: sidebar count computed once at renderShell; keep in sync on every board mutation
   function refreshSideCount() {
@@ -74,6 +77,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
         <button class="btn btn-primary kbdhint" id="kadd" aria-describedby="kadd-tip">${icon('plus', 16)} Novo cartão<span class="kbdhint-tip" id="kadd-tip" role="tooltip"><kbd>Ctrl</kbd>+<kbd>K</kbd></span></button>
         <button class="btn btn-ghost" id="karch">${icon('archive', 16)} Arquivados</button>
         <button class="btn btn-ghost" id="kimport" title="Importar tarefas de um roadmap (markdown)">${icon('forward', 16)} Importar</button>
+        <button class="btn btn-ghost" id="kortch" title="Move todos os cartões TODO (não arquivados) deste mundo para Em Curso">${icon('term', 16)} Orquestrar mundo</button>
         <button class="btn btn-ghost" id="ksel" title="Selecionar vários cartões para operações em bulk" style="${selMode?'color:var(--gold)':''}">${icon('check', 16)} ${selMode ? 'Concluir' : 'Bulk'}</button>
         <span class="kb-right">
           <span class="muted" style="font-size:.85rem">${board.cards.filter(c=>!c.archived).length} cartões</span>
@@ -102,6 +106,12 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     }))
     root.querySelector('#karch')!.addEventListener('click', showArchivedModal)
     root.querySelector('#kimport')!.addEventListener('click', importRoadmap)
+    root.querySelector('#kortch')!.addEventListener('click', () => {
+      api.orchestrator.start(slug).then(d => {
+        toast(d.moved ? `Orquestrador: ${d.moved} tarefa${d.moved === 1 ? '' : 's'} TODO → Em Curso` : 'Orquestrador: sem TODOs neste mundo (0)')
+        render()
+      }).catch(e => toast('Orquestrador: ' + e.message))
+    })
     root.querySelector('#ksel')!.addEventListener('click', () => { selMode = !selMode; if (!selMode) sel.clear(); render() })
     root.querySelector<HTMLElement>('#kboard')!.addEventListener('click', e => {
       const b = (e.target as HTMLElement).closest('[data-filter-prio]') as HTMLElement | null
@@ -154,27 +164,39 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       const isSel = sel.has(c.id)
       return `<article class="kcard${c.result ? ' has-output' : ''}${isSel ? ' sel' : ''}" draggable="true" tabindex="0" data-id="${c.id}">
         <div class="ktitle">${selMode ? `<input type="checkbox" class="kselbox" data-sel="${c.id}" ${isSel ? 'checked' : ''} aria-label="Selecionar ${esc(c.title)}">` : ''}<h5>${esc(c.title)}</h5><span class="kdate">${fmtDate(c.ts)}</span></div>
-        ${c.description ? `<div class="kdesc">${linkify(c.description)}</div>` : ''}
+        ${c.description ? `<div class="kdesc">${renderMd(c.description)}</div>` : ''}
         ${c.colId === 'doing' && !c.result ? kdoing(c) : ''}
         ${c.result ? `${resultHtml(c.result)}` : ''}
+        ${c.dp ? dpHtml(c.dp) : ''}
         ${c.colId === 'review' ? `<div class="kreview">
           <button class="btn btn-primary btn-sm" data-act="approve">${icon('check', 14)} Aprovar</button>
           <button class="btn btn-ghost btn-sm" data-act="reject">${icon('pencil', 14)} Refinar</button>
         </div>` : ''}
         <div class="kfoot">
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
-          <div class="kops">
-            <button class="btn-icon btn-ghost" data-act="run" aria-label="Executar no Hermes">${icon('play', 15)}</button>
-            <button class="btn-icon btn-ghost" data-act="term" aria-label="Ver terminal / log do run">${icon('term', 16)}</button>
-            <button class="btn-icon btn-ghost" data-act="move" data-dir="-1" ${prev?'':'disabled'} aria-label="Mover atrás">${icon('back', 15)}</button>
-            <button class="btn-icon btn-ghost" data-act="move" data-dir="1" ${next?'':'disabled'} aria-label="Mover frente">${icon('forward', 15)}</button>
-            <button class="btn-icon btn-ghost" data-act="edit" aria-label="Editar">${icon('pencil', 15)}</button>
-            <button class="btn-icon btn-ghost" data-act="arch" aria-label="Arquivar">${icon('archive', 15)}</button>
-            <button class="btn-icon btn-ghost" data-act="del" aria-label="Eliminar" style="color:var(--danger)">${icon('trash', 15)}</button>
-          </div>
+          ${kops(c, prev, next)}
         </div>
       </article>`
     }).join('')
+  }
+
+  // ponytail: composição condicional do .kops por coluna — só a ação de ciclo de vida relevante ao estado.
+  // start/play só em todo; restart(reset)+term só em doing; move/edit/arch/del em todas.
+  function kops(c: Card, prev?: string, next?: string): string {
+    const b: string[] = []
+    if (c.colId === 'todo') {
+      b.push(`<button class="btn-icon btn-ghost" data-act="run" aria-label="Executar no Hermes">${icon('play', 15)}</button>`)
+      b.push(`<button class="btn-icon btn-ghost" data-act="dp" aria-label="Gerar DP (design plan)">${icon('doc', 15)}</button>`)
+    } else if (c.colId === 'doing') {
+      b.push(`<button class="btn-icon btn-ghost" data-act="run" aria-label="Reiniciar execução">${icon('reset', 15)}</button>`)
+      b.push(`<button class="btn-icon btn-ghost" data-act="term" aria-label="Ver terminal / log do run">${icon('term', 16)}</button>`)
+    }
+    b.push(`<button class="btn-icon btn-ghost" data-act="move" data-dir="-1" ${prev?'':'disabled'} aria-label="Mover atrás">${icon('back', 15)}</button>`)
+    b.push(`<button class="btn-icon btn-ghost" data-act="move" data-dir="1" ${next?'':'disabled'} aria-label="Mover frente">${icon('forward', 15)}</button>`)
+    b.push(`<button class="btn-icon btn-ghost" data-act="edit" aria-label="Editar">${icon('pencil', 15)}</button>`)
+    b.push(`<button class="btn-icon btn-ghost" data-act="arch" aria-label="Arquivar">${icon('archive', 15)}</button>`)
+    b.push(`<button class="btn-icon btn-ghost" data-act="del" aria-label="Eliminar" style="color:var(--danger)">${icon('trash', 15)}</button>`)
+    return `<div class="kops">${b.join('')}</div>`
   }
 
   // ponytail: barra de operacoes em bulk — aparece quando selMode ativo
@@ -249,6 +271,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       if (act === 'edit' && c) { cardModal(c); return }
       if (act === 'del' && c) { confirmDialog({ title: 'Eliminar cartão', message: 'Apagar este cartão?' }).then(ok => { if (!ok) return; board.cards = board.cards.filter(x => x.id !== c.id); save().then(render); toast('Eliminado') }); return }
       if (act === 'run' && c) { runCard(c); return }
+      if (act === 'dp' && c) { dpCard(c); return }
       if (act === 'term' && c) { viewTerminal(c); return }
 if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquivado'); return }
       if (act === 'approve' && c) { approveCard(c); return }
@@ -277,7 +300,65 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
     })
   }
 
-  function runCard(c: Card) {
+  function dpCard(c: Card) {
+    // ponytail: botao DP por card — corre hermes headless que escreve o design plan e grava-o no card (card.dp)
+    fetch(`/api/w/${slug}/dp`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cardId: c.id }),
+    }).then(r => r.json()).then((d: any) => {
+      if (d && d.ok) { toast('A gerar DP em segundo plano (headless)'); viewDp(c) }
+      else toast((d && d.error) || 'Erro ao gerar DP')
+    }).catch(() => toast('Falha ao iniciar DP'))
+  }
+
+    function viewDp(c: Card) {
+    const key = `${slug}:dp-${c.id}`
+    // ponitail: registo por card p/ nao duplicar pollers; re-abrir o viz dos dados limpa o anterior
+    if (dpPollers[key]) { clearInterval(dpPollers[key].timer); delete dpPollers[key] }
+    let offset = 0
+    let pre = document.createElement('pre')
+    pre.className = 'term-view'
+    pre.textContent = 'A ligar ao DP...'
+    let timer: ReturnType<typeof setInterval> | undefined
+    const body = () => `<div class="term-wrap">${pre.outerHTML}<div class="term-status" id="${esc(c.id)}-dpstatus">a trabalhar…</div></div>`
+    const m = openModal({
+      title: 'DP · ' + c.title, submitText: 'Fechar', cancelText: 'Fechar',
+      body,
+      // ponitail: o poller continua em 2o plano apos fechar p/ conseguir notificar o fim do DP
+      onSubmit: () => {},
+    })
+    pre = m.root.querySelector('.term-view') as HTMLPreElement
+    const statusEl = m.root.querySelector('.term-status') as HTMLElement
+    const started = Date.now()
+    const finish = (code: number) => {
+      // ponitail: NOTIFICACAO quando o DP acaba — dispara mesmo com o modal ja fechado
+      toast(code === 0 ? ('DP concluído ✓ · ' + c.title) : ('DP terminou com erro (código ' + code + ') · ' + c.title))
+      if (dpPollers[key]) { clearInterval(dpPollers[key].timer); delete dpPollers[key] }
+      // ponitail: re-le o board p/ o card.dp (gravado pelo worker via API) aparecer logo ao fechar
+      if (code === 0) api.kanban.get(slug).then(fresh => { board = fresh; render() })
+    }
+    const tick = async () => {
+      // ponitail: cap de seguranca — para o poller detachado apos 30 min se nunca acabar (evita leak)
+      if (Date.now() - started > 30 * 60 * 1000) { if (dpPollers[key]) { clearInterval(dpPollers[key].timer); delete dpPollers[key] } return }
+      try {
+        const d = await api.run.output(slug, 'dp-' + c.id, offset)
+        if (d && d.chunk) { pre.textContent += d.chunk; pre.scrollTop = pre.scrollHeight }
+        offset = d ? d.offset : offset
+        if (d && d.done) {
+          if (d.code === 0) statusEl.textContent = 'concluído ✓ (arquivado no card)'
+          else { statusEl.textContent = 'terminou com erro (código ' + d.code + ') — vê o log acima'; statusEl.classList.add('err') }
+          finish(d.code ?? 0)
+          return
+        }
+        if (d && d.started === false && !pre.textContent) { statusEl.textContent = 'ainda não gerado' }
+      } catch { /* aguenta — server pode reiniciar */ }
+    }
+    timer = setInterval(tick, 1000)
+    dpPollers[key] = { timer }
+    tick()
+  }
+
+function runCard(c: Card) {
     toast('A abrir WezTerm com o Hermes...')
     fetch(`/api/w/${slug}/run`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -289,12 +370,14 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
   }
 
   function viewTerminal(c: Card) {
+    // ponytail: placeholder honesto — sem ficheiro .status a UI diz 'ainda nao lancado', nunca
+    // inventa 'concluido'. O pre so recebe bytes quando o log tem conteudo real.
     let offset = 0
     let pre = document.createElement('pre')
     pre.className = 'term-view'
-    pre.textContent = 'A ligar ao run...'
+    pre.textContent = ''
     let timer: ReturnType<typeof setInterval> | undefined
-    const body = () => `<div class="term-wrap">${pre.outerHTML}<div class="term-status" id="${esc(c.id)}-tstatus">a trabalhar…</div></div>`
+    const body = () => `<div class="term-wrap">${pre.outerHTML}<div class="term-status" id="${esc(c.id)}-tstatus">ainda não lançado</div></div>`
     const m = openModal({
       title: 'Terminal · ' + c.title, submitText: 'Fechar', cancelText: 'Fechar',
       body,
@@ -306,12 +389,17 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
     const tick = async () => {
       try {
         const d = await api.run.output(slug, c.id, offset)
-        if (d && d.chunk) { pre.textContent += d.chunk; pre.scrollTop = pre.scrollHeight }
-        offset = d ? d.offset : offset
-        if (d && d.done) {
-          if (timer) clearInterval(timer)
-          statusEl.textContent = d.code === 0 ? 'concluído ✓' : ('terminou com erro (código ' + d.code + ') — vê o log acima')
-          statusEl.classList.toggle('err', !!(d && d.code !== 0))
+        if (d) {
+          if (d.chunk) { pre.textContent += d.chunk; pre.scrollTop = pre.scrollHeight }
+          offset = d.offset
+          if (d.done) {
+            if (timer) clearInterval(timer)
+            statusEl.textContent = d.code === 0 ? 'concluído ✓' : ('terminou com erro (código ' + d.code + ') — vê o log acima')
+            statusEl.classList.toggle('err', !!(d.code !== 0))
+            return
+          }
+          if (d.started === false && !pre.textContent) { statusEl.textContent = 'ainda não lançado'; return }
+          statusEl.textContent = '● a trabalhar (update 1s)'
         }
       } catch { /* aguenta — server pode reiniciar */ }
     }
@@ -394,6 +482,8 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
 
   function viewModal(c: Card) {
     const col = board.columns.find(x => x.id === c.colId)?.name || ''
+    const vidx = board.columns.findIndex(x => x.id === c.colId)
+    const prev = board.columns[vidx - 1]?.id, next = board.columns[vidx + 1]?.id
     const m = openModal({
       title: c.title, submitText: 'Editar',
       body: () => `
@@ -405,8 +495,28 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
           <span class="muted"> · criado ${fmtDate(c.ts)}</span>
         </div>
         ${c.description
-          ? `<div class="kdesc" style="font-size:1rem;white-space:pre-wrap">${esc(c.description)}</div>`
+          ? `<div class="kdesc md-view">${renderMd(c.description)}</div>`
           : '<div class="muted">Sem descrição</div>'}
+        <div class="kmodal-actions" data-card-actions>
+          ${c.colId === 'todo'
+            ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="run">${icon('play',14)} Executar no Hermes</button>
+               <button type="button" class="btn btn-ghost btn-sm" data-card-act="dp">${icon('doc',14)} Gerar DP</button>`
+            : c.colId === 'doing'
+              ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="run">${icon('reset',14)} Reiniciar execução</button>
+                 <button type="button" class="btn btn-ghost btn-sm" data-card-act="term">${icon('term',14)} Ver terminal</button>`
+              : c.colId === 'review'
+                ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="approve">${icon('check',14)} Aprovar</button>
+                   <button type="button" class="btn btn-ghost btn-sm" data-card-act="reject">${icon('pencil',14)} Refinar</button>`
+                : ''}
+          <button type="button" class="btn-icon btn-ghost" data-card-act="move" data-dir="-1" ${prev?'':'disabled'} title="Mover atrás">${icon('back',15)}</button>
+          <button type="button" class="btn-icon btn-ghost" data-card-act="move" data-dir="1" ${next?'':'disabled'} title="Mover frente">${icon('forward',15)}</button>
+          <button type="button" class="btn-icon btn-ghost" data-card-act="edit" title="Editar">${icon('pencil',15)}</button>
+          <button type="button" class="btn-icon btn-ghost" data-card-act="arch" title="Arquivar">${icon('archive',15)}</button>
+          <button type="button" class="btn-icon btn-ghost" data-card-act="del" title="Eliminar" style="color:var(--danger)">${icon('trash',15)}</button>
+        </div>
+        ${c.dp
+          ? `<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--line)"><div class="muted" style="font-size:.8rem;font-weight:600;margin-bottom:6px;color:var(--gold)">DP (Design Plan)</div>${dpHtml(c.dp)}</div>`
+          : ''}
         ${c.result
           ? `<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--line)"><div class="muted" style="font-size:.8rem;font-weight:600;margin-bottom:6px;color:var(--gold)">Resultado</div>${resultHtml(c.result)}</div>`
           : ''}`
@@ -417,6 +527,26 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
       e.stopPropagation()
       navigator.clipboard.writeText(c.id).then(() => toast('ID copiado: ' + c.id)).catch(() => toast('Falha ao copiar'))
     })
+    // ponytail: ações contextuais do card no modal — reutilizam os mesmos handlers do grid
+    m.root.querySelector('[data-card-actions]')?.addEventListener('click', e => {
+      const actBtn = (e.target as HTMLElement).closest('[data-card-act]') as HTMLElement | null
+      if (!actBtn) return
+      const a = actBtn.dataset.cardAct
+      if (a === 'run') runCard(c)
+      else if (a === 'dp') dpCard(c)
+      else if (a === 'term') viewTerminal(c)
+      else if (a === 'approve') approveCard(c)
+      else if (a === 'reject') rejectCard(c)
+      else if (a === 'move') {
+        const dir = parseInt(actBtn.dataset.dir || '0'); const i = board.columns.findIndex(x => x.id === c.colId)
+        const target = board.columns[i + dir]; if (!target) return
+        c.colId = target.id; save().then(render)
+      }
+      else if (a === 'edit') cardModal(c)
+      else if (a === 'arch') { c.archived = true; save().then(render); toast('Arquivado') }
+      else if (a === 'del') { confirmDialog({ title: 'Eliminar cartão', message: 'Apagar este cartão?' }).then(ok => { if (!ok) return; board.cards = board.cards.filter(x => x.id !== c.id); save().then(render); toast('Eliminado') }) }
+    })
+    
   }
 
   function showArchivedModal() {
@@ -481,6 +611,13 @@ function kdoing(c: Card): string {
   const w = KDOING_WORDS[kdoingIdx % KDOING_WORDS.length]
   const start = c.startedAt || c.ts
   return `<div class="kdoing"><span class="kword">${w}</span><span class="kdot" style="--i:0"></span><span class="kdot" style="--i:1"></span><span class="kdot" style="--i:2"></span><span class="ktimer" data-start="${start}">${fmtElapsed(Date.now() - start)}</span></div>`
+}
+function dpHtml(dp: string): string {
+  // ponytail: DP apresentado como bloco destacado (primeira linha = cabecalho), cor distinta do result
+  const nl = dp.indexOf('\n')
+  const title = nl === -1 ? dp : dp.slice(0, nl)
+  const body = nl === -1 ? '' : dp.slice(nl + 1)
+  return `<div class="kdp"><div class="kdp-title">${esc(title)}</div>${body ? `<div class="kdp-body">${esc(deindent(body))}</div>` : ''}</div>`
 }
 function resultHtml(r: string): string {
   // ponytail: primeira linha = destaque (ex. 'Task cumprida: ...'); corpo separado

@@ -15,7 +15,7 @@ export function startClockWidget(root: HTMLElement) {
     if (dateEl) dateEl.textContent = new Intl.DateTimeFormat('pt-PT', { timeZone: tz, weekday: 'short', day: '2-digit', month: 'short' }).format(now)
     if (tzEl) tzEl.textContent = getTz().badge
     // Em modo auto o tema segue a hora; em manual fica fixo (nao reescreve).
-    if (getTheme().mode === 'auto') applyTheme()
+    if (getTheme().mode === 'auto' || getTheme().seasonMode === 'auto') applyTheme()
   }
   tick()
   return window.setInterval(tick, 1000)

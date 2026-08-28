@@ -1,6 +1,8 @@
 import { api, Card, Nota } from '../api'
 import { icon } from '../ui/icons'
 import { navigate } from '../router'
+import { toast } from '../ui/toast'
+import { today, week } from '../ui/stats'
 
 interface Wd { slug: string; name: string; description?: string; icon?: string }
 interface Row { wd: Wd; notes: Nota[]; board: { columns: { id: string; name: string }[]; cards: Card[] } }
@@ -133,14 +135,58 @@ function stat(label: string, val: string, sub: string, ico: Parameters<typeof ic
   `
 }
 
+function focusSection(): string {
+  const t = today(), w = week()
+  const blank = !t.sessions && !w.sessions
+  return `
+    <div class="focus" role="region" aria-label="Relatório de foco">
+      <div class="focus-head">${icon('timer', 15)} <span>Foco de hoje</span></div>
+      <div class="focus-metrics">
+        <div class="fm"><b>${t.sessions}</b><span>Sessões</span><small>${w.sessions} na semana</small></div>
+        <div class="fm fm-pomo"><b>${t.pomodoros}</b><span>Pomodoros</span><small>concluídos</small></div>
+        <div class="fm fm-time"><b>${fmtElapsed(t.focusMs)}</b><span>Tempo em foco</span><small>hoje</small></div>
+      </div>
+      <div class="focus-week"><span>${icon('aura', 12)} Esta semana</span><b>${blank ? '—' : fmtElapsed(w.focusMs)}</b></div>
+    </div>`
+}
+
+function searchResults(rows: Row[], q: string): { html: string; count: number } {
+  const ql = q.trim().toLowerCase()
+  if (!ql) return { html: '', count: 0 }
+  const hitsOf = (s?: string) => (s || '').toLowerCase().includes(ql)
+  const groups = rows.map(r => {
+    const nh = r.notes.filter(n => !n.archived && (hitsOf(n.title) || hitsOf(n.text) || (n.tags || []).some(t => t.includes(ql))))
+      .map(n => ({ kind: 'nota', icon: 'note', title: n.title, text: n.text, id: n.id }))
+    const ch = r.board.cards.filter(c => !c.archived && (hitsOf(c.title) || hitsOf(c.description)))
+      .map(c => ({ kind: 'card', icon: 'board', title: c.title, text: c.description, id: c.id }))
+    const hits = [...nh, ...ch]
+    return hits.length ? { wd: r.wd, hits } : null
+  }).filter((g): g is NonNullable<typeof g> => !!g)
+  const count = groups.reduce((a, g) => a + g.hits.length, 0)
+  if (!groups.length) return { html: `<div class="glob-none">Sem resultados para «${esc(q)}»</div>`, count }
+  // ponytail: filtro em memória sobre `rows` já carregado; endpoint agregado só se N crescer
+  return {
+    html: groups.map(g => `
+      <div class="glob-group">
+        <div class="glob-wd">${g.wd.icon ? `<img class="glob-orb" src="/icons/${g.wd.icon}" alt="">` : icon('sphere', 14)} <a href="/w/${g.wd.slug}" data-nav="/w/${g.wd.slug}">${esc(g.wd.name)}</a><em>${g.hits.length}</em></div>
+        <ul>${g.hits.map(h => `
+          <li><a class="glob-hit" href="/w/${g.wd.slug}?tab=${h.kind==='card'?'kanban':'notes'}&open=${h.id}" data-nav="/w/${g.wd.slug}?tab=${h.kind==='card'?'kanban':'notes'}&open=${h.id}">
+            ${icon(h.icon as Parameters<typeof icon>[0], 14)}<b>${esc(h.title)}</b><span class="glob-kind">${h.kind}</span>
+            ${h.text ? `<span class="glob-text">${esc(h.text.slice(0, 140))}</span>` : ''}
+          </a></li>`).join('')}</ul>
+      </div>`).join(''),
+    count,
+  }
+}
+
 export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
   const rows: Row[] = []
   for (const wd of items) {
     const [notes, board] = await Promise.all([
-      api.notes.get(wd.slug).catch(() => [] as Nota[]),
-      api.kanban.get(wd.slug).catch(() => ({ columns: [], cards: [] } as Row['board'])),
+      api.notes.get(wd.slug).catch(() => null),
+      api.kanban.get(wd.slug).catch(() => null),
     ])
-    rows.push({ wd, notes, board })
+    rows.push({ wd, notes: notes?.items ?? [] as Nota[], board: board ?? { columns: [], cards: [] } })
   }
   const { total, byWd } = tally(rows)
   const first = items[0]
@@ -158,7 +204,12 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
           <p class="dash-sub">Cada projeto, o seu próprio mundo — todos sob o mesmo céu.</p>
         </div>
         <div class="dash-actions">
+          <div class="glob-search-wrap">
+            <input class="glob-search" id="globQ" type="search" placeholder="Buscar em todos os mundos…" aria-label="Buscar notas e cartões em todos os mundos" autocomplete="off">
+            <div id="globResults" class="glob-results" hidden></div>
+          </div>
           ${first ? `<a class="btn btn-ghost" href="/w/${first.slug}" data-nav="/w/${first.slug}">${icon('sphere', 16)} Ir para o mundo ativo</a>` : ''}
+          <button class="btn btn-ghost" id="orch-btn" title="Move todos os cartões TODO (não arquivados) de todos os mundos para Em Curso e lança os agentes">${icon('term', 16)} Ativar orquestrador</button>
         </div>
       </header>
 
@@ -171,7 +222,10 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
 
       <section class="dash-sec">
         <h2>${icon('forward', 16)} Pipeline de trabalho</h2>
-        ${pipeline(total)}
+        <div class="dash-pipe-row">
+          <div class="pipe-col">${pipeline(total)}</div>
+          ${focusSection()}
+        </div>
       </section>
 
       <section class="dash-sec">
@@ -186,15 +240,69 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
     </div>`
 
   panel.querySelectorAll('[data-nav]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); navigate(a.getAttribute('data-nav')!) }))
+
+  const gq = panel.querySelector<HTMLInputElement>('#globQ')!
+  const gres = panel.querySelector<HTMLElement>('#globResults')!
+  let timer = 0
+  // ponytail: debounce curto + filtro em memória em `rows`; zero fetch por tecla
+  let sel = -1
+  const results = () => Array.from(gres.querySelectorAll<HTMLAnchorElement>('a.glob-hit'))
+  const paint = () => {
+    results().forEach((a, i) => a.classList.toggle('active', i === sel))
+    const cur = results()[sel]
+    if (cur) cur.scrollIntoView({ block: 'nearest' })
+  }
+  const runSearch = (val: string) => {
+    sel = -1
+    const q = val.trim()
+    if (!q) { gres.hidden = true; gres.innerHTML = ''; return }
+    const { html, count } = searchResults(rows, q)
+    gres.innerHTML = html
+    gres.hidden = false
+    gres.setAttribute('role', 'status')
+    gres.querySelectorAll('[data-nav]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); navigate(a.getAttribute('data-nav')!) }))
+  }
+  gq.addEventListener('input', () => {
+    clearTimeout(timer)
+    timer = window.setTimeout(() => runSearch(gq.value), 150)
+  })
+  gq.addEventListener('keydown', e => {
+    const as = results()
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!as.length) return
+      e.preventDefault()
+      sel = e.key === 'ArrowDown' ? (sel + 1) % as.length : (sel - 1 + as.length) % as.length
+      paint()
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      const cur = as[sel]
+      if (cur) cur.click()
+      else runSearch(gq.value)
+    }
+  })
+
+  // ponytail: orquestrador = gatilho; move TODO->doing em todos os mundos e re-render p/ atualizar counts
+  const orch = panel.querySelector<HTMLButtonElement>('#orch-btn')
+  orch?.addEventListener('click', () => {
+    const b = orch
+    b.disabled = true
+    api.orchestrator.start()
+      .then(d => {
+        toast(d.moved ? `Orquestrador ativado — ${d.moved} tarefa${d.moved === 1 ? '' : 's'} TODO → Em Curso` : 'Orquestrador: sem TODOs para mover (0)')
+        return renderDashboard(panel, items)
+      })
+      .catch(e => toast('Orquestrador: ' + e.message))
+      .finally(() => { b.disabled = false })
+  })
 }
 
 
 export async function renderWorldDashboard(panel: HTMLElement, wd: Wd) {
   const [notes, board] = await Promise.all([
-    api.notes.get(wd.slug).catch(() => [] as Nota[]),
-    api.kanban.get(wd.slug).catch(() => ({ columns: [], cards: [] } as Row['board'])),
+    api.notes.get(wd.slug).catch(() => null),
+    api.kanban.get(wd.slug).catch(() => null),
   ])
-  const rows: Row[] = [{ wd, notes, board }]
+  const rows: Row[] = [{ wd, notes: notes?.items ?? [] as Nota[], board: board ?? { columns: [], cards: [] } }]
   const { byWd } = tally(rows)
   const t = byWd.get(wd.slug)!
   panel.innerHTML = `
@@ -204,6 +312,9 @@ export async function renderWorldDashboard(panel: HTMLElement, wd: Wd) {
           <span class="dash-kicker">${icon(wd.icon ? 'sphere' : 'sphere', 13)} ${esc(wd.name)} · o seu mundo</span>
           <h1>Dashboard</h1>
           ${wd.description ? `<p class="dash-sub">${esc(wd.description)}</p>` : ''}
+        </div>
+        <div class="dash-actions">
+          <button class="btn btn-ghost" id="orch-wd-btn" title="Move todos os cartões TODO (não arquivados) deste mundo para Em Curso e lança os agentes">${icon('term', 16)} Ativar orquestrador</button>
         </div>
       </header>
 
@@ -216,14 +327,32 @@ export async function renderWorldDashboard(panel: HTMLElement, wd: Wd) {
 
       <section class="dash-sec">
         <h2>${icon('forward', 16)} Pipeline de trabalho</h2>
-        ${pipeline(t)}
+        <div class="dash-pipe-row">
+          <div class="pipe-col">${pipeline(t)}</div>
+          ${focusSection()}
+        </div>
       </section>
 
       <section class="dash-sec">
         <h2>${icon('aura', 16)} Sessões / terminais ativos neste mundo</h2>
         ${sessions(rows)}
       </section>
-    </div>`
+    </div>
+  `
+
+  // ponytail: orquestrador do mundo = gatilho; move TODO->doing deste mundo e lança os agentes, re-render a seguir
+  const orch = panel.querySelector<HTMLButtonElement>('#orch-wd-btn')
+  orch?.addEventListener('click', () => {
+    const b = orch
+    b.disabled = true
+    api.orchestrator.start(wd.slug)
+      .then(d => {
+        toast(d.moved ? `Orquestrador: ${d.moved} tarefa${d.moved === 1 ? '' : 's'} deste mundo → Em Curso` : 'Orquestrador: sem TODOs neste mundo (0)')
+        return renderWorldDashboard(panel, wd)
+      })
+      .catch(e => toast('Orquestrador: ' + e.message))
+      .finally(() => { b.disabled = false })
+  })
 }
 
 function esc(s: unknown) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }

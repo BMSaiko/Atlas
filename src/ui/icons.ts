@@ -4,6 +4,7 @@ const I = {
   play: '<path d="M9 6l9 6-9 6z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
   plus: '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
   note: '<path d="M5 4h11l3 3v13H5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  doc: '<path d="M6 2h9l4 4v16H6z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M15 2v4h4" fill="none" stroke="currentColor" stroke-width="1.5"/>',
   board: '<rect x="4" y="4" width="6" height="16" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="14" y="4" width="6" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/>',
   gear: '<circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5 5l2.1 2.1M16.9 16.9L19 19M19 5l-2.1 2.1M7.1 16.9L5 19" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
   pencil: '<path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19l-4 1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M14 6.5l3 3" stroke="currentColor" stroke-width="1.5"/>',
@@ -26,7 +27,9 @@ const I = {
   bell: '<path d="M12 4a6 6 0 0 1 6 6c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10a6 6 0 0 1 6-6zM9.5 19a2.6 2.6 0 0 0 5 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
   tag: '<path d="M3 11V5a2 2 0 0 1 2-2h6l10 10-7 7L3 11z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor"/>',
   bellOff: '<path d="M12 4a6 6 0 0 1 6 6c0 3 .8 4.6 1.3 5.3M4.5 15.5S6 14 6 10a6 6 0 0 1 .6-2.6M9.5 19a2.6 2.6 0 0 0 5 0M4 4l16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>',
-  term: '<rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 9l3 3-3 3M12 15h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'
+  term: '<rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 9l3 3-3 3M12 15h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  snow: '<path d="M12 3v18M6.5 6.5l15 11M19.5 6.5l-15 11M12 7l-2-2M12 7l2-2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  sprout: '<path d="M12 21v-8M12 13c0-4 3-6 7-6 0 4-3 6-7 6zM12 15c-1-3-3-5-7-5 0 3 2 5 7 5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>'
 }
 export function icon(name: keyof typeof I, size = 20): string {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" aria-hidden="true">${I[name]}</svg>`

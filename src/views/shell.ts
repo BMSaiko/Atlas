@@ -7,7 +7,7 @@ import { renderWorkspace } from './workspace'
 import { parseTags, bindTagAutocomplete } from './notes'
 import { renderDashboard } from './dashboard'
 import { startClockWidget } from '../ui/clock'
-import { getTheme, setManual, autoShift, Shift } from '../ui/theme'
+import { getTheme, setManual, setSeason, setAuto, setSeasonMode, autoShift, autoSeason, Shift, Season, SEASON_NAMES } from '../ui/theme'
 import { TZ_LIST, getTz, setTz } from '../ui/timezones'
 import { mountFocus } from '../ui/pomodoro'
 
@@ -18,7 +18,7 @@ const setActive = (s: string) => { try { localStorage.setItem(ACTIVE_KEY, s) } c
 async function counts(slug: string) {
   try {
     const [notes, board] = await Promise.all([api.notes.get(slug), api.kanban.get(slug)])
-    return { notes: notes.length, open: board.cards.filter(c => !c.archived && c.colId !== 'done').length }
+    return { notes: notes.items.length, open: board.cards.filter(c => !c.archived && c.colId !== 'done').length }
   } catch { return { notes: 0, open: 0 } }
 }
 
@@ -33,7 +33,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
     <div class="orb-bg"></div>
     <div class="shell" id="shell">
       <aside class="side" id="side">
-        <div class="side-head"><a class="logo logo-sm" href="/" data-nav="/">ATLAS</a><span class="shift-ind" id="shift-ind" title="Luminosidade do dia"></span></div>
+        <div class="side-head"><a class="logo logo-sm" href="/" data-nav="/">ATLAS</a><span class="shift-ind" id="shift-ind" title="Luminosidade do dia"></span><span class="shift-ind" id="season-ind" title="Estação do ano"></span></div>
         <nav class="side-nav" aria-label="Workdirs"></nav>
         <div class="side-clock" id="clock">
           <div class="clock-time" data-clock="time">--:--:--</div>
@@ -92,6 +92,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
   root.querySelector('#side-new')!.addEventListener('click', () => newWorkdir())
   bindKeydown()
   watchShift()
+  watchSeason()
   startClockWidget(shell)
   bindClockTz(shell)
   mountFocus(root.querySelector('#foco') as HTMLElement)
@@ -110,9 +111,10 @@ function renderShift() {
   const auto = t.mode === 'auto'
   const s: Shift = auto ? autoShift() : t.shift
   el.innerHTML = (auto ? icon('timer', 16) : icon(SHIFT_ICON[s] || 'moon', 16)) +
-    `<span class="shift-label">${auto ? 'Auto' : (SHIFT_LABEL[s] || 'Noite')}</span>`
+    `<span class="shift-label">${auto ? 'Auto' : (SHIFT_LABEL[s] || 'Noite')}</span>` +
+    `<span class="kbdhint-tip">Esquerdo: mudar tema à mão · Direito: voltar a automático (segue a hora)</span>`
   el.setAttribute('data-shift', s)
-  el.title = auto ? 'Tema automático — segue a hora do dia' : 'Tema manual — clicar alterna o tema'
+  el.title = auto ? 'Tema automático — esquerdo põe manual, direito mantém auto' : 'Tema manual — esquerdo alterna tema, direito volta a auto'
 }
 function watchShift() {
   renderShift()
@@ -124,8 +126,38 @@ function watchShift() {
     const next = CYCLE[(CYCLE.indexOf(t.shift) + 1) % CYCLE.length]
     setManual(next)
   })
+  // Direito = automático (volta a seguir a hora); esquerdo já faz manual (pin / ciclo).
+  el?.addEventListener('contextmenu', e => { e.preventDefault(); setAuto() })
   const mo = new MutationObserver(renderShift)
   mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-shift'] })
+}
+
+const SEASON_CYCLE: Array<Season> = ['winter', 'spring', 'summer', 'autumn']
+function renderSeason() {
+  const el = document.getElementById('season-ind')
+  if (!el) return
+  const t = getTheme()
+  const auto = t.seasonMode === 'auto'
+  const s: Season = auto ? autoSeason() : t.season
+  el.innerHTML = (auto ? icon('timer', 16) : icon('leaf', 16)) +
+    `<span class="shift-label">${auto ? 'Auto' : (SEASON_NAMES[s] || 'Inverno')}</span>` +
+    `<span class="kbdhint-tip">Esquerdo: mudar estação à mão · Direito: voltar a automático (segue o mês)</span>`
+  el.setAttribute('data-season', s)
+  el.title = auto ? 'Estação automática — esquerdo põe manual, direito mantém auto' : 'Estação manual — esquerdo altera estação, direito volta a auto'
+}
+function watchSeason() {
+  renderSeason()
+  const el = document.getElementById('season-ind')
+  el?.addEventListener('click', () => {
+    const t = getTheme()
+    if (t.seasonMode === 'auto') { setSeason(((document.documentElement.dataset.season) as Season) || autoSeason()); return }
+    const next = SEASON_CYCLE[(SEASON_CYCLE.indexOf(t.season) + 1) % SEASON_CYCLE.length]
+    setSeason(next)
+  })
+  // Direito = automático; esquerdo já faz manual (pin / ciclo).
+  el?.addEventListener('contextmenu', e => { e.preventDefault(); setSeasonMode('auto') })
+  const mo = new MutationObserver(renderSeason)
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-season'] })
 }
 
 let state: { slug: string | null; items: Array<{ slug: string; icon?: string }> } = { slug: null, items: [] }
@@ -170,8 +202,7 @@ function quickAdd(slug: string | null) {
       </select></div>
       <div class="field"><label for="qa-title">Título</label><input id="qa-title" name="title" required></div>
       <div class="field"><label for="qa-text">Texto / Descrição</label><textarea id="qa-text" name="text"></textarea></div>
-      <div class="field qa-tags"><label for="qa-tags">Tags</label><input id="qa-tags" name="tags" placeholder="separadas por espaço ou vírgula">
-      <div class="tag-sugg" id="qa-tags-sugg"></div></div>`,
+      <div class="field qa-tags"><label for="qa-tags">Tags</label><input id="qa-tags" name="tags" placeholder="separadas por espaço ou vírgula"></div>`,
     onSubmit: async () => {
       const form = document.querySelector('.modal form') as HTMLFormElement
       const type = (form.querySelector('[name=type]') as HTMLSelectElement).value
@@ -182,7 +213,7 @@ function quickAdd(slug: string | null) {
         if (type === 'note') {
           const notes = await api.notes.get(slug)
           const tags = parseTags((form.querySelector('[name=tags]') as HTMLInputElement).value)
-          notes.unshift({ id: uid(), title, text, ts: Date.now(), tags })
+          notes.items.unshift({ id: uid(), title, text, ts: Date.now(), tags })
           await api.notes.put(slug, notes)
           toast(`Nota criada: "${title}"`)
         } else {
@@ -201,14 +232,14 @@ function quickAdd(slug: string | null) {
 
   const qaType = m.root.querySelector('#qa-type') as HTMLSelectElement
   const qaTags = m.root.querySelector('.qa-tags') as HTMLElement
-  const syncTags = () => { qaTags.style.display = qaType.value === 'note' ? '' : 'none' }
-  qaType.addEventListener('change', syncTags); syncTags()
-  // autocomplete só faz sentido para Nota (cards não têm tags)
-  const wireAutocomplete = () => {
-    const ip = m.root.querySelector('#qa-tags') as HTMLInputElement | null
-    if (ip) api.notes.get(slug).then(ns => bindTagAutocomplete(ip, Array.from(new Set(ns.flatMap(n => n.tags || []))).sort())).catch(() => {})
+  const syncTags = () => {
+    qaTags.style.display = qaType.value === 'note' ? '' : 'none'
+    if (qaType.value !== 'note') document.querySelector('.tag-sugg.open')?.classList.remove('open')
   }
-  wireAutocomplete()
+  qaType.addEventListener('change', syncTags); syncTags()
+  // autocomplete de tags so para Nota (cards nao tem tags); set de tags existentes carregado async
+  const qaIp = m.root.querySelector('#qa-tags') as HTMLInputElement
+  api.notes.get(slug).then(ns => bindTagAutocomplete(qaIp, Array.from(new Set(ns.items.flatMap(n => n.tags || []))).sort())).catch(() => {})
 }
 
 function renderEmpty(panel: HTMLElement, items: Array<any>, root: HTMLElement) {

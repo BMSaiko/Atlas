@@ -1,16 +1,17 @@
-import { api, Board } from '../api'
+import { api, BoardDoc } from '../api'
 import { icon } from '../ui/icons'
 import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
 import { navigate } from '../router'
-import { getTheme, setMode, shiftSchedule } from '../ui/theme'
+import { getTheme, setMode, shiftSchedule, setSeasonMode, seasonSchedule } from '../ui/theme'
 import { notifState, requestNotifs } from '../ui/notifs'
 
 export async function renderSettings(root: HTMLElement, slug: string) {
   const th = getTheme()
   let meta = await api.meta(slug).catch(() => null)
-  let board: Board = await api.kanban.get(slug).catch(() => ({ columns: [], cards: [] }))
-  const saveBoard = async () => { await api.kanban.put(slug, board) }
+  let board: BoardDoc = await api.kanban.get(slug).catch(() => ({ ver: 0, columns: [], cards: [] }))
+  const adopt = (d: { ver?: number } | undefined) => { if (d && typeof d.ver === 'number') board.ver = d.ver }
+  const saveBoard = async () => { adopt(await api.kanban.put(slug, board)) }
 
   root.innerHTML = `
     <div class="settings">
@@ -32,6 +33,12 @@ export async function renderSettings(root: HTMLElement, slug: string) {
         <p class="muted" style="margin-bottom:12px">Em automático o tema segue a hora do dia. Em manual escolhes o tema no indicador da barra lateral (Dia / Entardecer / Noite), que se esconde quando voltas a automático.</p>
 
         <div class="tema-sched" style="margin-bottom:12px;font-size:.85rem">${shiftSchedule().map(sd => `<span style="display:inline-block;margin-right:16px"><b>${esc(sd.label)}</b> ${sd.range}</span>`).join()}</div>
+        <div class="tema-sched" style="margin-bottom:12px;font-size:.85rem">${seasonSchedule().map(sd => `<span style="display:inline-block;margin-right:16px"><b>${esc(sd.label)}</b> ${sd.range}</span>`).join()}</div>
+        <div class="field"><label for="se-mode">Estação do ano</label>
+          <select id="se-mode">
+            <option value="auto" ${th.seasonMode === 'auto' ? 'selected' : ''}>Automático — segue a estação do mês</option>
+            <option value="manual" ${th.seasonMode === 'manual' ? 'selected' : ''}>Manual — fico fixo na estação atual</option>
+          </select></div>
         <div class="field"><label for="th-mode">Troca automática</label>
           <select id="th-mode">
             <option value="auto" ${th.mode === 'auto' ? 'selected' : ''}>Automático — segue a hora do dia</option>
@@ -93,6 +100,9 @@ export async function renderSettings(root: HTMLElement, slug: string) {
   // --- Tema: modo auto/manual (a escolha do tema fica no indicador da sidebar) ---
   root.querySelector('#th-mode')!.addEventListener('change', e => {
     setMode((e.target as HTMLSelectElement).value === 'manual' ? 'manual' : 'auto')
+  })
+  root.querySelector('#se-mode')!.addEventListener('change', e => {
+    setSeasonMode((e.target as HTMLSelectElement).value === 'manual' ? 'manual' : 'auto')
   })
 
   // --- Notificações: pedir permissão SÓ num user gesture (click) ---
