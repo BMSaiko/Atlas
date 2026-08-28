@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { readFile, writeFile, rm } from 'node:fs/promises'
 import { createWriteStream } from 'node:fs'
 import { spawn } from 'node:child_process'
-import { join, normalize, extname, relative, sep } from 'node:path'
+import { join, dirname, delimiter, normalize, extname, relative, sep } from 'node:path'
 import { parseRoadmap } from './roadmap'
 
 const DATA = join(process.cwd(), 'data')
@@ -110,7 +110,16 @@ function runCmd(cmd: string, args: string[], cwd: string): Promise<{ ok: boolean
     const isBatch = /\.(cmd|bat)$/i.test(cmd)
     const bin = isBatch ? 'cmd' : cmd
     const binArgs = isBatch ? ['/d', '/s', '/c', cmd, ...args] : args
-    const c = spawn(bin, binArgs, { cwd, windowsHide: true })
+    // ponytail: PATH host gigante (>8k) estoura o limite da linha de comando do cmd.exe (~8191) ->
+    // npm corre scripts com PATH vazio -> 'tsc/vite is not recognized'. Passar PATH controlado curto
+    // (dirnode + node_modules/.bin + SystemRoot) p/ resolver tsc/vite em qualquer ambiente.
+    const root = process.env.SystemRoot
+    const ctrlPath = [
+      dirname(process.execPath),          // nodejs (npm.cmd, node)
+      join(cwd, 'node_modules', '.bin'),  // tsc, vite
+      ...(root ? [root + '\\System32', root] : [])
+    ].join(delimiter)
+    const c = spawn(bin, binArgs, { cwd, windowsHide: true, env: { ...process.env, PATH: ctrlPath } })
     let out = ''; c.stdout?.on('data', (d: Buffer) => out += d); c.stderr?.on('data', (d: Buffer) => out += d)
     c.on('error', e => res({ ok: false, out: e.message }))
     c.on('close', code => res({ ok: code === 0, out: out.trim() }))
