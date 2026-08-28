@@ -170,7 +170,8 @@ function quickAdd(slug: string | null) {
       </select></div>
       <div class="field"><label for="qa-title">Título</label><input id="qa-title" name="title" required></div>
       <div class="field"><label for="qa-text">Texto / Descrição</label><textarea id="qa-text" name="text"></textarea></div>
-      <div class="field qa-tags"><label for="qa-tags">Tags</label><input id="qa-tags" name="tags" placeholder="separadas por espaço ou vírgula"></div>`,
+      <div class="field qa-tags"><label for="qa-tags">Tags</label><input id="qa-tags" name="tags" list="qa-tags-list" placeholder="separadas por espaço ou vírgula">
+      <datalist id="qa-tags-list"></datalist></div>`,
     onSubmit: async () => {
       const form = document.querySelector('.modal form') as HTMLFormElement
       const type = (form.querySelector('[name=type]') as HTMLSelectElement).value
@@ -202,6 +203,10 @@ function quickAdd(slug: string | null) {
   const qaTags = m.root.querySelector('.qa-tags') as HTMLElement
   const syncTags = () => { qaTags.style.display = qaType.value === 'note' ? '' : 'none' }
   qaType.addEventListener('change', syncTags); syncTags()
+  api.notes.get(slug).then(ns => {
+    const dl = m.root.querySelector('#qa-tags-list') as HTMLDataListElement | null
+    if (dl) dl.innerHTML = Array.from(new Set(ns.flatMap(n => n.tags || []))).sort().map(t => `<option value="${esc(t)}">`).join('')
+  }).catch(() => {})
 }
 
 function renderEmpty(panel: HTMLElement, items: Array<any>, root: HTMLElement) {

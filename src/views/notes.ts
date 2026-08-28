@@ -7,6 +7,7 @@ import { confirmDialog } from '../ui/confirm'
 import { linkify } from '../ui/text'
 
 export const parseTags = (v: string) => Array.from(new Set(v.split(/[,\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean)))
+const existingTags = (notes: Nota[]) => Array.from(new Set(notes.flatMap(n => n.tags || []))).sort()
 
 export async function renderNotes(root: HTMLElement, slug: string) {
   let notes = await api.notes.get(slug).catch(() => [] as Nota[])
@@ -155,7 +156,8 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       title: n ? 'Editar nota' : 'Nova nota', submitText: n ? 'Guardar' : 'Criar',
       body: () => `<div class="field"><label for="nt-title">Título</label><input id="nt-title" name="title" required value="${esc(n?.title || '')}"></div>
                    <div class="field"><label for="nt-text">Texto</label><textarea id="nt-text" name="text">${esc(n?.text || '')}</textarea></div>
-                   <div class="field"><label for="nt-tags">Tags</label><input id="nt-tags" name="tags" placeholder="separadas por espaço ou vírgula" value="${esc((n?.tags || []).join(', '))}"></div>`,
+                   <div class="field"><label for="nt-tags">Tags</label><input id="nt-tags" name="tags" list="nt-tags-list" placeholder="separadas por espaço ou vírgula" value="${esc((n?.tags || []).join(', '))}">
+                   <datalist id="nt-tags-list">${existingTags(notes).map(t => '<option value="' + esc(t) + '">').join('')}</datalist></div>`,
       onSubmit: () => {
         const form = document.querySelector('.modal form') as HTMLFormElement
         const title = (form.querySelector('[name=title]') as HTMLInputElement).value.trim()
