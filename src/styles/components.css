@@ -239,7 +239,9 @@
 
 /* --- Toasts --- */
 .toast-wrap { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; gap:8px; z-index:2000; align-items:center; }
-.toast { background:var(--bg-3); border:1px solid var(--gold); color:var(--text); padding:12px 18px; border-radius:var(--r1); box-shadow:0 8px 24px rgba(0,0,0,.4); font-size:.9rem; }
+.toast { position:relative; overflow:hidden; background:var(--bg-3); border:1px solid var(--gold); color:var(--text); padding:12px 18px; padding-bottom:16px; border-radius:var(--r1); box-shadow:0 8px 24px rgba(0,0,0,.4); font-size:.9rem; cursor:default; }
+.toast-bar { position:absolute; left:0; bottom:0; height:3px; width:100%; background:var(--gold); opacity:.8; }
+.toast-msg { display:block; }
 
 /* --- misc --- */
 .muted { color:var(--text-dim); }
