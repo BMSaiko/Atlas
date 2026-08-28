@@ -224,7 +224,15 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
   const gres = panel.querySelector<HTMLElement>('#globResults')!
   let timer = 0
   // ponytail: debounce curto + filtro em memória em `rows`; zero fetch por tecla
+  let sel = -1
+  const results = () => Array.from(gres.querySelectorAll<HTMLAnchorElement>('a.glob-hit'))
+  const paint = () => {
+    results().forEach((a, i) => a.classList.toggle('active', i === sel))
+    const cur = results()[sel]
+    if (cur) cur.scrollIntoView({ block: 'nearest' })
+  }
   const runSearch = (val: string) => {
+    sel = -1
     const q = val.trim()
     if (!q) { gres.hidden = true; gres.innerHTML = ''; return }
     const { html, count } = searchResults(rows, q)
@@ -237,7 +245,20 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
     clearTimeout(timer)
     timer = window.setTimeout(() => runSearch(gq.value), 150)
   })
-  gq.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runSearch(gq.value) } })
+  gq.addEventListener('keydown', e => {
+    const as = results()
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!as.length) return
+      e.preventDefault()
+      sel = e.key === 'ArrowDown' ? (sel + 1) % as.length : (sel - 1 + as.length) % as.length
+      paint()
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      const cur = as[sel]
+      if (cur) cur.click()
+      else runSearch(gq.value)
+    }
+  })
 }
 
 
