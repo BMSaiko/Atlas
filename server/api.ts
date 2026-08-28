@@ -1,5 +1,5 @@
 import type { Plugin, Connect } from 'vite'
-import { existsSync, mkdirSync, readdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { readFile, writeFile, rm } from 'node:fs/promises'
 import { createWriteStream } from 'node:fs'
 import { spawn } from 'node:child_process'
@@ -168,6 +168,55 @@ function killWtLockers(wt: string): Promise<void> {
     const c = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true, stdio: 'ignore' })
     c.on('close', () => res()); c.on('error', () => res())
   })
+}
+
+// ---- limpeza periodica de runs/worktrees orfas (card zp46swqm) ----
+const RUN_KEEP_MS = 7 * 24 * 60 * 60 * 1000  // runs antigos: apagar .log/.status com >7 dias
+// cleanupRuns: apaga .log/.status antigos em data/.wt/runs/<slug>. O guard e a idade (mtime):
+// um run em andamento tem log/status com mtime recente -> nunca e apagado. Sem slug -> todos os slugs.
+async function cleanupRuns(slug?: string): Promise<void> {
+  const base = join(WT_ROOT, 'runs')
+  if (!existsSync(base)) return
+  let slugs: string[]
+  try { slugs = (slug ? [slug] : readdirSync(base)) } catch { return }
+  const now = Date.now()
+  for (const s of slugs) {
+    let files: string[]
+    try { files = readdirSync(join(base, s)); if (!files.length) { await rm(join(base, s), { recursive: true, force: true }).catch(() => {}); continue } }
+    catch { continue }
+    for (const f of files) {
+      if (!/\.(log|status)$/i.test(f)) continue
+      const fp = join(base, s, f)
+      try { if (now - statSync(fp).mtimeMs > RUN_KEEP_MS) await rm(fp, { force: true }).catch(() => {}) } catch { /* ja foi apagado */ }
+    }
+  }
+}
+// cleanupWorktrees: desregistar/remover worktrees orfas cujo trabalho JA esta em dev. Duplo guard:
+// (1) branch merged em dev (`--is-ancestor <branch> dev` rc0) -> trabalho nao se perde; (2) o run
+// correspondente NAO esta 'running' -> um card ATIVO (branch recém-criada == dev, por isso "merged") fica vivo.
+async function cleanupWorktrees(): Promise<void> {
+  await runGit(['worktree', 'prune'])
+  let slugs: string[]
+  try { slugs = readdirSync(WT_ROOT).filter(x => x !== 'runs') } catch { return }
+  for (const slug of slugs) {
+    const slugDir = join(WT_ROOT, slug)
+    let ids: string[]
+    try { ids = readdirSync(slugDir) } catch { continue }
+    for (const id of ids) {
+      const wtDir = join(slugDir, id)
+      const branch = 'feature/' + slug + '-' + id
+      const anc = await runGit(['merge-base', '--is-ancestor', branch, 'dev'])
+      if (!anc.ok) continue  // trabalho nao-merged nesta branch -> NAO apagar
+      const st = await readJ(join(WT_ROOT, 'runs', slug, id + '.status')).catch(() => null)
+      if (st?.state === 'running') continue  // card ativo -> preservar worktree e branch
+      await rmJunction(join(wtDir, 'node_modules'))
+      await runGit(['worktree', 'remove', '--force', wtDir])  // desregistar (ignora 'not a working tree')
+      await rm(wtDir, { recursive: true, force: true }).catch(() => {})
+    }
+    let rest: string[]
+    try { rest = readdirSync(slugDir); if (!rest.length) await rm(slugDir, { recursive: true, force: true }).catch(() => {}) } catch {}
+  }
+  await runGit(['worktree', 'prune'])
 }
 
 async function launchHermes(slug: string, card: any) {
@@ -563,6 +612,14 @@ export default function atlasApi(): Plugin {
         send(200, { ok: true })
         return
       }
+      // /api/w/:slug/cleanup -> limpeza manual de runs/worktrees orfas (trigger redundante ao boot)
+      if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'cleanup' && m === 'POST') {
+        const slug = parts[1]
+        if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
+        await cleanupRuns(slug); await cleanupWorktrees()
+        send(200, { ok: true }); return
+      }
+
       // /api/w/:slug/output/:cardId -> stream do log do run headless (offset-based, p/ debugging/erros)
       if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'output' && m === 'GET') {
         const slug = parts[1], cardId = parts[3]
@@ -634,7 +691,11 @@ export default function atlasApi(): Plugin {
   }
   return {
     name: 'atlas-api',
-    configureServer(s) { s.middlewares.use(middleware) },
+    configureServer(s) {
+      s.middlewares.use(middleware)
+      void cleanupRuns().catch(() => {})      // fire-and-forget no boot: limpa runs antigos
+      void cleanupWorktrees().catch(() => {}) // e worktrees orfas (ponto unico, nao bloqueia o arranque)
+    },
     configurePreviewServer(s) { s.middlewares.use(middleware) },
   }
 }
