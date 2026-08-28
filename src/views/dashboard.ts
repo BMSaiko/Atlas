@@ -139,9 +139,9 @@ function searchResults(rows: Row[], q: string): { html: string; count: number } 
   const hitsOf = (s?: string) => (s || '').toLowerCase().includes(ql)
   const groups = rows.map(r => {
     const nh = r.notes.filter(n => !n.archived && (hitsOf(n.title) || hitsOf(n.text) || (n.tags || []).some(t => t.includes(ql))))
-      .map(n => ({ kind: 'nota', icon: 'note', title: n.title, text: n.text }))
+      .map(n => ({ kind: 'nota', icon: 'note', title: n.title, text: n.text, id: n.id }))
     const ch = r.board.cards.filter(c => !c.archived && (hitsOf(c.title) || hitsOf(c.description)))
-      .map(c => ({ kind: 'card', icon: 'board', title: c.title, text: c.description }))
+      .map(c => ({ kind: 'card', icon: 'board', title: c.title, text: c.description, id: c.id }))
     const hits = [...nh, ...ch]
     return hits.length ? { wd: r.wd, hits } : null
   }).filter((g): g is NonNullable<typeof g> => !!g)
@@ -153,7 +153,7 @@ function searchResults(rows: Row[], q: string): { html: string; count: number } 
       <div class="glob-group">
         <div class="glob-wd">${g.wd.icon ? `<img class="glob-orb" src="/icons/${g.wd.icon}" alt="">` : icon('sphere', 14)} <a href="/w/${g.wd.slug}" data-nav="/w/${g.wd.slug}">${esc(g.wd.name)}</a><em>${g.hits.length}</em></div>
         <ul>${g.hits.map(h => `
-          <li><a class="glob-hit" href="/w/${g.wd.slug}" data-nav="/w/${g.wd.slug}">
+          <li><a class="glob-hit" href="/w/${g.wd.slug}?tab=${h.kind==='card'?'kanban':'notes'}&open=${h.id}" data-nav="/w/${g.wd.slug}?tab=${h.kind==='card'?'kanban':'notes'}&open=${h.id}">
             ${icon(h.icon as Parameters<typeof icon>[0], 14)}<b>${esc(h.title)}</b><span class="glob-kind">${h.kind}</span>
             ${h.text ? `<span class="glob-text">${esc(h.text.slice(0, 140))}</span>` : ''}
           </a></li>`).join('')}</ul>
