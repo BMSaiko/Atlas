@@ -4,6 +4,7 @@ import { openModal } from '../ui/modal'
 import { toast } from '../ui/toast'
 import { navigate } from '../router'
 import { renderWorkspace } from './workspace'
+import { parseTags } from './notes'
 import { renderDashboard } from './dashboard'
 import { startClockWidget } from '../ui/clock'
 import { getTheme, setManual, autoShift, Shift } from '../ui/theme'
@@ -160,7 +161,7 @@ function bindKeydown() {
 
 function quickAdd(slug: string | null) {
   if (!slug) return
-  openModal({
+  const m = openModal({
     title: 'Criar nota ou cartão', submitText: 'Criar',
     body: () => `<div class="field"><label for="qa-type">Tipo</label>
       <select id="qa-type" name="type">
@@ -168,7 +169,8 @@ function quickAdd(slug: string | null) {
         <option value="card">Cartão</option>
       </select></div>
       <div class="field"><label for="qa-title">Título</label><input id="qa-title" name="title" required></div>
-      <div class="field"><label for="qa-text">Texto / Descrição</label><textarea id="qa-text" name="text"></textarea></div>`,
+      <div class="field"><label for="qa-text">Texto / Descrição</label><textarea id="qa-text" name="text"></textarea></div>
+      <div class="field qa-tags"><label for="qa-tags">Tags</label><input id="qa-tags" name="tags" placeholder="separadas por espaço ou vírgula"></div>`,
     onSubmit: async () => {
       const form = document.querySelector('.modal form') as HTMLFormElement
       const type = (form.querySelector('[name=type]') as HTMLSelectElement).value
@@ -178,7 +180,8 @@ function quickAdd(slug: string | null) {
       try {
         if (type === 'note') {
           const notes = await api.notes.get(slug)
-          notes.unshift({ id: uid(), title, text, ts: Date.now() })
+          const tags = parseTags((form.querySelector('[name=tags]') as HTMLInputElement).value)
+          notes.unshift({ id: uid(), title, text, ts: Date.now(), tags })
           await api.notes.put(slug, notes)
           toast(`Nota criada: "${title}"`)
         } else {
@@ -194,6 +197,11 @@ function quickAdd(slug: string | null) {
       } catch (e: any) { toast('Erro: ' + e.message) }
     },
   })
+
+  const qaType = m.root.querySelector('#qa-type') as HTMLSelectElement
+  const qaTags = m.root.querySelector('.qa-tags') as HTMLElement
+  const syncTags = () => { qaTags.style.display = qaType.value === 'note' ? '' : 'none' }
+  qaType.addEventListener('change', syncTags); syncTags()
 }
 
 function renderEmpty(panel: HTMLElement, items: Array<any>, root: HTMLElement) {
