@@ -157,6 +157,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
         ${c.description ? `<div class="kdesc">${linkify(c.description)}</div>` : ''}
         ${c.colId === 'doing' && !c.result ? kdoing(c) : ''}
         ${c.result ? `${resultHtml(c.result)}` : ''}
+        ${c.dp ? dpHtml(c.dp) : ''}
         ${c.colId === 'review' ? `<div class="kreview">
           <button class="btn btn-primary btn-sm" data-act="approve">${icon('check', 14)} Aprovar</button>
           <button class="btn btn-ghost btn-sm" data-act="reject">${icon('pencil', 14)} Refinar</button>
@@ -165,6 +166,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
           <div class="kops">
             <button class="btn-icon btn-ghost" data-act="run" aria-label="Executar no Hermes">${icon('play', 15)}</button>
+            <button class="btn-icon btn-ghost" data-act="dp" aria-label="Gerar DP (design plan)">${icon('doc', 15)}</button>
             <button class="btn-icon btn-ghost" data-act="term" aria-label="Ver terminal / log do run">${icon('term', 16)}</button>
             <button class="btn-icon btn-ghost" data-act="move" data-dir="-1" ${prev?'':'disabled'} aria-label="Mover atrás">${icon('back', 15)}</button>
             <button class="btn-icon btn-ghost" data-act="move" data-dir="1" ${next?'':'disabled'} aria-label="Mover frente">${icon('forward', 15)}</button>
@@ -249,6 +251,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       if (act === 'edit' && c) { cardModal(c); return }
       if (act === 'del' && c) { confirmDialog({ title: 'Eliminar cartão', message: 'Apagar este cartão?' }).then(ok => { if (!ok) return; board.cards = board.cards.filter(x => x.id !== c.id); save().then(render); toast('Eliminado') }); return }
       if (act === 'run' && c) { runCard(c); return }
+      if (act === 'dp' && c) { dpCard(c); return }
       if (act === 'term' && c) { viewTerminal(c); return }
 if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquivado'); return }
       if (act === 'approve' && c) { approveCard(c); return }
@@ -275,6 +278,51 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
           .catch(e => toast('Erro: ' + e.message))
       },
     })
+  }
+
+  function dpCard(c: Card) {
+    // ponytail: botao DP por card — corre hermes headless que escreve o design plan e grava-o no card (card.dp)
+    fetch(`/api/w/${slug}/dp`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cardId: c.id }),
+    }).then(r => r.json()).then((d: any) => {
+      if (d && d.ok) { toast('A gerar DP em segundo plano (headless)'); viewDp(c) }
+      else toast((d && d.error) || 'Erro ao gerar DP')
+    }).catch(() => toast('Falha ao iniciar DP'))
+  }
+
+  function viewDp(c: Card) {
+    let offset = 0
+    let pre = document.createElement('pre')
+    pre.className = 'term-view'
+    pre.textContent = 'A ligar ao DP...'
+    let timer: ReturnType<typeof setInterval> | undefined
+    const body = () => `<div class="term-wrap">${pre.outerHTML}<div class="term-status" id="${esc(c.id)}-dpstatus">a trabalhar…</div></div>`
+    const m = openModal({
+      title: 'DP · ' + c.title, submitText: 'Fechar', cancelText: 'Fechar',
+      body,
+      onSubmit: () => { if (timer) clearInterval(timer) },
+    })
+    pre = m.root.querySelector('.term-view') as HTMLPreElement
+    const statusEl = m.root.querySelector('.term-status') as HTMLElement
+    const tick = async () => {
+      try {
+        const d = await api.run.output(slug, 'dp-' + c.id, offset)
+        if (d && d.chunk) { pre.textContent += d.chunk; pre.scrollTop = pre.scrollHeight }
+        offset = d ? d.offset : offset
+        if (d && d.done) {
+          if (timer) clearInterval(timer)
+          statusEl.textContent = d.code === 0 ? 'concluído ✓ (arquivado no card)' : ('terminou com erro (código ' + d.code + ') — vê o log acima')
+          statusEl.classList.toggle('err', !!(d && d.code !== 0))
+          // ponytail: re-lê o board p/ o card.dp (gravado pelo worker via API) aparecer ja ao fechar
+          if (d.code === 0) api.kanban.get(slug).then(fresh => { board = fresh; render() })
+        }
+      } catch { /* aguenta — server pode reiniciar */ }
+    }
+    timer = setInterval(tick, 1000)
+    tick()
+    const obs = new MutationObserver(() => { if (!m.root.isConnected) { if (timer) clearInterval(timer); obs.disconnect() } })
+    obs.observe(document.body, { childList: true })
   }
 
   function runCard(c: Card) {
@@ -481,6 +529,13 @@ function kdoing(c: Card): string {
   const w = KDOING_WORDS[kdoingIdx % KDOING_WORDS.length]
   const start = c.startedAt || c.ts
   return `<div class="kdoing"><span class="kword">${w}</span><span class="kdot" style="--i:0"></span><span class="kdot" style="--i:1"></span><span class="kdot" style="--i:2"></span><span class="ktimer" data-start="${start}">${fmtElapsed(Date.now() - start)}</span></div>`
+}
+function dpHtml(dp: string): string {
+  // ponytail: DP apresentado como bloco destacado (primeira linha = cabecalho), cor distinta do result
+  const nl = dp.indexOf('\n')
+  const title = nl === -1 ? dp : dp.slice(0, nl)
+  const body = nl === -1 ? '' : dp.slice(nl + 1)
+  return `<div class="kdp"><div class="kdp-title">${esc(title)}</div>${body ? `<div class="kdp-body">${esc(deindent(body))}</div>` : ''}</div>`
 }
 function resultHtml(r: string): string {
   // ponytail: primeira linha = destaque (ex. 'Task cumprida: ...'); corpo separado

@@ -282,6 +282,12 @@ a.link:hover { color:var(--gold-soft); }
 .kresult-body:after{content:'...';position:absolute;right:4px;bottom:2px;background:var(--bg);padding:0 4px;font-weight:700}
 .modal-body .kresult-body{max-height:none;overflow:visible}
 .modal-body .kresult-body:after{content:none}
+.kdp{margin:6px 2px 4px;padding:6px 8px;border:1px solid var(--line);border-left:3px solid var(--sky);border-radius:6px;font-size:.78rem;color:var(--muted);background:color-mix(in srgb,var(--sky) 6%, transparent)}
+.kdp-title{font-weight:600;color:var(--sky);font-size:.82rem;margin-bottom:2px}
+.kdp-body{white-space:pre-wrap;max-height:6rem;overflow:hidden;position:relative;padding-top:4px;border-top:1px dashed var(--line)}
+.kdp-body:after{content:'...';position:absolute;right:4px;bottom:2px;background:var(--bg);padding:0 4px;font-weight:700}
+.modal-body .kdp-body{max-height:none;overflow:visible}
+.modal-body .kdp-body:after{content:none}
 
 /* --- Keybind Hint (Ctrl+K quick-add) --- */
 .kbdhint { position:relative; display:inline-flex; align-items:center; align-self:center; }
