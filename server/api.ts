@@ -1,6 +1,7 @@
 import type { Plugin, Connect } from 'vite'
 import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { readFile, writeFile, rm } from 'node:fs/promises'
+import { createWriteStream } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { join, normalize, extname, relative, sep } from 'node:path'
 import { parseRoadmap } from './roadmap'
@@ -176,16 +177,15 @@ async function launchHermes(slug: string, card: any) {
     '- Apos concluires, coloca o teu card na coluna "review" (colId "review") no kanban.json — a task executada vai para review final.',
     '- No fim, ATUALIZA o teu card com um campo `result`: um resumo breve do que fizeste.',
   ].join('\n')
-  // ponytail: global wezterm.lua forces exit_behavior=Hold; CLI override is unreliable when a GUI is already running.
-  // So the task pane closes ITS OWN window: wezterm injects WEZTERM_PANE into the pane env, and
-  // `wezterm cli kill-pane` (no --pane-id) targets that env pane. Only the associated terminal closes.
+  // ponytail: terminal em modo headless — NAO abre janela WezTerm. O wrapper python corre direto
+  // como processo de fundo (detached, windowsHide) e a saida (stdout+stderr) e capturada para um log
+  // por card. "Ver o terminal" na UI faz stream desse log (offset-based) — debugging/erros incluidos.
   // Em sucesso (rc==0): merge branch->dev + push dev (a partir do repo base, sem conflito de checkout),
   // remove a junction node_modules (rmdir NAO segue), remove a worktree e a branch -> auto-cleanup do card.
-  // Falha: pane fica aberta (Hold) p/ o BMS ver. Merge com conflito: worktree mantido p/ resolver.
+  // Em falha: log fica gravado em disco p/ o BMS ver; worktree mantida p/ resolver.
   const wrapper = [
     'import subprocess,sys,os,shutil',
-    'subprocess.run([r"WEZTERM_CLI_PLACEHOLDER","cli","set-tab-title",sys.argv[5]],capture_output=True)',
-    'wt=sys.argv[1]; branch=sys.argv[2]; base=sys.argv[3]',
+    "wt=sys.argv[1]; branch=sys.argv[2]; base=sys.argv[3]",
     'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[4]])',
     'if rc==0:',
     '\x20\x20\x20\x20try:',
@@ -198,16 +198,32 @@ async function launchHermes(slug: string, card: any) {
     '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20except OSError: shutil.rmtree(nj,ignore_errors=True)',
     '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","worktree","remove","--force",wt],capture_output=True)',
     '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","branch","-D",branch],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"WEZTERM_CLI_PLACEHOLDER","cli","kill-pane"],capture_output=True)',
     '\x20\x20\x20\x20\x20\x20\x20\x20else:',
     '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20print("MERGE dev<-"+branch+" FALHOU (conflito?) - worktree mantido, verifica.")',
     '    except Exception as e:',
     '\x20\x20\x20\x20\x20\x20\x20\x20print("AUTO-CLEANUP FALHOU: %r - push/merge incompleto. Worktree e branch mantidas p/ inspecao." % (e,))',
     'sys.exit(rc)',
-  ].join('\n').replaceAll('WEZTERM_CLI_PLACEHOLDER', WEZTERM_CLI)
-  const p = spawn(WEZTERM, ['start', '--', VENV_PY, '-c', wrapper.replaceAll('GITBIN', GIT), wt, branch, ATLAS_REPO, prompt, card.title],
-    { cwd: wt, detached: true, stdio: 'ignore', env: { ...process.env, HERMES_HOME } })
-  p.on('error', e => { void fail('spawn wezterm falhou: ' + e.message) })
+  ].join('\n').replaceAll('GITBIN', GIT)
+  const runsDir = join(WT_ROOT, 'runs', slug)
+  mkdirSync(runsDir, { recursive: true })
+  const logPath = join(runsDir, card.id + '.log')
+  const stPath = join(runsDir, card.id + '.status')
+  const ws = createWriteStream(logPath, { flags: 'a' })
+  writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
+  const p = spawn(VENV_PY, ['-c', wrapper, wt, branch, ATLAS_REPO, prompt],
+    { cwd: wt, detached: true, windowsHide: true, stdio: ['ignore', ws, ws], env: { ...process.env, HERMES_HOME } })
+  p.on('error', e => { void fail('spawn headless falhou: ' + e.message) })
+  p.on('close', async (code) => {
+    ws.end()
+    await writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {})
+    // ponytail: em falha deixa um marcador ERRO no card p/ a UI saber que terminou com erro (debug facil)
+    if (code !== 0) {
+      const ff = join(DATA, slug, 'kanban.json')
+      const board = await readJ(ff).catch(() => null)
+      const c = board?.cards?.find((x: any) => x.id === card.id)
+      if (c && !c.result) { c.result = 'ERRO: processo terminou com código ' + code + ' — abre o terminal/card para ver o log.'; await writeJ(ff, board) }
+    }
+  })
   p.unref()
 }
 function body(req: any) { return new Promise<any>(res => { let d=''; req.on('data', (c: Buffer)=>d+=c); req.on('end', ()=>{ try{res(JSON.parse(d||'null'))}catch{res(null)} }) }) }
@@ -341,6 +357,23 @@ export default function atlasApi(): Plugin {
         await writeJ(file, board)
         await launchHermes(slug, card)
         send(200, { ok: true })
+        return
+      }
+      // /api/w/:slug/output/:cardId -> stream do log do run headless (offset-based, p/ debugging/erros)
+      if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'output' && m === 'GET') {
+        const slug = parts[1], cardId = parts[3]
+        const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0)
+        if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
+        const runsDir = join(WT_ROOT, 'runs', slug)
+        const logPath = join(runsDir, cardId + '.log')
+        const stPath = join(runsDir, cardId + '.status')
+        const st = (await readJ(stPath).catch(() => null)) || { state: 'done', code: 0 }
+        let full = ''
+        try { full = await readFile(logPath, 'utf8') } catch { full = '' }
+        const done = st.state !== 'running'
+        // ponytail: envia chunk desde o offset e reporta a posicao nova p/ o cliente pedir so o delta
+        const chunk = full.slice(offset)
+        send(200, { ok: true, done, code: done ? (st.code ?? 0) : null, chunk, offset: offset + chunk.length, size: full.length })
         return
       }
       // /api/w/:slug/import-roadmap -> migra tarefas abertas de um roadmap md (notas+cards)
