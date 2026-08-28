@@ -32,7 +32,7 @@ export async function renderWorkspace(panel: HTMLElement, slug: string, isSettin
 
   if (isSettings) {
     panel.innerHTML = `<div class="ws">${header}<div id="ws-settings"></div></div>`
-    bindNav(panel); renderSettings(panel.querySelector('#ws-settings')!, slug); return
+    bindNav(panel); bindGitOps(panel, slug); renderSettings(panel.querySelector('#ws-settings')!, slug); return
   }
 
   panel.innerHTML = `<div class="ws">${header}
@@ -43,7 +43,7 @@ export async function renderWorkspace(panel: HTMLElement, slug: string, isSettin
       </nav>
       <div id="ws-content"></div>
     </div>`
-  bindNav(panel)
+  bindNav(panel); bindGitOps(panel, slug)
   const tabKey = `atlas.tab.\${slug}`
   // ponytail: deep-link da busca global (?tab=notes|kanban&open=<id>) — prefere a tab pedida
   const qp = new URLSearchParams(location.search)
@@ -84,6 +84,15 @@ function gitOp(slug: string, op: string) {
       if (d && d.ok) { toast('A ' + label + ' em segundo plano (headless)'); viewGitTerm(slug, opId, label) }
       else toast((d && d.error) || 'Erro ao iniciar ' + label)
     }).catch(() => toast('Falha ao iniciar ' + label))
+}
+
+// bindGitOps: liga os botoes git do header ([data-git]) ao gitOp(). Eram <a href="#"> sem handler
+// -> clicar so relocalizava o hash ('refresh') sem disparar nada. preventDefault trava o salto.
+function bindGitOps(root: HTMLElement, slug: string) {
+  root.querySelectorAll('[data-git]').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault()
+    gitOp(slug, a.getAttribute('data-git')!)
+  }))
 }
 
 // viewGitTerm: replica o viewTerminal dos cards, mas para um id de operacao git (op). Mostra o log do
