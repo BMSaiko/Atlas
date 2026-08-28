@@ -10,6 +10,8 @@ import { linkify } from '../ui/text'
 // setInterval novo por chamada. Limpa o anterior antes de criar. O poll so faz refresh
 // ao vivo do board; as notificacoes de review sao globais (main.ts), não dependem do poll.
 let pollTimer: ReturnType<typeof setInterval> | undefined
+// ponitail: pollers de DP que sobrevivem ao fecho do modal p/ notificar conclusao
+const dpPollers: Record<string, { timer?: ReturnType<typeof setInterval> }> = {}
 
 export async function renderKanban(root: HTMLElement, slug: string) {
   let board = await api.kanban.get(slug).catch(() => ({ columns: [], cards: [] } as Board))
@@ -291,7 +293,10 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
     }).catch(() => toast('Falha ao iniciar DP'))
   }
 
-  function viewDp(c: Card) {
+    function viewDp(c: Card) {
+    const key = `${slug}:dp-${c.id}`
+    // ponitail: registo por card p/ nao duplicar pollers; re-abrir o viz dos dados limpa o anterior
+    if (dpPollers[key]) { clearInterval(dpPollers[key].timer); delete dpPollers[key] }
     let offset = 0
     let pre = document.createElement('pre')
     pre.className = 'term-view'
@@ -301,31 +306,40 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
     const m = openModal({
       title: 'DP · ' + c.title, submitText: 'Fechar', cancelText: 'Fechar',
       body,
-      onSubmit: () => { if (timer) clearInterval(timer) },
+      // ponitail: o poller continua em 2o plano apos fechar p/ conseguir notificar o fim do DP
+      onSubmit: () => {},
     })
     pre = m.root.querySelector('.term-view') as HTMLPreElement
     const statusEl = m.root.querySelector('.term-status') as HTMLElement
+    const started = Date.now()
+    const finish = (code: number) => {
+      // ponitail: NOTIFICACAO quando o DP acaba — dispara mesmo com o modal ja fechado
+      toast(code === 0 ? ('DP concluído ✓ · ' + c.title) : ('DP terminou com erro (código ' + code + ') · ' + c.title))
+      if (dpPollers[key]) { clearInterval(dpPollers[key].timer); delete dpPollers[key] }
+      // ponitail: re-le o board p/ o card.dp (gravado pelo worker via API) aparecer logo ao fechar
+      if (code === 0) api.kanban.get(slug).then(fresh => { board = fresh; render() })
+    }
     const tick = async () => {
+      // ponitail: cap de seguranca — para o poller detachado apos 30 min se nunca acabar (evita leak)
+      if (Date.now() - started > 30 * 60 * 1000) { if (dpPollers[key]) { clearInterval(dpPollers[key].timer); delete dpPollers[key] } return }
       try {
         const d = await api.run.output(slug, 'dp-' + c.id, offset)
         if (d && d.chunk) { pre.textContent += d.chunk; pre.scrollTop = pre.scrollHeight }
         offset = d ? d.offset : offset
         if (d && d.done) {
-          if (timer) clearInterval(timer)
-          statusEl.textContent = d.code === 0 ? 'concluído ✓ (arquivado no card)' : ('terminou com erro (código ' + d.code + ') — vê o log acima')
-          statusEl.classList.toggle('err', !!(d && d.code !== 0))
-          // ponytail: re-lê o board p/ o card.dp (gravado pelo worker via API) aparecer ja ao fechar
-          if (d.code === 0) api.kanban.get(slug).then(fresh => { board = fresh; render() })
+          if (d.code === 0) statusEl.textContent = 'concluído ✓ (arquivado no card)'
+          else { statusEl.textContent = 'terminou com erro (código ' + d.code + ') — vê o log acima'; statusEl.classList.add('err') }
+          finish(d.code ?? 0)
+          return
         }
       } catch { /* aguenta — server pode reiniciar */ }
     }
     timer = setInterval(tick, 1000)
+    dpPollers[key] = { timer }
     tick()
-    const obs = new MutationObserver(() => { if (!m.root.isConnected) { if (timer) clearInterval(timer); obs.disconnect() } })
-    obs.observe(document.body, { childList: true })
   }
 
-  function runCard(c: Card) {
+function runCard(c: Card) {
     toast('A abrir WezTerm com o Hermes...')
     fetch(`/api/w/${slug}/run`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
