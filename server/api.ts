@@ -16,16 +16,26 @@ const HERMES_CWD = process.env.HERMES_CWD || 'C:\\Users\\bruno\\Documents\\herme
 const HERMES_HOME = process.env.HERMES_LIVE_HOME || 'C:\\Users\\bruno\\AppData\\Local\\hermes'
 const GIT = process.env.GIT_BIN || 'C:\\Program Files\\Git\\bin\\git.exe'
 const VAULT = 'C:\\Users\\bruno\\Documents\\Second-Brain' // ponytail: datas locais (live-data) versionadas na vault -> auto-backup a cada escrita
-let vaultSyncing = false
-function syncVault() { // ponytail: git commit fire-and-forget a cada escrita (nao bloqueia a rota); .wt ignorado na vault
-  if (vaultSyncing) return; vaultSyncing = true
+let vaultDirty = false  // ha escrita pendente de commit
+let vaultTimer: ReturnType<typeof setTimeout> | null = null  // handle do debounce
+let vaultBusy = false  // guarda de overlap: add+commit em curso
+function flushVault() {  // ponytail: 1 commit por lote (debounce trailing); .wt ignorado na vault
+  if (!vaultDirty || vaultBusy) return
+  vaultDirty = false; vaultBusy = true
   const c = spawn(GIT, ['-C', VAULT, 'add', '-A', 'knowledge/projects/atlas/live-data', '--'], { windowsHide: true, stdio: 'ignore' })
   c.on('close', () => {
     const d = spawn(GIT, ['-C', VAULT, 'commit', '--no-verify', '-m', 'atlas: live-data sync (data.json)', '--', 'knowledge/projects/atlas/live-data'], { windowsHide: true, stdio: 'ignore' })
-    d.on('close', () => { vaultSyncing = false })
-    d.on('error', () => { vaultSyncing = false })
+    // ponytail: escritas que chegaram a meio do commit ficam em vaultDirty -> commit de arrasto
+    const revive = () => { vaultBusy = false; if (vaultDirty) vaultTimer = setTimeout(flushVault, 2000) }
+    d.on('close', revive)
+    d.on('error', revive)
   })
-  c.on('error', () => { vaultSyncing = false })
+  c.on('error', () => { vaultBusy = false; if (vaultDirty) vaultTimer = setTimeout(flushVault, 2000) })
+}
+function syncVault() {  // ponytail: debounce trailing 2s -> rajada de N escritas = 1 commit; ficheiro fica ja em disco (writeJ nao muda)
+  vaultDirty = true
+  if (vaultTimer) clearTimeout(vaultTimer)
+  vaultTimer = setTimeout(flushVault, 2000)
 }
 const ATLAS_REPO = process.env.ATLAS_REPO || 'C:\\Users\\bruno\\Documents\\Second-Brain\\knowledge\\projects\\atlas\\code'
 const WT_ROOT = join(ATLAS_REPO, 'data', '.wt')  // ponytail: worktrees por card -> N cards em paralelo sem colidir no checkout
