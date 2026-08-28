@@ -40,10 +40,15 @@
 .shift-ind[data-shift="dusk"] { color:var(--prio-med); }
 .shift-ind[data-shift="night"] { color:var(--sky); }
 
+.season-ind[data-season="winter"] { color:#9fc2ff; }
+.season-ind[data-season="spring"] { color:#8fdcb0; }
+.season-ind[data-season="summer"] { color:#f0c05a; }
+.season-ind[data-season="autumn"] { color:#e8a04a; }
+
 
 /* --- App shell (sidebar + panel) --- */
 .shell { display:flex; min-height:100dvh; }
-.side { width:260px; flex-shrink:0; background:var(--bg-1); border-right:1px solid var(--line); display:flex; flex-direction:column; position:sticky; top:0; height:100dvh; }
+.side { width:300px; flex-shrink:0; background:var(--bg-1); border-right:1px solid var(--line); display:flex; flex-direction:column; position:sticky; top:0; height:100dvh; }
 .side-head { padding: var(--s5) var(--s4) var(--s3); }
 .logo-sm { font-size:1.7rem; }
 .side-nav { flex:1; overflow-y:auto; padding: var(--s2); display:flex; flex-direction:column; gap:2px; }
