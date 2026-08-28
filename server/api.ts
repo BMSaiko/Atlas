@@ -498,7 +498,10 @@ async function launchGitOp(slug: string, op: string, title: string, task: string
     '  - Faz append UTF-8 (open(<logPath>, \'a\', encoding=\'utf-8\')). No fim, 1 linha de resumo.',
     `Titulo da operacao: ${title}`,
   ].join('\n')
-  const ws = createWriteStream(logPath, { flags: 'w' })
+  // banner imediato no log -> o term-view mostra feedback logo no 1o poll (hermes headless leva
+  // ~min a produzir a 1a linha; sem isto o terminal fica mudo e parece que o botao nao funciona).
+  await writeFile(logPath, '◆ ' + title + ' — gestor git headless a arrancar…\n', 'utf8')
+  const ws = createWriteStream(logPath, { flags: 'a' })
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
   const wrapper = [
     'import subprocess,sys',
