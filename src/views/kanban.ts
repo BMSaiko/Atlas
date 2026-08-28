@@ -40,8 +40,15 @@ export async function renderKanban(root: HTMLElement, slug: string) {
   let selMode = false
   let sel = new Set<string>()
   const P: Record<Prioridade, number> = { low: 0, medium: 1, high: 2 }
+  const PRIOS: Array<{ id: Prioridade; label: string }> = [
+    { id: 'low', label: 'Baixa' },
+    { id: 'medium', label: 'Média' },
+    { id: 'high', label: 'Alta' },
+  ]
+  type ColFilter = 'all' | Prioridade
   type SortKey = 'pos'|'prio'|'date'|'title'
   let sortKey: SortKey = (localStorage.getItem(`atlas.kbsort.${slug}`) as SortKey) || 'pos'
+  let colFilters: Record<string, ColFilter> = {}
   const cmp = (a: Card, b: Card): number => {
     if (sortKey === 'prio') return P[b.priority] - P[a.priority]
     if (sortKey === 'date') return b.ts - a.ts
@@ -80,6 +87,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       <div class="kanban" id="kboard">${board.columns.map(col => `
         <section class="kcol" data-col="${col.id}">
           <h4>${esc(col.name)} <span class="muted" style="font-size:.78rem">${count(col.id)}</span></h4>
+          ${kolFilter(col.id)}
           <div class="kcards" data-col="${col.id}">${cardsOf(col.id)}</div>
         </section>`).join('')}
       </div>`
@@ -94,6 +102,15 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     root.querySelector('#karch')!.addEventListener('click', showArchivedModal)
     root.querySelector('#kimport')!.addEventListener('click', importRoadmap)
     root.querySelector('#ksel')!.addEventListener('click', () => { selMode = !selMode; if (!selMode) sel.clear(); render() })
+    root.querySelector<HTMLElement>('#kboard')!.addEventListener('click', e => {
+      const b = (e.target as HTMLElement).closest('[data-filter-prio]') as HTMLElement | null
+      if (!b) return
+      const colId = b.closest<HTMLElement>('.kcol')?.dataset.col || ''
+      if (!colId) return
+      const p = b.dataset.filterPrio
+      if (!p) return
+      if (colFilters[colId] !== p) { colFilters[colId] = p as ColFilter; render() }
+    })
     const boardEl = root.querySelector('#kboard') as HTMLElement
     boardEl.addEventListener('keydown', e => {
       const tEl = e.target as HTMLElement
@@ -115,11 +132,22 @@ export async function renderKanban(root: HTMLElement, slug: string) {
 
   }
 
-  function count(colId: string) { return board.cards.filter(c => c.colId === colId && !c.archived).length }
+  function kolFilter(colId: string) {
+    const active = colFilters[colId] || 'all'
+    const chips = [{ id: 'all' as ColFilter, label: 'Todas' }, ...PRIOS].map(p =>
+      `<button type="button" class="tag-chip${active === p.id ? ' on' : ''}" data-filter-prio="${p.id}" aria-pressed="${active === p.id}">${p.id === 'all' ? 'Todas' : p.label}</button>`
+    ).join('')
+    return `<div class="kfilter" data-col-filter="${colId}">${chips}</div>`
+  }
+  function matchesColFilter(c: Card, colId: string) {
+    const f = colFilters[colId] || 'all'
+    return f === 'all' || c.priority === f
+  }
+  function count(colId: string) { return board.cards.filter(c => c.colId === colId && !c.archived && matchesColFilter(c, colId)).length }
   function prioLabel(p: Prioridade) { return p === 'high' ? 'Alta' : p === 'medium' ? 'Média' : 'Baixa' }
 
   function cardsOf(colId: string) {
-    return board.cards.filter(c => c.colId === colId && !c.archived).sort(cmp).map(c => {
+    return board.cards.filter(c => c.colId === colId && !c.archived && matchesColFilter(c, colId)).sort(cmp).map(c => {
       const idx = board.columns.findIndex(x => x.id === c.colId)
       const prev = board.columns[idx-1]?.id, next = board.columns[idx+1]?.id
       const isSel = sel.has(c.id)
