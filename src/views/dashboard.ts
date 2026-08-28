@@ -209,7 +209,7 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
             <div id="globResults" class="glob-results" hidden></div>
           </div>
           ${first ? `<a class="btn btn-ghost" href="/w/${first.slug}" data-nav="/w/${first.slug}">${icon('sphere', 16)} Ir para o mundo ativo</a>` : ''}
-          <button class="btn btn-ghost" id="orch-btn" title="Move todos os cartões TODO (não arquivados) de todos os mundos para Em Curso">${icon('term', 16)} Ativar orquestrador</button>
+          <button class="btn btn-ghost" id="orch-btn" title="Move todos os cartões TODO (não arquivados) de todos os mundos para Em Curso e lança os agentes">${icon('term', 16)} Ativar orquestrador</button>
         </div>
       </header>
 
@@ -313,6 +313,9 @@ export async function renderWorldDashboard(panel: HTMLElement, wd: Wd) {
           <h1>Dashboard</h1>
           ${wd.description ? `<p class="dash-sub">${esc(wd.description)}</p>` : ''}
         </div>
+        <div class="dash-actions">
+          <button class="btn btn-ghost" id="orch-wd-btn" title="Move todos os cartões TODO (não arquivados) deste mundo para Em Curso e lança os agentes">${icon('term', 16)} Ativar orquestrador</button>
+        </div>
       </header>
 
       <div class="stat-grid">
@@ -334,7 +337,22 @@ export async function renderWorldDashboard(panel: HTMLElement, wd: Wd) {
         <h2>${icon('aura', 16)} Sessões / terminais ativos neste mundo</h2>
         ${sessions(rows)}
       </section>
-    </div>`
+    </div>
+  `
+
+  // ponytail: orquestrador do mundo = gatilho; move TODO->doing deste mundo e lança os agentes, re-render a seguir
+  const orch = panel.querySelector<HTMLButtonElement>('#orch-wd-btn')
+  orch?.addEventListener('click', () => {
+    const b = orch
+    b.disabled = true
+    api.orchestrator.start(wd.slug)
+      .then(d => {
+        toast(d.moved ? `Orquestrador: ${d.moved} tarefa${d.moved === 1 ? '' : 's'} deste mundo → Em Curso` : 'Orquestrador: sem TODOs neste mundo (0)')
+        return renderWorldDashboard(panel, wd)
+      })
+      .catch(e => toast('Orquestrador: ' + e.message))
+      .finally(() => { b.disabled = false })
+  })
 }
 
 function esc(s: unknown) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }

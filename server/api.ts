@@ -480,6 +480,7 @@ export default function atlasApi(): Plugin {
         const targets = only ? worldIdx.filter(w => w.slug === only) : worldIdx
         if (only && targets.length === 0) { send(404, { error: 'mundo nao encontrado' }); return }
         let moved = 0
+        const launched: { slug: string; card: any }[] = []
         for (const wd of targets) {
           const file = join(DATA, wd.slug, 'kanban.json')
           if (!inside(DATA, file)) continue
@@ -493,10 +494,13 @@ export default function atlasApi(): Plugin {
             delete card.result
             delete card.reviewed
             moved++; dirty = true
+            launched.push({ slug: wd.slug, card })
           }
           if (dirty) await writeJ(file, board)
         }
-        send(200, { ok: true, moved }); return
+        // ponytail: orquestrador tambem lanca o agente (run headless) por card movido — fire-and-forget, em paralelo.
+        for (const l of launched) void launchHermes(l.slug, l.card).catch((e: any) => console.error('[orchestrator:' + l.slug + ':' + l.card.id + '] ' + (e?.message || e)))
+        send(200, { ok: true, moved, launched: launched.length }); return
       }
 
 if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { icons: iconCatalog() }); return }
