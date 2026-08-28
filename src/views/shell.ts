@@ -18,7 +18,7 @@ const setActive = (s: string) => { try { localStorage.setItem(ACTIVE_KEY, s) } c
 async function counts(slug: string) {
   try {
     const [notes, board] = await Promise.all([api.notes.get(slug), api.kanban.get(slug)])
-    return { notes: notes.length, open: board.cards.filter(c => !c.archived && c.colId !== 'done').length }
+    return { notes: notes.items.length, open: board.cards.filter(c => !c.archived && c.colId !== 'done').length }
   } catch { return { notes: 0, open: 0 } }
 }
 
@@ -181,7 +181,7 @@ function quickAdd(slug: string | null) {
         if (type === 'note') {
           const notes = await api.notes.get(slug)
           const tags = parseTags((form.querySelector('[name=tags]') as HTMLInputElement).value)
-          notes.unshift({ id: uid(), title, text, ts: Date.now(), tags })
+          notes.items.unshift({ id: uid(), title, text, ts: Date.now(), tags })
           await api.notes.put(slug, notes)
           toast(`Nota criada: "${title}"`)
         } else {
@@ -207,7 +207,7 @@ function quickAdd(slug: string | null) {
   qaType.addEventListener('change', syncTags); syncTags()
   // autocomplete de tags so para Nota (cards nao tem tags); set de tags existentes carregado async
   const qaIp = m.root.querySelector('#qa-tags') as HTMLInputElement
-  api.notes.get(slug).then(ns => bindTagAutocomplete(qaIp, Array.from(new Set(ns.flatMap(n => n.tags || []))).sort())).catch(() => {})
+  api.notes.get(slug).then(ns => bindTagAutocomplete(qaIp, Array.from(new Set(ns.items.flatMap(n => n.tags || []))).sort())).catch(() => {})
 }
 
 function renderEmpty(panel: HTMLElement, items: Array<any>, root: HTMLElement) {

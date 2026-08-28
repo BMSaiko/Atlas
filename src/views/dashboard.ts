@@ -178,10 +178,10 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
   const rows: Row[] = []
   for (const wd of items) {
     const [notes, board] = await Promise.all([
-      api.notes.get(wd.slug).catch(() => [] as Nota[]),
-      api.kanban.get(wd.slug).catch(() => ({ columns: [], cards: [] } as Row['board'])),
+      api.notes.get(wd.slug).catch(() => null),
+      api.kanban.get(wd.slug).catch(() => null),
     ])
-    rows.push({ wd, notes, board })
+    rows.push({ wd, notes: notes?.items ?? [] as Nota[], board: board ?? { columns: [], cards: [] } })
   }
   const { total, byWd } = tally(rows)
   const first = items[0]
@@ -279,10 +279,10 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
 
 export async function renderWorldDashboard(panel: HTMLElement, wd: Wd) {
   const [notes, board] = await Promise.all([
-    api.notes.get(wd.slug).catch(() => [] as Nota[]),
-    api.kanban.get(wd.slug).catch(() => ({ columns: [], cards: [] } as Row['board'])),
+    api.notes.get(wd.slug).catch(() => null),
+    api.kanban.get(wd.slug).catch(() => null),
   ])
-  const rows: Row[] = [{ wd, notes, board }]
+  const rows: Row[] = [{ wd, notes: notes?.items ?? [] as Nota[], board: board ?? { columns: [], cards: [] } }]
   const { byWd } = tally(rows)
   const t = byWd.get(wd.slug)!
   panel.innerHTML = `

@@ -74,13 +74,17 @@ export function bindTagAutocomplete(inp: HTMLInputElement, existing: string[]) {
 }
 
 export async function renderNotes(root: HTMLElement, slug: string) {
-  let notes = await api.notes.get(slug).catch(() => [] as Nota[])
+  // optimistic concurrency: guarda o `ver` que leu p/ o enviar no PUT (etag); 409 -> re-faz GET
+  const doc0 = await api.notes.get(slug).catch(() => null)
+  let notes: Nota[] = doc0?.items ?? []
+  let notesVer: number = doc0?.ver ?? 0
+  const adoptVer = (d: { ver?: number } | undefined) => { if (d && typeof d.ver === 'number') notesVer = d.ver }
   let showArch = false
   let tagFilter = ''  // tag ativa para filtrar ('' = sem filtro)
   // ponytail: bulk — selecao de multiplas notas
   let selMode = false
   let sel = new Set<string>()
-  const save = async () => { await api.notes.put(slug, notes); refreshTabCounts(slug) }
+  const save = async () => { adoptVer(await api.notes.put(slug, { ver: notesVer, items: notes })); refreshTabCounts(slug) }
   const fmt = (ts: number) => new Date(ts).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
   const archCount = () => notes.filter(n => n.archived).length
   // ponytail: ao converter nota->cartao (tocanban) o board muda fora de kanban.ts; re-sync sidebar aqui

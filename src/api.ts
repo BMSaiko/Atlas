@@ -3,6 +3,9 @@ export interface Nota { id: string; title: string; text: string; ts: number; arc
 export interface Card { id: string; colId: string; title: string; description: string; priority: Prioridade; ts: number; archived: boolean; result?: string; dp?: string; reviewed?: boolean; startedAt?: number }
 export interface Coluna { id: string; name: string }
 export interface Board { columns: Coluna[]; cards: Card[] }
+// optimistic concurrency: payloads com etag `ver` (escapam ao last-write-wins do PUT)
+export type BoardDoc = { ver: number; columns: Coluna[]; cards: Card[] }
+export type NotesDoc = { ver: number; items: Nota[] }
 export interface Workdir { slug: string; name: string; description?: string; createdAt: number; icon?: string }
 export interface WorkdirMeta { slug: string; name: string; description: string; createdAt: number; icon?: string }
 
@@ -21,13 +24,13 @@ export const api = {
   deleteWorkdir: (slug: string) => j<{ ok: boolean }>(`/api/workdirs/${slug}`, 'DELETE'),
   meta: (slug: string) => j<WorkdirMeta>(`/api/w/${slug}`),
   notes: {
-    get: (slug: string) => j<Nota[]>(`/api/w/${slug}/notes`),
-    put: (slug: string, notes: Nota[]) => j<{ ok: boolean }>(`/api/w/${slug}/notes`, 'PUT', notes),
+    get: (slug: string) => j<{ ver: number; items: Nota[] }>(`/api/w/${slug}/notes`),
+    put: (slug: string, doc: { ver: number; items: Nota[] }) => j<{ ok: boolean; ver?: number }>(`/api/w/${slug}/notes`, 'PUT', doc),
   },
   importRoadmap: (slug: string, path: string) => j<{ ok: boolean; addedCards: number; addedNotes: number; skipped: number; total: number }>(`/api/w/${slug}/import-roadmap`, 'POST', { path }),
   kanban: {
-    get: (slug: string) => j<Board>(`/api/w/${slug}/kanban`),
-    put: (slug: string, board: Board) => j<{ ok: boolean }>(`/api/w/${slug}/kanban`, 'PUT', board),
+    get: (slug: string) => j<{ ver: number; columns: Coluna[]; cards: Card[] }>(`/api/w/${slug}/kanban`),
+    put: (slug: string, doc: { ver: number; columns: Coluna[]; cards: Card[] }) => j<{ ok: boolean; ver?: number }>(`/api/w/${slug}/kanban`, 'PUT', doc),
   },
   review: {
     approve: (slug: string, cardId: string) => j<{ ok: boolean; merge?: string }>(`/api/w/${slug}/review/approve`, 'POST', { cardId }),
