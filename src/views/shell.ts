@@ -4,7 +4,7 @@ import { openModal } from '../ui/modal'
 import { toast } from '../ui/toast'
 import { navigate } from '../router'
 import { renderWorkspace } from './workspace'
-import { parseTags } from './notes'
+import { parseTags, bindTagAutocomplete } from './notes'
 import { renderDashboard } from './dashboard'
 import { startClockWidget } from '../ui/clock'
 import { getTheme, setManual, autoShift, Shift } from '../ui/theme'
@@ -170,7 +170,8 @@ function quickAdd(slug: string | null) {
       </select></div>
       <div class="field"><label for="qa-title">Título</label><input id="qa-title" name="title" required></div>
       <div class="field"><label for="qa-text">Texto / Descrição</label><textarea id="qa-text" name="text"></textarea></div>
-      <div class="field qa-tags"><label for="qa-tags">Tags</label><input id="qa-tags" name="tags" placeholder="separadas por espaço ou vírgula"></div>`,
+      <div class="field qa-tags"><label for="qa-tags">Tags</label><input id="qa-tags" name="tags" placeholder="separadas por espaço ou vírgula">
+      <div class="tag-sugg" id="qa-tags-sugg"></div></div>`,
     onSubmit: async () => {
       const form = document.querySelector('.modal form') as HTMLFormElement
       const type = (form.querySelector('[name=type]') as HTMLSelectElement).value
@@ -202,6 +203,12 @@ function quickAdd(slug: string | null) {
   const qaTags = m.root.querySelector('.qa-tags') as HTMLElement
   const syncTags = () => { qaTags.style.display = qaType.value === 'note' ? '' : 'none' }
   qaType.addEventListener('change', syncTags); syncTags()
+  // autocomplete só faz sentido para Nota (cards não têm tags)
+  const wireAutocomplete = () => {
+    const ip = m.root.querySelector('#qa-tags') as HTMLInputElement | null
+    if (ip) api.notes.get(slug).then(ns => bindTagAutocomplete(ip, Array.from(new Set(ns.flatMap(n => n.tags || []))).sort())).catch(() => {})
+  }
+  wireAutocomplete()
 }
 
 function renderEmpty(panel: HTMLElement, items: Array<any>, root: HTMLElement) {

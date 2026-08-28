@@ -164,6 +164,14 @@
 .tag-chip { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:999px; font-size:.74rem; background:var(--bg-2); border:1px solid var(--line); color:var(--text-dim); cursor:pointer; transition:border-color .15s,color .15s,background .15s; }
 .tag-chip:hover { border-color:var(--gold); color:var(--text); }
 .tag-chip.on { background:var(--gold); border-color:var(--gold); color:var(--bg-0); cursor:default; }
+
+/* Autocomplete de tags — dropdown de sugestões por baixo do campo (completa o token atual) */
+.tag-sugg { position:relative; }
+.tag-sugg:empty { display:none; }
+.tag-sugg-item { display:block; width:100%; text-align:left; padding:6px 10px; border:none; background:transparent; color:var(--text); font-size:.8rem; border-radius:var(--r1); cursor:pointer; }
+.tag-sugg-item:hover, .tag-sugg-item.on { background:rgba(212,175,55,.12); color:var(--gold); }
+.tag-sugg.open { position:absolute; top:100%; left:0; right:0; z-index:1900; margin-top:2px; background:var(--bg-2); border:1px solid var(--line); border-radius:var(--r1); box-shadow:0 8px 30px rgba(0,0,0,.5); padding:4px; max-height:200px; overflow-y:auto; }
+
 .note-tags { display:flex; flex-wrap:wrap; gap:4px; }
 .note-card .note-tags { margin-top:0; }
 .note-tags .tag-chip { color:var(--gold); border-color:rgba(212,175,55,.35); cursor:pointer; }
@@ -219,7 +227,7 @@
 .modal-backdrop { position:fixed; inset:0; background:rgba(3,5,10,.65); display:flex; align-items:center; justify-content:center; z-index:1800; padding:var(--s4); }
 .modal { width:100%; max-width:520px; background:var(--bg-2); border:1px solid var(--line); border-radius:var(--r3); padding:var(--s5); }
 .modal h3 { font-size:1.4rem; margin-bottom:var(--s4); }
-.field { display:flex; flex-direction:column; gap:6px; margin-bottom:var(--s4); }
+.field { display:flex; flex-direction:column; gap:6px; margin-bottom:var(--s4); position:relative; }
 .field label { font-size:.85rem; color:var(--text-dim); }
 .field input, .field textarea, .field select { padding:10px 12px; border-radius:var(--r1); background:var(--bg-3); border:1px solid var(--line); color:var(--text); }
 .field textarea { resize:vertical; min-height:90px; }

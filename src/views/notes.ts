@@ -7,6 +7,44 @@ import { confirmDialog } from '../ui/confirm'
 import { linkify } from '../ui/text'
 
 export const parseTags = (v: string) => Array.from(new Set(v.split(/[,\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean)))
+// Autocomplete de tags: completa o token atual (a palavra que o user está a escrever, após espaço/vírgula)
+// com tags já existentes. Navegação por ↑/↓, aceita com Enter ou Tab. DOM-based (testável headless).
+const existingTags = (notes: Nota[]) => Array.from(new Set(notes.flatMap(n => n.tags || []))).sort()
+export function bindTagAutocomplete(inp: HTMLInputElement, existing: string[]) {
+  const box = inp.closest('.field')?.querySelector('.tag-sugg') as HTMLElement | null
+  if (!box) return
+  let items: string[] = []
+  let idx = 0
+  const curToken = (v: string) => { const m = v.match(/([^,\s]+)$/); return m ? m[1].toLowerCase() : '' }
+  const render = (focusIdx = false) => {
+    box.innerHTML = items.map((t, i) => `<button type="button" class="tag-sugg-item${i === idx ? ' on' : ''}" data-i="${i}">${esc(t)}</button>`).join('')
+    box.classList.toggle('open', items.length > 0)
+    if (focusIdx) box.querySelector<HTMLElement>('.on')?.scrollIntoView({ block: 'nearest' })
+  }
+  const refresh = () => {
+    const tok = curToken(inp.value)
+    items = tok ? existing.filter(t => t.startsWith(tok) && t !== tok).sort() : []
+    idx = 0
+    render()
+  }
+  inp.addEventListener('input', refresh)
+  inp.addEventListener('focus', refresh)
+  inp.addEventListener('keydown', e => {
+    if (!items.length) return
+    if (e.key === 'ArrowDown') { e.preventDefault(); idx = (idx + 1) % items.length; render(true) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); idx = (idx - 1 + items.length) % items.length; render(true) }
+    else if (e.key === 'Enter' || e.key === 'Tab') {
+      // só aceita se o token atual não for já a tag completa e o user estiver no fim do campo
+      if (idx >= 0 && idx < items.length) {
+        e.preventDefault()
+        const tag = items[idx]
+        inp.value = inp.value.replace(/([^,\s]+)$/, tag)  // ponytail: troca o token atual pela tag
+        box.classList.remove('open')
+      }
+    }
+    else if (e.key === 'Escape') box.classList.remove('open')
+  })
+}
 
 export async function renderNotes(root: HTMLElement, slug: string) {
   let notes = await api.notes.get(slug).catch(() => [] as Nota[])
@@ -155,7 +193,8 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       title: n ? 'Editar nota' : 'Nova nota', submitText: n ? 'Guardar' : 'Criar',
       body: () => `<div class="field"><label for="nt-title">Título</label><input id="nt-title" name="title" required value="${esc(n?.title || '')}"></div>
                    <div class="field"><label for="nt-text">Texto</label><textarea id="nt-text" name="text">${esc(n?.text || '')}</textarea></div>
-                   <div class="field"><label for="nt-tags">Tags</label><input id="nt-tags" name="tags" placeholder="separadas por espaço ou vírgula" value="${esc((n?.tags || []).join(', '))}"></div>`,
+                   <div class="field"><label for="nt-tags">Tags</label><input id="nt-tags" name="tags" placeholder="separadas por espaço ou vírgula" value="${esc((n?.tags || []).join(', '))}">
+                   <div class="tag-sugg" id="nt-tags-sugg"></div></div>`,
       onSubmit: () => {
         const form = document.querySelector('.modal form') as HTMLFormElement
         const title = (form.querySelector('[name=title]') as HTMLInputElement).value.trim()
@@ -167,6 +206,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
         save().then(() => { doRender(searchInput.value); toast(n ? 'Nota guardada' : 'Nota criada') })
       },
     })
+    bindTagAutocomplete(document.querySelector('.modal [name=tags]') as HTMLInputElement, existingTags(notes))
   }
 
   // ponytail: bulk — barra + handlers (arquivar/restaurar consoante a vista)
