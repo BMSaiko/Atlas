@@ -5,6 +5,7 @@ import { refreshTabCounts } from '../ui/counts'
 import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
 import { linkify } from '../ui/text'
+import { navigate } from '../router'
 
 export const parseTags = (v: string) => Array.from(new Set(v.split(/[,\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean)))
 
@@ -35,6 +36,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       <button class="btn btn-ghost" id="narch" aria-pressed="${showArch}" title="${showArch ? 'Ver ativas' : 'Ver arquivadas'}">${icon('archive', 16)} <span>Arquivadas</span><span class="side-count" id="narchcount">${archCount()}</span></button>
       <button class="btn btn-primary kbdhint" id="nadd" aria-describedby="nadd-tip">${icon('plus', 16)} Nova nota<span class="kbdhint-tip" id="nadd-tip" role="tooltip"><kbd>Ctrl</kbd>+<kbd>K</kbd></span></button>
       <button class="btn btn-ghost" id="nsel" title="Selecionar várias notas para operações em bulk" style="${selMode?'color:var(--gold)':''}">${icon('check', 16)} ${selMode ? 'Concluir' : 'Bulk'}</button>
+      <button class="btn btn-ghost" id="nbrain" title="Brainstorm + SWOT do projeto (headless — cria notas novas)" aria-label="Brainstorm + SWOT do projeto">${icon('aura', 16)} Brainstorm</button>
     </div>
     <div class="notes-tagbar" id="ntagbar"></div>
     ${selMode ? bulkBarNotes() : ''}
@@ -105,6 +107,8 @@ export async function renderNotes(root: HTMLElement, slug: string) {
 
   root.querySelector('#nadd')!.addEventListener('click', () => noteModal(null))
   root.querySelector('#nsel')!.addEventListener('click', () => { selMode = !selMode; if (!selMode) sel.clear(); doRender(searchInput.value.toLowerCase()) })
+  const brainBtn = root.querySelector('#nbrain') as HTMLButtonElement
+  if (brainBtn) brainBtn.addEventListener('click', () => brainstorm(slug))
   grid.addEventListener('keydown', e => {
     const t = e.target as HTMLElement
     if (t.classList.contains('note-card') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); const n = notes.find(x => x.id === t.dataset.id); if (n) noteView(n) }
@@ -212,4 +216,50 @@ export async function renderNotes(root: HTMLElement, slug: string) {
     }).catch(e => toast('Erro: ' + e.message))
   }
 }
+// ponytail: botão Brainstorm na toolbar de notas — corre um hermes headless que analisa o
+// source-tree, faz SWOT + brainstorm e escreve notas novas no workdir. Log streameado do
+// mecanismo /output do run-card (id ficticio "brainstorm"); ao concluir, refresca a lista.
+function brainstorm(slug: string) {
+  fetch(`/api/w/${slug}/brainstorm`, { method: 'POST' })
+    .then(r => r.json()).then((d: any) => {
+      if (d && d.ok) { toast('Brainstorm a correr em segundo plano (headless)'); viewBrainstorm(slug) }
+      else toast((d && d.error) || 'Erro ao iniciar brainstorm')
+    }).catch(() => toast('Falha ao iniciar brainstorm'))
+}
+function viewBrainstorm(slug: string) {
+  let offset = 0
+  let pre = document.createElement('pre')
+  pre.className = 'term-view'
+  pre.textContent = 'A ligar ao brainstorm...'
+  let timer: ReturnType<typeof setInterval> | undefined
+  const body = () => `<div class="term-wrap">${pre.outerHTML}<div class="term-status" id="bs-tstatus">a trabalhar…</div></div>`
+  const m = openModal({
+    title: 'Brainstorm/SWOT · ' + slug, submitText: 'Fechar', cancelText: 'Fechar',
+    body,
+    onSubmit: () => { if (timer) clearInterval(timer) },
+  })
+  pre = m.root.querySelector('.term-view') as HTMLPreElement
+  const statusEl = m.root.querySelector('.term-status') as HTMLElement
+  const tick = async () => {
+    try {
+      const d = await api.run.output(slug, 'brainstorm', offset)
+      if (d && d.chunk) { pre.textContent += d.chunk; pre.scrollTop = pre.scrollHeight }
+      offset = d ? d.offset : offset
+      if (d && d.done) {
+        if (timer) clearInterval(timer)
+        statusEl.textContent = d.code === 0 ? 'concluído ✓ (notas criadas)' : ('terminou com erro (código ' + d.code + ') — vê o log acima')
+        statusEl.classList.toggle('err', !!(d && d.code !== 0))
+        // ponytail: refresca as notas quando o brainstorm acaba (o worker escreveu notas novas via API)
+        if (d.code === 0) renderNotesAfterBrainstorm(slug)
+      }
+    } catch { }
+  }
+  timer = setInterval(tick, 1000)
+  tick()
+  const obs = new MutationObserver(() => { if (!m.root.isConnected) { if (timer) clearInterval(timer); obs.disconnect() } })
+  obs.observe(document.body, { childList: true })
+}
+// ponytail: o worker escreveu notas novas via API; re-render so relendo. Como renderNotes é
+// uma closure com estado, o mais fiável e simples é refazer a viagem à rota (re-render shell).
+function renderNotesAfterBrainstorm(slug: string) { navigate(`/w/${slug}`) }
 function esc(s: string) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;') }
