@@ -473,20 +473,21 @@ async function launchDp(slug: string, card: any) {
 // nem meu no kanban: so corre git na repo base. O prompt forcA o ramo alvo explicitamente (a wrapper
 // launchHermes mergea na branch atual do base — aqui o agente corre git checkout dev/main por conta propria).
 async function launchGitOp(slug: string, op: string, title: string, task: string) {
-  const runsDir = join(WT_ROOT, 'runs', slug)
+  const repo = await repoDir(slug)  // repo do mundo (nao so ATLAS_REPO) — top de repo corre no codigo desse mundo
+  const runsDir = join(wtRoot(repo), 'runs', slug)
   mkdirSync(runsDir, { recursive: true })
   const logPath = join(runsDir, op + '.log')
   const stPath = join(runsDir, op + '.status')
   const prompt = [
     'Tu es um agente autonomo. Executa a operacao git de topo de repo abaixo usando o terminal headless do Hermes.',
     `Workdir: ${slug}`,
-    `Source-tree (repo base, raiz do repositorio): ${ATLAS_REPO}`,
+    `Source-tree (repo base, raiz do repositorio): ${repo}`,
     '',
     'TAREFA:',
     task,
     '',
     'REGRAS:',
-    '- Roda na repo base (ATLAS_REPO) — NAO em worktree, NAO toques em data/.wt. Forca o ramo alvo explicitamente (`git checkout dev`/`git checkout main`), nunca confies na branch atual.',
+    '- Roda na repo base (' + repo + ') — NAO em worktree, NAO toques em data/.wt. Forca o ramo alvo explicitamente (`git checkout dev`/`git checkout main`), nunca confies na branch atual.',
     '- NUNCA uses --force, `git reset`, rebase destrutivo nem forcas para main. Divergencia nao-resolvivel -> reporta e para.',
     '- NUNCA corras npm install / npm ci (node_modules e partilhado). So npm run typecheck / vite build com deps ja instaladas.',
     '- Ficheiros TS/CSS resolvidos: normaliza EOL para CRLF (repo usa CRLF) p/ nao gerar diff fantasma.',
@@ -505,7 +506,7 @@ async function launchGitOp(slug: string, op: string, title: string, task: string
     'sys.exit(rc)',
   ].join('\n')
   const p = spawn(VENV_PY, ['-c', wrapper, prompt],
-    { cwd: ATLAS_REPO, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
+    { cwd: repo, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
   p.stdout?.on('data', (d: Buffer) => ws.write(d))
   p.stderr?.on('data', (d: Buffer) => ws.write(d))
   p.on('error', () => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code: 1, ts: Date.now() }), 'utf8').catch(() => {}) })
@@ -746,7 +747,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         const slug = parts[1]
         if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
         const task = [
-          'Merge dev -> main e push para origin. Na repo base ATLAS_REPO:',
+          'Merge dev -> main e push para origin. Na repo base do mundo (vê o Source-tree no prompt do runner):',
           '1. `git fetch origin`.',
           '2. Verifica se dev esta sincronizado com origin/dev (`git rev-parse dev` vs `git rev-parse origin/dev`).',
           '3. No-op (dev \u2286 main, main a frente): se `git merge-base --is-ancestor dev main` rc0, main ja contem dev -> so `git push origin main`.',
@@ -762,7 +763,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         const slug = parts[1]
         if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
         const task = [
-          'Resolver o merge conflict existente em dev (repo base ATLAS_REPO).',
+          'Resolver o merge conflict existente em dev (repo base do mundo — vê o Source-tree no prompt do runner).',
           '1. `git checkout dev` (forca o ramo alvo; nunca confies na branch atual do base).',
           '2. `git status` / verifica MERGE_HEAD para localizar o merge em curso e os ficheiros UU (both modified).',
           '3. Para cada UU: resolve mantendo os lados ADITIVOS (re-injeta tails partilhados, verifica balanco de `{}` / parentesis). Se o conflito nao for resolvivel automaticamente, deixa dev em conflito e reporta — NAO forces.',
