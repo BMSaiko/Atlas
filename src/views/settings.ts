@@ -1,4 +1,4 @@
-import { api, Board } from '../api'
+import { api, BoardDoc } from '../api'
 import { icon } from '../ui/icons'
 import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
@@ -9,8 +9,9 @@ import { notifState, requestNotifs } from '../ui/notifs'
 export async function renderSettings(root: HTMLElement, slug: string) {
   const th = getTheme()
   let meta = await api.meta(slug).catch(() => null)
-  let board: Board = await api.kanban.get(slug).catch(() => ({ columns: [], cards: [] }))
-  const saveBoard = async () => { await api.kanban.put(slug, board) }
+  let board: BoardDoc = await api.kanban.get(slug).catch(() => ({ ver: 0, columns: [], cards: [] }))
+  const adopt = (d: { ver?: number } | undefined) => { if (d && typeof d.ver === 'number') board.ver = d.ver }
+  const saveBoard = async () => { adopt(await api.kanban.put(slug, board)) }
 
   root.innerHTML = `
     <div class="settings">

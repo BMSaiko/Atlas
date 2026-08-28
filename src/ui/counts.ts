@@ -5,15 +5,17 @@ import { api } from '../api'
 // para o count atualizar de forma reativa ao arquivar nota ou concluir cartao.
 export async function refreshTabCounts(slug: string) {
   const [notes, board] = await Promise.all([
-    api.notes.get(slug).catch(() => [] as { archived?: boolean }[]),
-    api.kanban.get(slug).catch(() => ({ cards: [] as { archived?: boolean; colId?: string }[] })),
+    api.notes.get(slug).catch(() => null),
+    api.kanban.get(slug).catch(() => null),
   ])
+  const notesArr: { archived?: boolean }[] = notes?.items ?? []
+  const cardsArr: { archived?: boolean; colId?: string }[] = board?.cards ?? []
   const set = (id: string, n: number) => {
     const el = document.getElementById(id)
     if (!el) return
     el.querySelector('.side-count')?.remove()
     if (n > 0) el.insertAdjacentHTML('beforeend', `<span class="side-count">${n}</span>`)
   }
-  set('tab-notes', notes.filter(n => !n.archived).length)
-  set('tab-kanban', board.cards.filter(c => !c.archived && c.colId !== 'done').length)
+  set('tab-notes', notesArr.filter(n => !n.archived).length)
+  set('tab-kanban', cardsArr.filter(c => !c.archived && c.colId !== 'done').length)
 }

@@ -1,4 +1,4 @@
-import { api, Board, Card, Coluna, Prioridade, uid } from '../api'
+import { api, Board, Card, Coluna, Prioridade, uid, BoardDoc } from '../api'
 import { icon } from '../ui/icons'
 import { openModal } from '../ui/modal'
 import { refreshTabCounts } from '../ui/counts'
@@ -14,7 +14,8 @@ let pollTimer: ReturnType<typeof setInterval> | undefined
 const dpPollers: Record<string, { timer?: ReturnType<typeof setInterval> }> = {}
 
 export async function renderKanban(root: HTMLElement, slug: string) {
-  let board = await api.kanban.get(slug).catch(() => ({ columns: [], cards: [] } as Board))
+  let board: BoardDoc = await api.kanban.get(slug).catch(() => ({ ver: 0, columns: [], cards: [] } as BoardDoc))
+  const adopt = (d: { ver?: number } | undefined) => { if (d && typeof d.ver === 'number') board.ver = d.ver }  // mantem etag local em sync apos PUT
   const save = async () => {
     const now = Date.now()
     // ponytail: qualquer card em doing sem startedAt comeca o timer agora (cobre dnd/modal de entrada em doing)
@@ -26,7 +27,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
         delete c.reviewed
       }
     }
-    await api.kanban.put(slug, board); refreshSideCount(); refreshTabCounts(slug)
+    adopt(await api.kanban.put(slug, board)); refreshSideCount(); refreshTabCounts(slug)
   }
   // ponytail: sidebar count computed once at renderShell; keep in sync on every board mutation
   function refreshSideCount() {

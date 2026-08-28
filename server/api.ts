@@ -367,7 +367,7 @@ async function launchBrainstorm(slug: string) {
     '- Le o source-tree e o estado do workdir para perceberes o projeto.',
     '- Faz uma analise SWOT (forcas, fraquezas, oportunidades, ameacas).',
     '- Faz um brainstorm de coisas que podemos implementar (features, melhorias, correcoes).',
-    '- Cria notas novas nesse workdir: uma nota por ideia + uma nota com o SWOT. Para gravar, faz GET da lista atual em /api/w/' + slug + '/notes, faz append das novas e faz PUT com a lista completa.',
+    '- Cria notas novas nesse workdir: uma nota por ideia + uma nota com o SWOT. Para gravar, faz GET da lista atual em /api/w/' + slug + '/notes (devolve {ver, items}), preserva o ver lido, faz append das novas em items e faz PUT com o objeto completo enviando o mesmo ver. Se receberes 409 (conflito de versao), re-faz GET e re-aplica.',
     '',
     'REGRAS:',
     '- NAO apagues nem alteres notas existentes — so adiciona notas novas (append no array).',
@@ -455,7 +455,10 @@ async function launchDp(slug: string, card: any) {
 }
 function body(req: any) { return new Promise<any>(res => { let d=''; req.on('data', (c: Buffer)=>d+=c); req.on('end', ()=>{ try{res(JSON.parse(d||'null'))}catch{res(null)} }) }) }
 async function readJ(p: string) { try { return JSON.parse(await readFile(p,'utf8')) } catch { return null } }
-async function writeJ(p: string, v: any) { await writeFile(p, JSON.stringify(v,null,2), 'utf8'); syncVault() }
+// ponytail: ETag por ficheiro — TODA escrita via writeJ avanca `ver` (1 ponto, nao um guard por escritor).
+// index.json/meta.json nao tem `ver` -> `'ver' in v` cobre-os (nada a fazer).
+function bumpVer(v: any) { if (v && typeof v === 'object' && ('ver' in v)) v.ver = (Number(v.ver) || 0) + 1; return v }
+async function writeJ(p: string, v: any) { await writeFile(p, JSON.stringify(bumpVer(v),null,2), 'utf8'); syncVault() }
 interface WD { slug: string; name: string; description: string; createdAt: number; icon?: string }
 async function readIdx(): Promise<WD[]> { return (await readJ(join(DATA, INDEX))) || [] }
 
@@ -496,8 +499,9 @@ export default function atlasApi(): Plugin {
           idx.push(wd); await writeJ(join(DATA, INDEX), idx)
           const d = join(DATA, base); mkdirSync(d, { recursive: true })
           await writeJ(join(d,'meta.json'), { slug: base, name: wd.name, description: wd.description, icon: wd.icon, createdAt: wd.createdAt })
-          await writeJ(join(d,'notes.json'), [])
-          await writeJ(join(d,'kanban.json'), { columns:[{id:'todo',name:'To Do'},{id:'doing',name:'Em Curso'},{id:'review',name:'Review/Revisão'},{id:'done',name:'Concluído'}], cards:[] })
+          // ver:0 -> bumpVer na 1a escrita grava ver:1 (shape {ver,items}/{ver,columns,cards})
+          await writeJ(join(d,'notes.json'), { ver: 0, items: [] })
+          await writeJ(join(d,'kanban.json'), { ver: 0, columns:[{id:'todo',name:'To Do'},{id:'doing',name:'Em Curso'},{id:'review',name:'Review/Revisão'},{id:'done',name:'Concluído'}], cards:[] })
           send(201, wd); return
         }
       }
@@ -654,7 +658,9 @@ export default function atlasApi(): Plugin {
         try { md = await readFile(path, 'utf8') } catch { send(400, { error: 'ficheiro nao encontrado: ' + path }); return }
         const tasks = parseRoadmap(md)
         const board = (await readJ(file)) || { columns: [], cards: [] }
-        const notes = (await readJ(join(DATA, slug, 'notes.json'))) || []
+        // notas agora sao {ver, items} (optimistic concurrency) — unshift em items, ver sobe no writeJ
+        const notesDoc = (await readJ(join(DATA, slug, 'notes.json'))) || { ver: 0, items: [] }
+        const notes = notesDoc.items || []
         if (!board.columns.some((c: any) => c.id === 'todo')) board.columns.unshift({ id: 'todo', name: 'To Do' })
         const now = Date.now()
         let addedCards = 0, addedNotes = 0, skipped = 0
@@ -670,7 +676,7 @@ export default function atlasApi(): Plugin {
           }
         }
         await writeJ(file, board)
-        await writeJ(join(DATA, slug, 'notes.json'), notes)
+        await writeJ(join(DATA, slug, 'notes.json'), notesDoc)
         send(200, { ok: true, addedCards, addedNotes, skipped, total: tasks.length })
         return
       }
@@ -679,8 +685,22 @@ export default function atlasApi(): Plugin {
         if (!SLUG.test(slug) || !['notes','kanban','meta'].includes(kind)) { send(400,{error:'bad request'}); return }
         const file = join(DATA, slug, `${kind}.json`)
         if (!inside(DATA, file)) { send(400,{error:'bad path'}); return }
-        if (m === 'GET') { send(200, (await readJ(file)) ?? (kind==='kanban'?{columns:[],cards:[]}:[])); return }
-        if (m === 'PUT') { const b = await body(req); await writeJ(file, b); send(200,{ok:true}); return }
+        if (m === 'GET') { send(200, (await readJ(file)) ?? (kind==='kanban'?{ver:0,columns:[],cards:[]}:{ver:0,items:[]})); return }
+        if (m === 'PUT') {
+          const b = await body(req)
+          // optimistic concurrency (card: optimistic concurrency no PUT): o client deve enviar o `ver`
+          // que leu; se o ficheiro em disco ja avancou, outro escritor ganhou -> 409 p/ o client re-sync.
+          // meta nao entra (nao e reescrito em corrida por agents) — so notes/kanban validam.
+          if (kind === 'notes' || kind === 'kanban') {
+            const cur = await readJ(file)
+            const storedVer = cur?.ver ?? 0
+            const inVer = (b && typeof b === 'object') ? (Number(b.ver) || 0) : 0
+            if (storedVer !== 0 && inVer !== storedVer) {
+              send(409, { error: 'conflito de versao — re-faz GET e re-aplica as tuas mudancas', ver: storedVer }); return
+            }
+          }
+          await writeJ(file, b); send(200,{ok:true, ver: (b && typeof b === 'object') ? (Number(b.ver) || 0) : 0}); return
+        }
       }
       // /api/w/:slug meta get
       if (parts[0] === 'w' && parts.length === 2 && m === 'GET') {
