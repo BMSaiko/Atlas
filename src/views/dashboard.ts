@@ -133,6 +133,35 @@ function stat(label: string, val: string, sub: string, ico: Parameters<typeof ic
   `
 }
 
+function searchResults(rows: Row[], q: string): { html: string; count: number } {
+  const ql = q.trim().toLowerCase()
+  if (!ql) return { html: '', count: 0 }
+  const hitsOf = (s?: string) => (s || '').toLowerCase().includes(ql)
+  const groups = rows.map(r => {
+    const nh = r.notes.filter(n => !n.archived && (hitsOf(n.title) || hitsOf(n.text) || (n.tags || []).some(t => t.includes(ql))))
+      .map(n => ({ kind: 'nota', icon: 'note', title: n.title, text: n.text }))
+    const ch = r.board.cards.filter(c => !c.archived && (hitsOf(c.title) || hitsOf(c.description)))
+      .map(c => ({ kind: 'card', icon: 'board', title: c.title, text: c.description }))
+    const hits = [...nh, ...ch]
+    return hits.length ? { wd: r.wd, hits } : null
+  }).filter((g): g is NonNullable<typeof g> => !!g)
+  const count = groups.reduce((a, g) => a + g.hits.length, 0)
+  if (!groups.length) return { html: `<div class="glob-none">Sem resultados para «${esc(q)}»</div>`, count }
+  // ponytail: filtro em memória sobre `rows` já carregado; endpoint agregado só se N crescer
+  return {
+    html: groups.map(g => `
+      <div class="glob-group">
+        <div class="glob-wd">${g.wd.icon ? `<img class="glob-orb" src="/icons/${g.wd.icon}" alt="">` : icon('sphere', 14)} <a href="/w/${g.wd.slug}" data-nav="/w/${g.wd.slug}">${esc(g.wd.name)}</a><em>${g.hits.length}</em></div>
+        <ul>${g.hits.map(h => `
+          <li><a class="glob-hit" href="/w/${g.wd.slug}" data-nav="/w/${g.wd.slug}">
+            ${icon(h.icon as Parameters<typeof icon>[0], 14)}<b>${esc(h.title)}</b><span class="glob-kind">${h.kind}</span>
+            ${h.text ? `<span class="glob-text">${esc(h.text.slice(0, 140))}</span>` : ''}
+          </a></li>`).join('')}</ul>
+      </div>`).join(''),
+    count,
+  }
+}
+
 export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
   const rows: Row[] = []
   for (const wd of items) {
@@ -158,6 +187,10 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
           <p class="dash-sub">Cada projeto, o seu próprio mundo — todos sob o mesmo céu.</p>
         </div>
         <div class="dash-actions">
+          <div class="glob-search-wrap">
+            <input class="glob-search" id="globQ" type="search" placeholder="Buscar em todos os mundos…" aria-label="Buscar notas e cartões em todos os mundos" autocomplete="off">
+            <div id="globResults" class="glob-results" hidden></div>
+          </div>
           ${first ? `<a class="btn btn-ghost" href="/w/${first.slug}" data-nav="/w/${first.slug}">${icon('sphere', 16)} Ir para o mundo ativo</a>` : ''}
         </div>
       </header>
@@ -186,6 +219,25 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
     </div>`
 
   panel.querySelectorAll('[data-nav]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); navigate(a.getAttribute('data-nav')!) }))
+
+  const gq = panel.querySelector<HTMLInputElement>('#globQ')!
+  const gres = panel.querySelector<HTMLElement>('#globResults')!
+  let timer = 0
+  // ponytail: debounce curto + filtro em memória em `rows`; zero fetch por tecla
+  const runSearch = (val: string) => {
+    const q = val.trim()
+    if (!q) { gres.hidden = true; gres.innerHTML = ''; return }
+    const { html, count } = searchResults(rows, q)
+    gres.innerHTML = html
+    gres.hidden = false
+    gres.setAttribute('role', 'status')
+    gres.querySelectorAll('[data-nav]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); navigate(a.getAttribute('data-nav')!) }))
+  }
+  gq.addEventListener('input', () => {
+    clearTimeout(timer)
+    timer = window.setTimeout(() => runSearch(gq.value), 150)
+  })
+  gq.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runSearch(gq.value) } })
 }
 
 

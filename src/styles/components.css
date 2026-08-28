@@ -481,3 +481,21 @@ a.link:hover { color:var(--gold-soft); }
   box-shadow:0 0 8px var(--pipe-doing); animation:sess-pulse 1.6s infinite; }
 .term-status.err { color:var(--danger); }
 .term-status.err::before { background:var(--danger); box-shadow:0 0 8px var(--danger); animation:none; }
+.glob-search-wrap { position:relative; }
+.glob-search { width:min(320px, 100%); padding:10px 14px; border-radius:var(--r1); background:var(--bg-2); border:1px solid var(--line); color:var(--text); }
+.glob-search::placeholder { color:var(--text-dim); }
+.glob-search:focus { outline:2px solid var(--focus); outline-offset:2px; }
+.glob-results { position:absolute; right:0; top:calc(100% + 8px); width:min(480px, 90vw); max-height:60vh; overflow:auto; background:var(--bg-2); border:1px solid var(--line); border-radius:var(--r2); box-shadow:0 12px 32px rgba(0,0,0,.45); padding:var(--s2); z-index:40; }
+.glob-group { margin-bottom:var(--s3); }
+.glob-group:last-child { margin-bottom:0; }
+.glob-wd { display:flex; align-items:center; gap:8px; padding:6px 8px; font-weight:600; color:var(--gold); border-bottom:1px solid var(--line); }
+.glob-wd a { color:var(--gold); }
+.glob-wd em { margin-left:auto; font-style:normal; color:var(--text-dim); font-size:.85rem; }
+.glob-orb { width:18px; height:18px; border-radius:50%; object-fit:cover; }
+.glob-group ul { list-style:none; margin:0; padding:4px 0 0; }
+.glob-hit { display:flex; align-items:center; gap:8px; padding:8px; border-radius:var(--r1); color:var(--text); text-decoration:none; }
+.glob-hit:hover { background:var(--bg-3); }
+.glob-hit b { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.glob-kind { font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-dim); border:1px solid var(--line); border-radius:100px; padding:1px 6px; flex-shrink:0; }
+.glob-text { display:block; width:100%; color:var(--text-dim); font-size:.82rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.glob-none { padding:var(--s3); color:var(--text-dim); }
