@@ -41,11 +41,15 @@ export async function renderKanban(root: HTMLElement, slug: string) {
   let sel = new Set<string>()
   const P: Record<Prioridade, number> = { low: 0, medium: 1, high: 2 }
   type SortKey = 'pos'|'prio'|'date'|'title'
-  let sortKey: SortKey = (localStorage.getItem(`atlas.kbsort.${slug}`) as SortKey) || 'pos'
-  const cmp = (a: Card, b: Card): number => {
-    if (sortKey === 'prio') return P[b.priority] - P[a.priority]
-    if (sortKey === 'date') return b.ts - a.ts
-    if (sortKey === 'title') return a.title.localeCompare(b.title, 'pt')
+  // ponytail: ordenacao/filtro POR COLUNA — cada coluna tem o seu select independente (pos/prio/date/title).
+  // Guarda-se um map colId->SortKey; o componente reusa o <select> que ja existia no toolbar (agora global removido).
+  let sortKey: Record<string, SortKey> = {}
+  try { Object.assign(sortKey, JSON.parse(localStorage.getItem(`atlas.kbsort.${slug}`) || '{}')) } catch { /* saltou storage */ }
+  const keyOf = (colId: string) => sortKey[colId] || 'pos'
+  const cmp = (a: Card, b: Card, key: SortKey): number => {
+    if (key === 'prio') return P[b.priority] - P[a.priority]
+    if (key === 'date') return b.ts - a.ts
+    if (key === 'title') return a.title.localeCompare(b.title, 'pt')
     return 0
   }
 
@@ -66,31 +70,28 @@ export async function renderKanban(root: HTMLElement, slug: string) {
         <button class="btn btn-ghost" id="ksel" title="Selecionar vários cartões para operações em bulk" style="${selMode?'color:var(--gold)':''}">${icon('check', 16)} ${selMode ? 'Concluir' : 'Bulk'}</button>
         <span class="kb-right">
           <span class="muted" style="font-size:.85rem">${board.cards.filter(c=>!c.archived).length} cartões</span>
-          <label class="muted" style="font-size:.85rem;display:flex;align-items:center;gap:6px">Ordenar
-          <select id="k-sort">
-            <option value="pos" ${sortKey==='pos'?'selected':''}>Posição</option>
-            <option value="prio" ${sortKey==='prio'?'selected':''}>Prioridade</option>
-            <option value="date" ${sortKey==='date'?'selected':''}>Data</option>
-            <option value="title" ${sortKey==='title'?'selected':''}>Título</option>
-          </select>
-        </label>
         </span>
       </div>
       ${selMode ? bulkBar() : ''}
       <div class="kanban" id="kboard">${board.columns.map(col => `
         <section class="kcol" data-col="${col.id}">
           <h4>${esc(col.name)} <span class="muted" style="font-size:.78rem">${count(col.id)}</span></h4>
+          <select class="k-sort" data-col="${col.id}" aria-label="Ordenar ${esc(col.name)}" title="Ordenar coluna">
+            <option value="pos"   ${keyOf(col.id)==='pos'  ?'selected':''}>Posição</option>
+            <option value="prio"  ${keyOf(col.id)==='prio' ?'selected':''}>Prioridade</option>
+            <option value="date"  ${keyOf(col.id)==='date' ?'selected':''}>Data</option>
+            <option value="title" ${keyOf(col.id)==='title'?'selected':''}>Título</option>
+          </select>
           <div class="kcards" data-col="${col.id}">${cardsOf(col.id)}</div>
         </section>`).join('')}
       </div>`
     bind()
     root.querySelector('#kadd')!.addEventListener('click', () => cardModal(null))
-    root.querySelector('#k-sort')!.addEventListener('change', e => {
-      sortKey = (e.target as HTMLSelectElement).value as SortKey
-      board.cards.sort(cmp)
-      localStorage.setItem(`atlas.kbsort.${slug}`, sortKey)
-      save().then(render)
-    })
+    root.querySelectorAll<HTMLSelectElement>('.k-sort').forEach(sel => sel.addEventListener('change', e => {
+      sortKey[sel.dataset.col!] = (e.target as HTMLSelectElement).value as SortKey
+      localStorage.setItem(`atlas.kbsort.${slug}`, JSON.stringify(sortKey))
+      render()
+    }))
     root.querySelector('#karch')!.addEventListener('click', showArchivedModal)
     root.querySelector('#kimport')!.addEventListener('click', importRoadmap)
     root.querySelector('#ksel')!.addEventListener('click', () => { selMode = !selMode; if (!selMode) sel.clear(); render() })
@@ -119,7 +120,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
   function prioLabel(p: Prioridade) { return p === 'high' ? 'Alta' : p === 'medium' ? 'Média' : 'Baixa' }
 
   function cardsOf(colId: string) {
-    return board.cards.filter(c => c.colId === colId && !c.archived).sort(cmp).map(c => {
+    return board.cards.filter(c => c.colId === colId && !c.archived).sort((a,b) => cmp(a, b, keyOf(colId))).map(c => {
       const idx = board.columns.findIndex(x => x.id === c.colId)
       const prev = board.columns[idx-1]?.id, next = board.columns[idx+1]?.id
       const isSel = sel.has(c.id)

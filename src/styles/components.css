@@ -181,6 +181,9 @@
 .kcol { background:var(--bg-2); border:1px solid var(--line); border-radius:var(--r2); padding:var(--s3); min-height:140px; transition:background .15s, border-color .15s; }
 .kcol.dragover { background:var(--bg-3); border-color:var(--gold); }
 .kcol h4 { display:flex; justify-content:space-between; align-items:center; font-size:1rem; color:var(--gold); margin-bottom:var(--s3); }
+
+.kcol .k-sort { width:100%; margin-bottom:var(--s3); padding:6px 8px; font-size:.8rem; border-radius:var(--r1); background:var(--bg-3); border:1px solid var(--line); color:var(--text); }
+.kcol .k-sort:hover { border-color:var(--gold); }
 .kcards { display:flex; flex-direction:column; gap:var(--s3); }
 .kcard { background:var(--bg-3); border:1px solid var(--line); border-radius:var(--r2); padding:10px; cursor:grab; transition:box-shadow .15s, transform .15s, opacity .3s; }
 .kcard:active { cursor:grabbing; }
