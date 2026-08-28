@@ -136,12 +136,16 @@ function stat(label: string, val: string, sub: string, ico: Parameters<typeof ic
 
 function focusSection(): string {
   const t = today(), w = week()
+  const blank = !t.sessions && !w.sessions
   return `
-    <div class="focus">
-      <div class="focus-head">${icon('timer', 14)} Foco de hoje</div>
-      ${stat('Sessões', String(t.sessions), `${w.sessions} na semana`, 'aura', 'var(--pipe-doing)')}
-      ${stat('Pomodoros', String(t.pomodoros), 'concluídos hoje', 'check', 'var(--pipe-done)')}
-      ${stat('Tempo em foco', fmtElapsed(t.focusMs), `semana: ${fmtElapsed(w.focusMs)}`, 'timer', 'var(--gold)')}
+    <div class="focus" role="region" aria-label="Relatório de foco">
+      <div class="focus-head">${icon('timer', 15)} <span>Foco de hoje</span></div>
+      <div class="focus-metrics">
+        <div class="fm"><b>${t.sessions}</b><span>Sessões</span><small>${w.sessions} na semana</small></div>
+        <div class="fm fm-pomo"><b>${t.pomodoros}</b><span>Pomodoros</span><small>concluídos</small></div>
+        <div class="fm fm-time"><b>${fmtElapsed(t.focusMs)}</b><span>Tempo em foco</span><small>hoje</small></div>
+      </div>
+      <div class="focus-week"><span>${icon('aura', 12)} Esta semana</span><b>${blank ? '—' : fmtElapsed(w.focusMs)}</b></div>
     </div>`
 }
 

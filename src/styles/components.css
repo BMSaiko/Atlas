@@ -357,15 +357,33 @@ a.link:hover { color:var(--gold-soft); }
 .dash-sec h2 { font-size:1.15rem; font-weight:600; color:var(--gold); text-transform:uppercase; letter-spacing:.06em; margin-bottom:var(--s4); display:flex; align-items:center; gap:var(--s2); }
 
 
-/* Foco na dashboard — relatório ao lado do pipeline */
-.dash-pipe-row { display:grid; grid-template-columns:1fr auto; gap:var(--s4); align-items:start; }
+/* Foco na dashboard — card compacto junto ao pipeline (redesign 28/08) */
+.dash-pipe-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(240px,300px); gap:var(--s4); align-items:stretch; }
 .pipe-col { min-width:0; }
-.focus { width:260px; display:grid; gap:var(--s3); }
-.focus-head { font-size:.95rem; font-weight:600; color:var(--gold); display:flex; align-items:center; gap:var(--s2); text-transform:uppercase; letter-spacing:.06em; margin-bottom:var(--s2); }
-.focus .stat { padding:var(--s3); }
-@media (max-width:760px) {
+.focus { display:flex; flex-direction:column; gap:var(--s4);
+  background:linear-gradient(180deg,var(--bg-2),var(--bg-1)); border:1px solid var(--line);
+  border-radius:var(--r3); padding:var(--s4); }
+.focus-head { display:flex; align-items:center; gap:var(--s2); font-size:.78rem; font-weight:600;
+  color:var(--gold); text-transform:uppercase; letter-spacing:.08em; }
+.focus-metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--s2); }
+.fm { display:flex; flex-direction:column; gap:1px; padding:var(--s3) var(--s2);
+  background:var(--bg-3); border:1px solid var(--line); border-radius:var(--r1); min-width:0; }
+.fm b { font-family:var(--font-disp); font-size:1.25rem; font-weight:600; line-height:1.1;
+  color:var(--gold-soft); font-variant-numeric:tabular-nums; }
+.fm span { font-size:.7rem; font-weight:600; color:var(--text); margin-top:2px; white-space:nowrap; }
+.fm small { font-size:.62rem; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fm-pomo b { color:var(--pipe-done); }
+.fm-time b { font-size:1.05rem; color:var(--gold); }
+.focus-week { display:flex; align-items:center; justify-content:space-between; gap:var(--s2);
+  margin-top:auto; padding-top:var(--s3); border-top:1px dashed var(--line);
+  font-size:.78rem; color:var(--text-dim); }
+.focus-week span { display:inline-flex; align-items:center; gap:var(--s1); }
+.focus-week b { color:var(--text); font-weight:600; font-variant-numeric:tabular-nums; }
+@media (max-width:900px) {
   .dash-pipe-row { grid-template-columns:1fr; }
-  .focus { width:100%; grid-template-columns:1fr; }
+}
+@media (max-width:520px) {
+  .focus-metrics { grid-template-columns:1fr; }
 }
 
 /* pipeline — viagem pelo cosmo, etapa a etapa */
