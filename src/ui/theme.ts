@@ -66,18 +66,18 @@ export const SEASON_NAMES: Record<Season, string> = { winter: 'Inverno', spring:
 /** Estação que o mês atual implicaria, em modo auto (hemisfério norte, PT). */
 export function autoSeason(now = new Date()): Season {
   const m = now.getMonth() // 0..11
-  if (m <= 1 || m === 11) return 'winter' // dez, jan, fev
-  if (m <= 4) return 'spring'             // mar, abr, mai
-  if (m <= 7) return 'summer'             // jun, jul, ago
-  return 'autumn'                          // set, out, nov
+  if (m >= 9) return 'winter' // out, nov, dez (inverno: 1 out a fim de dez)
+  if (m <= 2) return 'spring' // jan, fev, mar
+  if (m <= 5) return 'summer' // abr, mai, jun
+  return 'autumn'              // jul, ago, set
 }
 /** Faixas de meses das estações, prontas a mostrar na UI. */
 export function seasonSchedule(): Array<{ season: Season; label: string; range: string }> {
   return [
-    { season: 'winter', label: SEASON_NAMES.winter, range: 'Dez – Fev' },
-    { season: 'spring', label: SEASON_NAMES.spring, range: 'Mar – Mai' },
-    { season: 'summer', label: SEASON_NAMES.summer, range: 'Jun – Ago' },
-    { season: 'autumn', label: SEASON_NAMES.autumn, range: 'Set – Nov' },
+    { season: 'winter', label: SEASON_NAMES.winter, range: 'Out – Dez' },
+    { season: 'spring', label: SEASON_NAMES.spring, range: 'Jan – Mar' },
+    { season: 'summer', label: SEASON_NAMES.summer, range: 'Abr – Jun' },
+    { season: 'autumn', label: SEASON_NAMES.autumn, range: 'Jul – Set' },
   ]
 }
 
