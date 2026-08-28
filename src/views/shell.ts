@@ -7,7 +7,7 @@ import { renderWorkspace } from './workspace'
 import { parseTags, bindTagAutocomplete } from './notes'
 import { renderDashboard } from './dashboard'
 import { startClockWidget } from '../ui/clock'
-import { getTheme, setManual, autoShift, Shift } from '../ui/theme'
+import { getTheme, setManual, autoShift, setSeason, autoSeason, Shift, Season } from '../ui/theme'
 import { TZ_LIST, getTz, setTz } from '../ui/timezones'
 import { mountFocus } from '../ui/pomodoro'
 
@@ -92,6 +92,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
   root.querySelector('#side-new')!.addEventListener('click', () => newWorkdir())
   bindKeydown()
   watchShift()
+  watchSeason()
   startClockWidget(shell)
   bindClockTz(shell)
   mountFocus(root.querySelector('#foco') as HTMLElement)
@@ -126,6 +127,35 @@ function watchShift() {
   })
   const mo = new MutationObserver(renderShift)
   mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-shift'] })
+}
+
+const SEASON_ICON: Record<Season, 'snow'|'sprout'|'sun'|'leaf'> = { winter: 'snow', spring: 'sprout', summer: 'sun', autumn: 'leaf' }
+const SEASON_LABEL: Record<Season, string> = { winter: 'Inverno', spring: 'Primavera', summer: 'Verão', autumn: 'Outono' }
+// Clicar no indicador cicla Inverno -> Primavera -> Verao -> Outono (escolha manual de estacao).
+// Modo auto e definido nas Definicoes; enquanto estiver ativo a estacao segue o mes.
+const CYCLE_SEASON: Array<Season> = ['winter', 'spring', 'summer', 'autumn']
+function renderSeason() {
+  const el = document.getElementById('season-ind')
+  if (!el) return
+  const t = getTheme()
+  const auto = t.seasonMode === 'auto'
+  const s: Season = auto ? autoSeason() : t.season
+  el.innerHTML = (auto ? icon('timer', 16) : icon(SEASON_ICON[s] || 'leaf', 16)) +
+    `<span class="shift-label">${auto ? 'Auto' : (SEASON_LABEL[s] || 'Inverno')}</span>`
+  el.setAttribute('data-season', s)
+  el.title = auto ? 'Estação automática — segue o mês do ano' : 'Estação manual — clicar alterna a estação'
+}
+function watchSeason() {
+  renderSeason()
+  const el = document.getElementById('season-ind')
+  el?.addEventListener('click', () => {
+    const t = getTheme()
+    if (t.seasonMode === 'auto') { setSeason((document.documentElement.dataset.season as Season) || autoSeason()); return }
+    const next = CYCLE_SEASON[(CYCLE_SEASON.indexOf(t.season) + 1) % CYCLE_SEASON.length]
+    setSeason(next)
+  })
+  const mo = new MutationObserver(renderSeason)
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-season'] })
 }
 
 let state: { slug: string | null; items: Array<{ slug: string; icon?: string }> } = { slug: null, items: [] }
