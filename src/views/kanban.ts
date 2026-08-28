@@ -455,6 +455,9 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
         ${c.description
           ? `<div class="kdesc" style="font-size:1rem;white-space:pre-wrap">${esc(c.description)}</div>`
           : '<div class="muted">Sem descrição</div>'}
+        ${c.dp
+          ? `<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--line)"><div class="muted" style="font-size:.8rem;font-weight:600;margin-bottom:6px;color:var(--gold)">DP (Design Plan)</div>${dpHtml(c.dp)}</div>`
+          : ''}
         ${c.result
           ? `<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--line)"><div class="muted" style="font-size:.8rem;font-weight:600;margin-bottom:6px;color:var(--gold)">Resultado</div>${resultHtml(c.result)}</div>`
           : ''}`

@@ -162,6 +162,10 @@ async function launchHermes(slug: string, card: any) {
     'TAREFA:',
     card.description || '(sem descricao)',
     '',
+    (card.dp
+      ? ['DP (Design Plan) ja gerado p/ este card — LE-O ANTES de implementar e segue-o:', '', card.dp, ''].join('\n')
+      : 'SEM DP — escreve um breve plano (objetivo, abordagem, ficheiros afetados) antes de implementar.'),
+    '',
     'GIT WORKFLOW:',
     `  - Ja estas na branch ${branch} criada a partir de dev (worktree isolada). NAO mudes de branch, NAO corras git checkout/dev nem git pull.`,
     '  - Trabalha em ./ e a cada passo faz commit local.',
