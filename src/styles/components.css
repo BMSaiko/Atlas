@@ -184,6 +184,8 @@
 
 .kcol .k-sort { width:100%; margin-bottom:var(--s3); padding:6px 8px; font-size:.8rem; border-radius:var(--r1); background:var(--bg-3); border:1px solid var(--line); color:var(--text); }
 .kcol .k-sort:hover { border-color:var(--gold); }
+.kfilter { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:var(--s3); }
+.kfilter .tag-chip { padding:2px 7px; font-size:.7rem; }
 .kcards { display:flex; flex-direction:column; gap:var(--s3); }
 .kcard { background:var(--bg-3); border:1px solid var(--line); border-radius:var(--r2); padding:10px; cursor:grab; transition:box-shadow .15s, transform .15s, opacity .3s; }
 .kcard:active { cursor:grabbing; }
