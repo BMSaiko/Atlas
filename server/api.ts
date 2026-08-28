@@ -467,6 +467,52 @@ async function launchDp(slug: string, card: any) {
   p.on('close', (code: number) => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {}) })
   p.unref()
 }
+// launchGitOp: operacoes git de TOPO de repo (merge dev->main, resolver conflito) via hermes
+// headless — mesmo padrao do launchDp (sessao oneshot hermes_cli.main -z, cwd=ATLAS_REPO, detached,
+// log/status por id ficticio `op` p/ a UI streamear via /api/w/:slug/output/<op>). NAO usa worktree
+// nem meu no kanban: so corre git na repo base. O prompt forcA o ramo alvo explicitamente (a wrapper
+// launchHermes mergea na branch atual do base — aqui o agente corre git checkout dev/main por conta propria).
+async function launchGitOp(slug: string, op: string, title: string, task: string) {
+  const runsDir = join(WT_ROOT, 'runs', slug)
+  mkdirSync(runsDir, { recursive: true })
+  const logPath = join(runsDir, op + '.log')
+  const stPath = join(runsDir, op + '.status')
+  const prompt = [
+    'Tu es um agente autonomo. Executa a operacao git de topo de repo abaixo usando o terminal headless do Hermes.',
+    `Workdir: ${slug}`,
+    `Source-tree (repo base, raiz do repositorio): ${ATLAS_REPO}`,
+    '',
+    'TAREFA:',
+    task,
+    '',
+    'REGRAS:',
+    '- Roda na repo base (ATLAS_REPO) — NAO em worktree, NAO toques em data/.wt. Forca o ramo alvo explicitamente (`git checkout dev`/`git checkout main`), nunca confies na branch atual.',
+    '- NUNCA uses --force, `git reset`, rebase destrutivo nem forcas para main. Divergencia nao-resolvivel -> reporta e para.',
+    '- NUNCA corras npm install / npm ci (node_modules e partilhado). So npm run typecheck / vite build com deps ja instaladas.',
+    '- Ficheiros TS/CSS resolvidos: normaliza EOL para CRLF (repo usa CRLF) p/ nao gerar diff fantasma.',
+    '- No fim responde com 1 linha a resumir o que fizeste e o estado final.',
+    '',
+    'PROGRESSO AO VIVO:',
+    `  - Anexa 1 linha curta de progresso por passo ([hh:mm] <descricao>) ao ficheiro de log: ${logPath}`,
+    '  - Faz append UTF-8 (open(<logPath>, \'a\', encoding=\'utf-8\')). No fim, 1 linha de resumo.',
+    `Titulo da operacao: ${title}`,
+  ].join('\n')
+  const ws = createWriteStream(logPath, { flags: 'w' })
+  writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
+  const wrapper = [
+    'import subprocess,sys',
+    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[1]])',
+    'sys.exit(rc)',
+  ].join('\n')
+  const p = spawn(VENV_PY, ['-c', wrapper, prompt],
+    { cwd: ATLAS_REPO, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
+  p.stdout?.on('data', (d: Buffer) => ws.write(d))
+  p.stderr?.on('data', (d: Buffer) => ws.write(d))
+  p.on('error', () => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code: 1, ts: Date.now() }), 'utf8').catch(() => {}) })
+  p.on('close', (code: number) => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {}) })
+  p.unref()
+}
+
 function body(req: any) { return new Promise<any>(res => { let d=''; req.on('data', (c: Buffer)=>d+=c); req.on('end', ()=>{ try{res(JSON.parse(d||'null'))}catch{res(null)} }) }) }
 async function readJ(p: string) { try { return JSON.parse(await readFile(p,'utf8')) } catch { return null } }
 // ponytail: ETag por ficheiro — TODA escrita via writeJ avanca `ver` (1 ponto, nao um guard por escritor).
@@ -694,6 +740,39 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         const chunk = full.slice(offset)
         send(200, { ok: true, started, done, code: done ? (st2.code ?? 0) : null, chunk, offset: offset + chunk.length, size: full.length })
         return
+      }
+            // /api/w/:slug/git/merge-main -> merge dev->main + push origin (headless, repo base)
+      if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'git' && parts[3] === 'merge-main' && m === 'POST') {
+        const slug = parts[1]
+        if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
+        const task = [
+          'Merge dev -> main e push para origin. Na repo base ATLAS_REPO:',
+          '1. `git fetch origin`.',
+          '2. Verifica se dev esta sincronizado com origin/dev (`git rev-parse dev` vs `git rev-parse origin/dev`).',
+          '3. No-op (dev \u2286 main, main a frente): se `git merge-base --is-ancestor dev main` rc0, main ja contem dev -> so `git push origin main`.',
+          '4. Senao: `git checkout main`, `git merge dev --no-edit` (fast-forward ou merge normal), e `git push origin main`.',
+          '5. NUNCA forces, nunca rebase destrutivo nem `git reset`. Se a divergencia nao for resolvivel por merge normal, reporta explicitamente e NAO forces para main.',
+          '6. No fim reporta `git log --oneline main..dev` / diff resumido e o estado final do push.',
+        ].join('\n')
+        void launchGitOp(slug, 'merge-main', 'Merge dev->main', task).catch(e => console.error('[git-merge] ' + slug + ': ' + e.message))
+        send(200, { ok: true }); return
+      }
+      // /api/w/:slug/git/resolve -> resolver merge conflict em dev (headless, repo base)
+      if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'git' && parts[3] === 'resolve' && m === 'POST') {
+        const slug = parts[1]
+        if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
+        const task = [
+          'Resolver o merge conflict existente em dev (repo base ATLAS_REPO).',
+          '1. `git checkout dev` (forca o ramo alvo; nunca confies na branch atual do base).',
+          '2. `git status` / verifica MERGE_HEAD para localizar o merge em curso e os ficheiros UU (both modified).',
+          '3. Para cada UU: resolve mantendo os lados ADITIVOS (re-injeta tails partilhados, verifica balanco de `{}` / parentesis). Se o conflito nao for resolvivel automaticamente, deixa dev em conflito e reporta — NAO forces.',
+          '4. Verifica zero marcadores: `git grep -c -E \'^(<<<<<<<|=======|>>>>>>>)\'` == 0 (em todo o arvore).',
+          '5. `git add` dos ficheiros resolvidos e termina o merge (`git merge --continue` / commit).',
+          '6. Valida: `npm run typecheck` E `npm run build` (vite) verdes.',
+          '7. NAO auto-push para main — o merge fica em dev p/ BMS validar/rever.',
+        ].join('\n')
+        void launchGitOp(slug, 'resolve-conflict', 'Resolve merge conflito', task).catch(e => console.error('[git-resolve] ' + slug + ': ' + e.message))
+        send(200, { ok: true }); return
       }
       // /api/w/:slug/import-roadmap -> migra tarefas abertas de um roadmap md (notas+cards)
       if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'import-roadmap' && m === 'POST') {
