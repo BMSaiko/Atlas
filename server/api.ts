@@ -91,6 +91,33 @@ async function mergeDevToMain() {
   return { ok: true, out: 'main = dev (fast-forward); push ' + (push.ok ? 'ok' : ('falhou: ' + push.out)) }
 }
 
+// ---- CI gate no approve review (DR rn9w9tsw) ----
+// runCmd: spawn promissificado p/ executar comandos no repo base (mesmo padrao de runGit).
+function runCmd(cmd: string, args: string[], cwd: string): Promise<{ ok: boolean; out: string }> {
+  return new Promise(res => {
+    const c = spawn(cmd, args, { cwd, windowsHide: true })
+    let out = ''; c.stdout?.on('data', (d: Buffer) => out += d); c.stderr?.on('data', (d: Buffer) => out += d)
+    c.on('error', e => res({ ok: false, out: e.message }))
+    c.on('close', code => res({ ok: code === 0, out: out.trim() }))
+  })
+}
+// checkConflictMarkers: git grep sobre a arvore de dev; se 'dev' nao existir, cai p/ working tree.
+// rc 1 = sem matches (limpo, out vazio); rc 0 = achou markers; fatal = erro -> trunca como falha.
+async function checkConflictMarkers(): Promise<boolean> {
+  let g = await runCmd(GIT, ['grep', '-n', '-E', '^(<<<<<<<|=======|>>>>>>>)', 'dev', '--'], ATLAS_REPO)
+  if (g.out.includes('fatal')) g = await runCmd(GIT, ['grep', '-n', '-E', '^(<<<<<<<|=======|>>>>>>>)', '--'], ATLAS_REPO)
+  return g.out.trim().length > 0
+}
+// runCIGate: barato->caro; para no 1o que falhe. build escreve dist/ (gitignored) -> nao suja git status.
+async function runCIGate(): Promise<{ ok: boolean; step: string; out: string }> {
+  if (await checkConflictMarkers()) return { ok: false, step: 'conflict-markers', out: 'marcadores de conflito presentes em dev' }
+  const tc = await runCmd('npm.cmd', ['run', 'typecheck'], ATLAS_REPO)
+  if (!tc.ok) return { ok: false, step: 'typecheck', out: tc.out.slice(-2000) }
+  const bd = await runCmd('npm.cmd', ['run', 'build'], ATLAS_REPO)
+  if (!bd.ok) return { ok: false, step: 'build', out: bd.out.slice(-2000) }
+  return { ok: true, step: 'ok', out: '' }
+}
+
 // rmJunction: remove SO o junction (nao segue para o target). rmdir elimina um reparse point
 // juncão sem tocar no conteudo do repo base. Previne `rm -r` seguir o junction e apagar o node_modules base.
 function rmJunction(dir: string): Promise<void> {
@@ -438,8 +465,10 @@ export default function atlasApi(): Plugin {
           await launchHermes(slug, card)
           send(200, { ok: true }); return
         }
-        // approve -> so de 'review'; merge dev->main antes de done
+        // approve -> so de 'review'; CI gate antes de mergear dev->main
         if (card.colId !== 'review') { send(409, { error: 'card not in review' }); return }
+        const gate = await runCIGate()
+        if (!gate.ok) { send(500, { error: 'CI gate falhou (' + gate.step + '): ' + gate.out }); return }
         const mgr = await mergeDevToMain()
         if (!mgr.ok) { send(500, { error: 'merge dev->main falhou: ' + mgr.out }); return }
         card.colId = 'done'
