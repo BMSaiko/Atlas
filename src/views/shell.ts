@@ -4,7 +4,7 @@ import { openModal } from '../ui/modal'
 import { toast } from '../ui/toast'
 import { navigate } from '../router'
 import { renderWorkspace } from './workspace'
-import { parseTags } from './notes'
+import { parseTags, bindTagAutocomplete } from './notes'
 import { renderDashboard } from './dashboard'
 import { startClockWidget } from '../ui/clock'
 import { getTheme, setManual, autoShift, Shift } from '../ui/theme'
@@ -200,8 +200,14 @@ function quickAdd(slug: string | null) {
 
   const qaType = m.root.querySelector('#qa-type') as HTMLSelectElement
   const qaTags = m.root.querySelector('.qa-tags') as HTMLElement
-  const syncTags = () => { qaTags.style.display = qaType.value === 'note' ? '' : 'none' }
+  const syncTags = () => {
+    qaTags.style.display = qaType.value === 'note' ? '' : 'none'
+    if (qaType.value !== 'note') document.querySelector('.tag-sugg.open')?.classList.remove('open')
+  }
   qaType.addEventListener('change', syncTags); syncTags()
+  // autocomplete de tags so para Nota (cards nao tem tags); set de tags existentes carregado async
+  const qaIp = m.root.querySelector('#qa-tags') as HTMLInputElement
+  api.notes.get(slug).then(ns => bindTagAutocomplete(qaIp, Array.from(new Set(ns.flatMap(n => n.tags || []))).sort())).catch(() => {})
 }
 
 function renderEmpty(panel: HTMLElement, items: Array<any>, root: HTMLElement) {

@@ -8,6 +8,70 @@ import { linkify } from '../ui/text'
 import { navigate } from '../router'
 
 export const parseTags = (v: string) => Array.from(new Set(v.split(/[,\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean)))
+const existingTags = (notes: Nota[]) => Array.from(new Set(notes.flatMap(n => n.tags || []))).sort()
+// Autocomplete de tags: completa o token atual (ultima palavra apos espaco/virgula) com tags existentes.
+// Popover a nivel do body (position:fixed) — escapa ao overflow do .modal-body (era o que escondia as
+// sugestoes). Setas Arriba/Baixo mudam, Enter/Tab ou clique aceitam, Esc fecha.
+export function bindTagAutocomplete(inp: HTMLInputElement, existing: string[]) {
+  if (!existing.length) return
+  const box = document.createElement('div')
+  box.className = 'tag-sugg'
+  box.setAttribute('role', 'listbox')
+  document.body.appendChild(box)
+  let items: string[] = []
+  let idx = 0
+  const curToken = (v: string) => { const m = v.match(/([^,\s]+)$/); return m ? m[1].toLowerCase() : '' }
+  const close = (clear = true) => { box.classList.remove('open'); if (clear) box.innerHTML = '' }
+  const position = () => {
+    const r = inp.getBoundingClientRect()
+    const h = Math.min(200, box.scrollHeight || 200)
+    const gap = 5
+    if (r.bottom + gap + h > window.innerHeight && r.top > h + gap) box.style.top = `${r.top - h - gap}px`
+    else box.style.top = `${r.bottom + gap}px`
+    box.style.left = `${r.left}px`
+    box.style.width = `${r.width}px`
+  }
+  const render = (scroll = false) => {
+    const tok = curToken(inp.value)
+    items = tok ? existing.filter(t => t.startsWith(tok) && t !== tok).sort() : []
+    close()
+    if (!items.length) return
+    box.innerHTML = items.map((t, i) => `<button type="button" class="tag-sugg-item${i === idx ? ' on' : ''}" data-i="${i}" role="option">${esc(t)}</button>`).join('')
+    box.classList.add('open')
+    if (scroll) box.querySelector<HTMLElement>('.on')?.scrollIntoView({ block: 'nearest' })
+    position()
+  }
+  const accept = (i: number) => {
+    const tag = items[i]; if (!tag) return
+    inp.value = inp.value.replace(/([^,\s]+)$/, tag)  // ponytail: troca o token atual pela tag completa
+    close(); inp.focus()
+  }
+  inp.addEventListener('input', () => { idx = 0; render() })
+  inp.addEventListener('focus', () => { idx = 0; render() })
+  inp.addEventListener('keydown', e => {
+    if (!box.classList.contains('open')) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); idx = 0; render() }
+      return
+    }
+    switch (e.key) {
+      case 'ArrowDown': e.preventDefault(); idx = (idx + 1) % items.length; render(true); break
+      case 'ArrowUp': e.preventDefault(); idx = (idx - 1 + items.length) % items.length; render(true); break
+      case 'Enter': case 'Tab': e.preventDefault(); accept(idx); break
+      case 'Escape': close(); break
+    }
+  })
+  box.addEventListener('mousedown', e => {  // mousedown (nao clique) para nao roubar o foco do input
+    const b = (e.target as HTMLElement).closest('.tag-sugg-item') as HTMLElement | null
+    if (b) { e.preventDefault(); accept(Number(b.dataset.i)) }
+  })
+  inp.addEventListener('blur', () => setTimeout(() => { if (!box.matches(':hover')) close() }, 120))
+  // limpa o popover quando o modal fechar
+  const backdrop = inp.closest('.modal-backdrop')
+  if (backdrop) {
+    const mo = new MutationObserver(() => { if (!backdrop.isConnected) { mo.disconnect(); box.remove() } })
+    mo.observe(backdrop, { childList: true, subtree: true })
+  }
+}
 
 export async function renderNotes(root: HTMLElement, slug: string) {
   let notes = await api.notes.get(slug).catch(() => [] as Nota[])
@@ -193,6 +257,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
         save().then(() => { doRender(searchInput.value); toast(n ? 'Nota guardada' : 'Nota criada') })
       },
     })
+    bindTagAutocomplete(document.querySelector('.modal [name=tags]') as HTMLInputElement, existingTags(notes))
   }
 
   // ponytail: bulk — barra + handlers (arquivar/restaurar consoante a vista)
