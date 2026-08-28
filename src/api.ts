@@ -35,7 +35,7 @@ export const api = {
   },
   run: {
     // stream incremental do log do run headless (terminal a trabalhar / debugging)
-    output: (slug: string, cardId: string, offset = 0) => j<{ ok: boolean; done: boolean; code: number | null; chunk: string; offset: number; size: number }>(`/api/w/${slug}/output/${cardId}?offset=${offset}`),
+    output: (slug: string, cardId: string, offset = 0) => j<{ ok: boolean; started: boolean; done: boolean; code: number | null; chunk: string; offset: number; size: number }>(`/api/w/${slug}/output/${cardId}?offset=${offset}`),
   },
 }
 export const uid = () => Math.random().toString(36).slice(2, 10)

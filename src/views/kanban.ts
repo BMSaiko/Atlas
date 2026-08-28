@@ -342,6 +342,7 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
           finish(d.code ?? 0)
           return
         }
+        if (d && d.started === false && !pre.textContent) { statusEl.textContent = 'ainda não gerado' }
       } catch { /* aguenta — server pode reiniciar */ }
     }
     timer = setInterval(tick, 1000)
@@ -361,12 +362,14 @@ function runCard(c: Card) {
   }
 
   function viewTerminal(c: Card) {
+    // ponytail: placeholder honesto — sem ficheiro .status a UI diz 'ainda nao lancado', nunca
+    // inventa 'concluido'. O pre so recebe bytes quando o log tem conteudo real.
     let offset = 0
     let pre = document.createElement('pre')
     pre.className = 'term-view'
-    pre.textContent = 'A ligar ao run...'
+    pre.textContent = ''
     let timer: ReturnType<typeof setInterval> | undefined
-    const body = () => `<div class="term-wrap">${pre.outerHTML}<div class="term-status" id="${esc(c.id)}-tstatus">a trabalhar…</div></div>`
+    const body = () => `<div class="term-wrap">${pre.outerHTML}<div class="term-status" id="${esc(c.id)}-tstatus">ainda não lançado</div></div>`
     const m = openModal({
       title: 'Terminal · ' + c.title, submitText: 'Fechar', cancelText: 'Fechar',
       body,
@@ -378,12 +381,17 @@ function runCard(c: Card) {
     const tick = async () => {
       try {
         const d = await api.run.output(slug, c.id, offset)
-        if (d && d.chunk) { pre.textContent += d.chunk; pre.scrollTop = pre.scrollHeight }
-        offset = d ? d.offset : offset
-        if (d && d.done) {
-          if (timer) clearInterval(timer)
-          statusEl.textContent = d.code === 0 ? 'concluído ✓' : ('terminou com erro (código ' + d.code + ') — vê o log acima')
-          statusEl.classList.toggle('err', !!(d && d.code !== 0))
+        if (d) {
+          if (d.chunk) { pre.textContent += d.chunk; pre.scrollTop = pre.scrollHeight }
+          offset = d.offset
+          if (d.done) {
+            if (timer) clearInterval(timer)
+            statusEl.textContent = d.code === 0 ? 'concluído ✓' : ('terminou com erro (código ' + d.code + ') — vê o log acima')
+            statusEl.classList.toggle('err', !!(d.code !== 0))
+            return
+          }
+          if (d.started === false && !pre.textContent) { statusEl.textContent = 'ainda não lançado'; return }
+          statusEl.textContent = '● a trabalhar (update 1s)'
         }
       } catch { /* aguenta — server pode reiniciar */ }
     }

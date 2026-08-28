@@ -154,6 +154,11 @@ function killWtLockers(wt: string): Promise<void> {
 async function launchHermes(slug: string, card: any) {
   const branch = `feature/${slug}-${card.id}`
   const wt = join(WT_ROOT, slug, card.id)
+  // ponytail: log de progresso por card (canal de 'ver o hermes a trabalhar' e de debug/erros) — o
+  // ficheiro vive cedo o suficiente p/ ser referido no prompt (runs antigos isolados c/ flags 'w').
+  const runsDir = join(WT_ROOT, 'runs', slug)
+  mkdirSync(runsDir, { recursive: true })
+  const logPath = join(runsDir, card.id + '.log')
   // ponytail: no canvas de feedback quando NAO abre janela, o unico canal e o card -> grava ERRO em result
   const fail = async (msg: string) => {
     console.error(`[run:${slug}:${card.id}] ${msg}`)
@@ -212,6 +217,12 @@ async function launchHermes(slug: string, card: any) {
     '- NUNCA marques o teu card como "done"/concluido. So o BMS conclui apos validar na branch dev.',
     '- Apos concluires, coloca o teu card na coluna "review" (colId "review") no kanban.json — a task executada vai para review final.',
     '- No fim, ATUALIZA o teu card com um campo `result`: um resumo breve do que fizeste.',
+    '',
+    'PROGRESSO AO VIVO (OBRIGATORIO):',
+    `  - O utilizador ve o teu trabalho AO VIVO num terminal. A cada passo significativo, anexa 1 linha curta de progresso ao ficheiro de log: ${logPath}`,
+    '  - Formato da linha: [hh:mm] <descricao curta>  (ex.: [14:05] A ler server/api.ts  ·  [14:07] A editar viewTerminal  ·  [14:11] A correr tsc --noEmit).',
+    '  - Faz append UTF-8 ao ficheiro com a tua tool terminal/execute_code (ex.: python -c "open(<logPath>, \'a\', encoding=\'utf-8\').write(...)").',
+    '  - No fim anexa 1 linha com o resumo final. NAO e opcional: sem estas linhas o terminal fica mudo e o utilizador nao ve o teu progresso. E o teu canal de debug/erros visivel.',
   ].join('\n')
   // ponytail: terminal em modo headless — NAO abre janela WezTerm. O wrapper python corre direto
   // como processo de fundo (detached, windowsHide) e a saida (stdout+stderr) e capturada para um log
@@ -247,11 +258,8 @@ async function launchHermes(slug: string, card: any) {
     '\x20\x20\x20\x20\x20\x20\x20\x20print("AUTO-CLEANUP FALHOU: %r - push/merge incompleto. Worktree e branch mantidas p/ inspecao." % (e,))',
     'sys.exit(rc)',
   ].join('\n').replaceAll('GITBIN', GIT)
-  const runsDir = join(WT_ROOT, 'runs', slug)
-  mkdirSync(runsDir, { recursive: true })
-  const logPath = join(runsDir, card.id + '.log')
   const stPath = join(runsDir, card.id + '.status')
-  const ws = createWriteStream(logPath, { flags: 'a' })
+  const ws = createWriteStream(logPath, { flags: 'w' })
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
   // ponytail: spawn com pipe e reencaminha p/ o log — evita a corrida do fd (WriteStream{fd:null} no stdio)
   const p = spawn(VENV_PY, ['-c', wrapper, wt, branch, ATLAS_REPO, prompt],
@@ -297,8 +305,12 @@ async function launchBrainstorm(slug: string) {
     '- NAO apagues nem alteres notas existentes — so adiciona notas novas (append no array).',
     '- NAO facas git commits, NAO mexas no kanban, NAO marques nada como done.',
     '- No fim responde com um resumo curto do que criaste (quantas notas).',
+    '',
+    'PROGRESSO AO VIVO:',
+    `  - Anexa 1 linha curta de progresso por passo ([hh:mm] <descricao>) ao ficheiro de log: ${logPath}`,
+    '  - Faz append UTF-8. No fim, 1 linha de resumo.',
   ].join('\n')
-  const ws = createWriteStream(logPath, { flags: 'a' })
+  const ws = createWriteStream(logPath, { flags: 'w' })
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
   // ponytail: wrapper minimo (sem git) — hermes oneshot grava notas via API, sai com rc do processo
   const wrapper = [
@@ -353,8 +365,12 @@ async function launchDp(slug: string, card: any) {
     '- NAO mudes colId, NAO apagues result/descricao/outros campos do card.',
     '- NAO facas git commits, NAO mexas no kanban exceto o campo dp deste card, NAO marques nada como done.',
     '- No fim responde com 1 linha a resumir o DP (o que se vai implementar).',
+    '',
+    'PROGRESSO AO VIVO:',
+    `  - Anexa 1 linha curta de progresso por passo ([hh:mm] <descricao>) ao ficheiro de log: ${logPath}`,
+    '  - Faz append UTF-8 (open(<logPath>, \'a\', encoding=\'utf-8\')). No fim, 1 linha de resumo.',
   ].join('\n')
-  const ws = createWriteStream(logPath, { flags: 'a' })
+  const ws = createWriteStream(logPath, { flags: 'w' })
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
   const wrapper = [
     'import subprocess,sys',
@@ -536,13 +552,18 @@ export default function atlasApi(): Plugin {
         const runsDir = join(WT_ROOT, 'runs', slug)
         const logPath = join(runsDir, cardId + '.log')
         const stPath = join(runsDir, cardId + '.status')
-        const st = (await readJ(stPath).catch(() => null)) || { state: 'done', code: 0 }
+        const st = (await readJ(stPath).catch(() => null)) || null
+        // ponytail: sem ficheiro .status = NUNCA lancado (honesto, NAO fantasma done). O default
+        // running em vez de done evita inventar 'concluido'. Campo `started` deixa a UI distinguir
+        // 'ainda nao lancado' de 'em curso'.
+        const started = !!st
+        const st2 = st || { state: 'running' }
         let full = ''
         try { full = await readFile(logPath, 'utf8') } catch { full = '' }
-        const done = st.state !== 'running'
+        const done = st2.state !== 'running'
         // ponytail: envia chunk desde o offset e reporta a posicao nova p/ o cliente pedir so o delta
         const chunk = full.slice(offset)
-        send(200, { ok: true, done, code: done ? (st.code ?? 0) : null, chunk, offset: offset + chunk.length, size: full.length })
+        send(200, { ok: true, started, done, code: done ? (st2.code ?? 0) : null, chunk, offset: offset + chunk.length, size: full.length })
         return
       }
       // /api/w/:slug/import-roadmap -> migra tarefas abertas de um roadmap md (notas+cards)
