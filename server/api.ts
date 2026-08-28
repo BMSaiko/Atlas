@@ -38,7 +38,15 @@ function syncVault() {  // ponytail: debounce trailing 2s -> rajada de N escrita
   vaultTimer = setTimeout(flushVault, 2000)
 }
 const ATLAS_REPO = process.env.ATLAS_REPO || 'C:\\Users\\bruno\\Documents\\Second-Brain\\knowledge\\projects\\atlas\\code'
-const WT_ROOT = join(ATLAS_REPO, 'data', '.wt')  // ponytail: worktrees por card -> N cards em paralelo sem colidir no checkout
+// repoDir: repo (.git / source-tree) do mundo -> worktrees, merge, CI e push correm no codigo do mundo,
+// NAO no do atlas. ponytail: fallback ATLAS_REPO p/ mundos sem `repo` (atlas, heimdall) -> comportamento actual.
+async function repoDir(slug: string): Promise<string> {
+  const meta = await readJ(join(DATA, slug, 'meta.json'))
+  if (meta && typeof meta.repo === 'string' && meta.repo.trim()) return meta.repo.trim()
+  return ATLAS_REPO
+}
+// wtRoot: .wt (worktrees + runs) de um mundo vive dentro do repo desse mundo.
+function wtRoot(repo: string): string { return join(repo, 'data', '.wt') }
 const nid = () => Math.random().toString(36).slice(2, 10)  // id curto p/ notas/cards
 // catalog de icons por workdir -> cada tab da sidebar mostra um icon diferente.
 function iconCatalog(): string[] {
@@ -69,35 +77,35 @@ function inside(root: string, p: string) {
 function toSlug(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 }
-function runGit(args: string[]): Promise<{ ok: boolean; out: string }> {
+function runGit(args: string[], cwd: string = ATLAS_REPO): Promise<{ ok: boolean; out: string }> {
   return new Promise(res => {
-    const c = spawn(GIT, args, { cwd: process.cwd(), windowsHide: true })
+    const c = spawn(GIT, args, { cwd, windowsHide: true })
     let out = ''; c.stdout?.on('data', (d: Buffer) => out += d); c.stderr?.on('data', (d: Buffer) => out += d)
     c.on('error', e => res({ ok: false, out: e.message }))
     c.on('close', code => res({ ok: code === 0, out: out.trim() }))
   })
 }
 // ponytail: fast-forward-only merge dev->main (sem checkout -> nao choca com data/ sujo)
-async function resolveMainTip(): Promise<string | null> {
-  const lo = await runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/main'])
+async function resolveMainTip(repo: string): Promise<string | null> {
+  const lo = await runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/main'], repo)
   if (lo.ok) return lo.out
-  const lo2 = await runGit(['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main'])
+  const lo2 = await runGit(['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main'], repo)
   return lo2.ok ? lo2.out : null
 }
 
-async function mergeDevToMain() {
+async function mergeDevToMain(repo: string) {
   // ponytail: local main pode NAO existir no clone (só nasce no update-ref do 1º approve) ->
   // resolver o tip real (local || remote); sem tip, main nunca existiu -> ff trivial, deixar mergear.
-  const tip = await resolveMainTip()
+  const tip = await resolveMainTip(repo)
   if (tip) {
-    const anc = await runGit(['merge-base', '--is-ancestor', tip, 'dev'])
+    const anc = await runGit(['merge-base', '--is-ancestor', tip, 'dev'], repo)
     if (!anc.ok) return { ok: false, out: 'main e dev divergentes — merge manual necessario (dev deveria estar a frente de main)' }
   }
-  const devSha = await runGit(['rev-parse', 'dev'])
+  const devSha = await runGit(['rev-parse', 'dev'], repo)
   if (!devSha.ok) return { ok: false, out: 'falha a obter dev' }
-  const upd = await runGit(['update-ref', 'refs/heads/main', devSha.out])
+  const upd = await runGit(['update-ref', 'refs/heads/main', devSha.out], repo)
   if (!upd.ok) return { ok: false, out: 'falha a mover main para dev' }
-  const push = await runGit(['push', 'origin', 'main'])
+  const push = await runGit(['push', 'origin', 'main'], repo)
   return { ok: true, out: 'main = dev (fast-forward); push ' + (push.ok ? 'ok' : ('falhou: ' + push.out)) }
 }
 
@@ -127,17 +135,17 @@ function runCmd(cmd: string, args: string[], cwd: string): Promise<{ ok: boolean
 }
 // checkConflictMarkers: git grep sobre a arvore de dev; se 'dev' nao existir, cai p/ working tree.
 // rc 1 = sem matches (limpo, out vazio); rc 0 = achou markers; fatal = erro -> trunca como falha.
-async function checkConflictMarkers(): Promise<boolean> {
-  let g = await runCmd(GIT, ['grep', '-n', '-E', '^(<<<<<<<|=======|>>>>>>>)', 'dev', '--'], ATLAS_REPO)
-  if (g.out.includes('fatal')) g = await runCmd(GIT, ['grep', '-n', '-E', '^(<<<<<<<|=======|>>>>>>>)', '--'], ATLAS_REPO)
+async function checkConflictMarkers(repo: string): Promise<boolean> {
+  let g = await runCmd(GIT, ['grep', '-n', '-E', '^(<<<<<<<|=======|>>>>>>>)', 'dev', '--'], repo)
+  if (g.out.includes('fatal')) g = await runCmd(GIT, ['grep', '-n', '-E', '^(<<<<<<<|=======|>>>>>>>)', '--'], repo)
   return g.out.trim().length > 0
 }
 // runCIGate: barato->caro; para no 1o que falhe. build escreve dist/ (gitignored) -> nao suja git status.
-async function runCIGate(): Promise<{ ok: boolean; step: string; out: string }> {
-  if (await checkConflictMarkers()) return { ok: false, step: 'conflict-markers', out: 'marcadores de conflito presentes em dev' }
-  const tc = await runCmd('npm.cmd', ['run', 'typecheck'], ATLAS_REPO)
+async function runCIGate(repo: string): Promise<{ ok: boolean; step: string; out: string }> {
+  if (await checkConflictMarkers(repo)) return { ok: false, step: 'conflict-markers', out: 'marcadores de conflito presentes em dev' }
+  const tc = await runCmd('npm.cmd', ['run', 'typecheck'], repo)
   if (!tc.ok) return { ok: false, step: 'typecheck', out: tc.out.slice(-2000) }
-  const bd = await runCmd('npm.cmd', ['run', 'build'], ATLAS_REPO)
+  const bd = await runCmd('npm.cmd', ['run', 'build'], repo)
   if (!bd.ok) return { ok: false, step: 'build', out: bd.out.slice(-2000) }
   return { ok: true, step: 'ok', out: '' }
 }
@@ -175,18 +183,19 @@ const RUN_KEEP_MS = 7 * 24 * 60 * 60 * 1000  // runs antigos: apagar .log/.statu
 // cleanupRuns: apaga .log/.status antigos em data/.wt/runs/<slug>. O guard e a idade (mtime):
 // um run em andamento tem log/status com mtime recente -> nunca e apagado. Sem slug -> todos os slugs.
 async function cleanupRuns(slug?: string): Promise<void> {
-  const base = join(WT_ROOT, 'runs')
-  if (!existsSync(base)) return
   let slugs: string[]
-  try { slugs = (slug ? [slug] : readdirSync(base)) } catch { return }
+  try { slugs = slug ? [slug] : (await readIdx()).map(w => w.slug) } catch { return }
+  if (!slugs.length) return
   const now = Date.now()
   for (const s of slugs) {
+    const base = join(wtRoot(await repoDir(s)), 'runs', s)
+    if (!existsSync(base)) continue
     let files: string[]
-    try { files = readdirSync(join(base, s)); if (!files.length) { await rm(join(base, s), { recursive: true, force: true }).catch(() => {}); continue } }
+    try { files = readdirSync(base); if (!files.length) { await rm(base, { recursive: true, force: true }).catch(() => {}); continue } }
     catch { continue }
     for (const f of files) {
       if (!/\.(log|status)$/i.test(f)) continue
-      const fp = join(base, s, f)
+      const fp = join(base, f)
       try { if (now - statSync(fp).mtimeMs > RUN_KEEP_MS) await rm(fp, { force: true }).catch(() => {}) } catch { /* ja foi apagado */ }
     }
   }
@@ -195,36 +204,39 @@ async function cleanupRuns(slug?: string): Promise<void> {
 // (1) branch merged em dev (`--is-ancestor <branch> dev` rc0) -> trabalho nao se perde; (2) o run
 // correspondente NAO esta 'running' -> um card ATIVO (branch recém-criada == dev, por isso "merged") fica vivo.
 async function cleanupWorktrees(): Promise<void> {
-  await runGit(['worktree', 'prune'])
-  let slugs: string[]
-  try { slugs = readdirSync(WT_ROOT).filter(x => x !== 'runs') } catch { return }
-  for (const slug of slugs) {
-    const slugDir = join(WT_ROOT, slug)
+  let worlds: WD[]
+  try { worlds = await readIdx() } catch { return }
+  for (const wd of worlds) {
+    const slug = wd.slug
+    const repo = await repoDir(slug)
+    await runGit(['worktree', 'prune'], repo)
+    const slugDir = join(wtRoot(repo), slug)
+    if (!existsSync(slugDir)) continue
     let ids: string[]
     try { ids = readdirSync(slugDir) } catch { continue }
     for (const id of ids) {
       const wtDir = join(slugDir, id)
       const branch = 'feature/' + slug + '-' + id
-      const anc = await runGit(['merge-base', '--is-ancestor', branch, 'dev'])
+      const anc = await runGit(['merge-base', '--is-ancestor', branch, 'dev'], repo)
       if (!anc.ok) continue  // trabalho nao-merged nesta branch -> NAO apagar
-      const st = await readJ(join(WT_ROOT, 'runs', slug, id + '.status')).catch(() => null)
+      const st = await readJ(join(wtRoot(repo), 'runs', slug, id + '.status')).catch(() => null)
       if (st?.state === 'running') continue  // card ativo -> preservar worktree e branch
       await rmJunction(join(wtDir, 'node_modules'))
-      await runGit(['worktree', 'remove', '--force', wtDir])  // desregistar (ignora 'not a working tree')
+      await runGit(['worktree', 'remove', '--force', wtDir], repo)  // desregistar (ignora 'not a working tree')
       await rm(wtDir, { recursive: true, force: true }).catch(() => {})
     }
     let rest: string[]
     try { rest = readdirSync(slugDir); if (!rest.length) await rm(slugDir, { recursive: true, force: true }).catch(() => {}) } catch {}
   }
-  await runGit(['worktree', 'prune'])
 }
 
 async function launchHermes(slug: string, card: any) {
+  const repo = await repoDir(slug)
   const branch = `feature/${slug}-${card.id}`
-  const wt = join(WT_ROOT, slug, card.id)
+  const wt = join(wtRoot(repo), slug, card.id)
   // ponytail: log de progresso por card (canal de 'ver o hermes a trabalhar' e de debug/erros) — o
   // ficheiro vive cedo o suficiente p/ ser referido no prompt (runs antigos isolados c/ flags 'w').
-  const runsDir = join(WT_ROOT, 'runs', slug)
+  const runsDir = join(wtRoot(repo), 'runs', slug)
   mkdirSync(runsDir, { recursive: true })
   const logPath = join(runsDir, card.id + '.log')
   // ponytail: no canvas de feedback quando NAO abre janela, o unico canal e o card -> grava ERRO em result
@@ -237,7 +249,7 @@ async function launchHermes(slug: string, card: any) {
   }
   // ponytail: worktree isolado por card -> varios cards rodam em paralelo sem colidir no mesmo checkout.
   // limpa junction/node_modules ANTES do rm recursivo (senao rm segue o junction e apaga o node_modules base).
-  await runGit(['worktree', 'prune'])
+  await runGit(['worktree', 'prune'], repo)
   await rmJunction(join(wt, 'node_modules'))
   await killWtLockers(wt)  // pane de run anterior tbm segura o wt -> EBUSY no rm abaixo
   // ponytail: re-tentar remove+rm p/ vencer EBUSY do Windows. O taskkill e assincrono e a pane
@@ -245,15 +257,15 @@ async function launchHermes(slug: string, card: any) {
   // orfaos sobreviviam e o `worktree add` a seguir rebentava em 'already exists'. Aqui removemos com retry
   // e fazemos `prune` DEPOIS do dir sumir (prune so limpa registos cujo dir ja nao existe).
   for (let attempt = 0; attempt < 3; attempt++) {
-    await runGit(['worktree', 'prune'])
-    await runGit(['worktree', 'remove', '--force', wt])  // desregistar a worktree orfa (git-native)
+    await runGit(['worktree', 'prune'], repo)
+    await runGit(['worktree', 'remove', '--force', wt], repo)  // desregistar a worktree orfa (git-native)
     try { await rm(wt, { recursive: true, force: true }); break }  // limpa residuo do dir, se sobrar
     catch { await new Promise(r => setTimeout(r, 500)) }  // lock da pane ainda nao solto -> retry
   }
-  await runGit(['worktree', 'prune'])  // limpa qualquer registo orfao residuo antes de recriar
-  const addOut = await runGit(['worktree', 'add', '-B', branch, wt, 'dev'])
+  await runGit(['worktree', 'prune'], repo)  // limpa qualquer registo orfao residuo antes de recriar
+  const addOut = await runGit(['worktree', 'add', '-B', branch, wt, 'dev'], repo)
   if (!addOut.ok) { await fail('git worktree add falhou: ' + addOut.out); return }
-  const linked = await addJunction(join(wt, 'node_modules'), join(ATLAS_REPO, 'node_modules'))
+  const linked = await addJunction(join(wt, 'node_modules'), join(repo, 'node_modules'))
   if (!linked) { await fail('nao consegui ligar node_modules partilhado (mklink)'); return }
   const prompt = [
     'Tu es um agente autonomo. Executa o trabalho abaixo do card de kanban e atualiza o estado.',
@@ -330,8 +342,8 @@ async function launchHermes(slug: string, card: any) {
   const ws = createWriteStream(logPath, { flags: 'w' })
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
   // ponytail: spawn com pipe e reencaminha p/ o log — evita a corrida do fd (WriteStream{fd:null} no stdio)
-  const p = spawn(VENV_PY, ['-c', wrapper, wt, branch, ATLAS_REPO, prompt],
-    { cwd: wt, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
+  const p = spawn(VENV_PY, ['-c', wrapper, wt, branch, repo, prompt],
+    { cwd: repo, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
   p.stdout?.on('data', d => ws.write(d))
   p.stderr?.on('data', d => ws.write(d))
   p.on('error', e => { ws.end(); void fail('spawn headless falhou: ' + e.message) })
@@ -352,7 +364,8 @@ async function launchBrainstorm(slug: string) {
   // ponytail: brainstorm/SWOT nao toca em codigo nem kanban -> sem worktree/merge. So corre
   // o hermes headless com um prompt de analise e ele ESCREVE notas novas no workdir. Log/status
   // partilhados com o mecanismo /output do run-card (id ficticio "brainstorm").
-  const runsDir = join(WT_ROOT, 'runs', slug)
+  const repo = await repoDir(slug)
+  const runsDir = join(wtRoot(repo), 'runs', slug)
   mkdirSync(runsDir, { recursive: true })
   const logPath = join(runsDir, 'brainstorm.log')
   const stPath = join(runsDir, 'brainstorm.status')
@@ -361,7 +374,7 @@ async function launchBrainstorm(slug: string) {
     'Tu es um agente autonomo. Faz um brainstorm e um SWOT ao projeto e cria notas com ideias para implementar.',
     `Workdir: ${slug} («${meta.name}» — ${(meta.description || 'sem descricao').replace(/\n/g, ' ').slice(0, 120)})`,
     `API notas (get/put): http://localhost:5173/api/w/${slug}/notes`,
-    `Source-tree do projeto a analisar: ${ATLAS_REPO}`,
+    `Source-tree do projeto a analisar: ${repo}`,
     '',
     'TAREFA:',
     '- Le o source-tree e o estado do workdir para perceberes o projeto.',
@@ -388,7 +401,7 @@ async function launchBrainstorm(slug: string) {
     'sys.exit(rc)',
   ].join('\n')
   const p = spawn(VENV_PY, ['-c', wrapper, prompt],
-    { cwd: ATLAS_REPO, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
+    { cwd: repo, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
   p.stdout?.on('data', (d: Buffer) => ws.write(d))
   p.stderr?.on('data', (d: Buffer) => ws.write(d))
   p.on('error', () => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code: 1, ts: Date.now() }), 'utf8').catch(() => {}) })
@@ -400,7 +413,8 @@ async function launchBrainstorm(slug: string) {
 // escreve um DP em markdown e GRAVA-O no proprio card via API (card.dp). Log/status partilhados
 // com o mecanismo /output do run-card (id ficticio "dp-"+cardId) p/ a UI streamear o terminal.
 async function launchDp(slug: string, card: any) {
-  const runsDir = join(WT_ROOT, 'runs', slug)
+  const repo = await repoDir(slug)
+  const runsDir = join(wtRoot(repo), 'runs', slug)
   mkdirSync(runsDir, { recursive: true })
   const rid = 'dp-' + card.id
   const logPath = join(runsDir, rid + '.log')
@@ -417,7 +431,7 @@ async function launchDp(slug: string, card: any) {
     `Workdir: ${slug}`,
     `Kanban JSON (em disco): ${join(DATA, slug, 'kanban.json')}`,
     `Kanban API (para gravar o DP): http://localhost:5173/api/w/${slug}/kanban`,
-    `Source-tree do projeto a analisar: ${ATLAS_REPO}`,
+    `Source-tree do projeto a analisar: ${repo}`,
     '',
     `CARTAO ID: ${card.id}`,
     `TITULO: ${card.title}`,
@@ -446,7 +460,7 @@ async function launchDp(slug: string, card: any) {
     'sys.exit(rc)',
   ].join('\n')
   const p = spawn(VENV_PY, ['-c', wrapper, prompt],
-    { cwd: ATLAS_REPO, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
+    { cwd: repo, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
   p.stdout?.on('data', (d: Buffer) => ws.write(d))
   p.stderr?.on('data', (d: Buffer) => ws.write(d))
   p.on('error', () => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code: 1, ts: Date.now() }), 'utf8').catch(() => {}); void fail('spawn DP falhou') })
@@ -459,7 +473,7 @@ async function readJ(p: string) { try { return JSON.parse(await readFile(p,'utf8
 // index.json/meta.json nao tem `ver` -> `'ver' in v` cobre-os (nada a fazer).
 function bumpVer(v: any) { if (v && typeof v === 'object' && ('ver' in v)) v.ver = (Number(v.ver) || 0) + 1; return v }
 async function writeJ(p: string, v: any) { await writeFile(p, JSON.stringify(bumpVer(v),null,2), 'utf8'); syncVault() }
-interface WD { slug: string; name: string; description: string; createdAt: number; icon?: string }
+interface WD { slug: string; name: string; description: string; createdAt: number; icon?: string; repo?: string }
 async function readIdx(): Promise<WD[]> { return (await readJ(join(DATA, INDEX))) || [] }
 
 export default function atlasApi(): Plugin {
@@ -521,10 +535,12 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
           const idx = await readIdx()
           let slug = toSlug(b.name) || 'workdir'; let base = slug, i = 1
           while (idx.some(w => w.slug === base)) base = `${slug}-${i++}`
-          const wd = { slug: base, name: b.name.trim(), description: (b.description||'').trim(), icon: pickIcon(idx), createdAt: Date.now() }
+          const wd = { slug: base, name: b.name.trim(), description: (b.description||'').trim(), icon: pickIcon(idx), createdAt: Date.now(), repo: typeof b.repo === 'string' ? (b.repo.trim() || undefined) : undefined } as WD
           idx.push(wd); await writeJ(join(DATA, INDEX), idx)
           const d = join(DATA, base); mkdirSync(d, { recursive: true })
-          await writeJ(join(d,'meta.json'), { slug: base, name: wd.name, description: wd.description, icon: wd.icon, createdAt: wd.createdAt })
+          const meta0: Record<string, any> = { slug: base, name: wd.name, description: wd.description, icon: wd.icon, createdAt: wd.createdAt }
+          if (wd.repo) meta0.repo = wd.repo
+          await writeJ(join(d,'meta.json'), meta0)
           // ver:0 -> bumpVer na 1a escrita grava ver:1 (shape {ver,items}/{ver,columns,cards})
           await writeJ(join(d,'notes.json'), { ver: 0, items: [] })
           await writeJ(join(d,'kanban.json'), { ver: 0, columns:[{id:'todo',name:'To Do'},{id:'doing',name:'Em Curso'},{id:'review',name:'Review/Revisão'},{id:'done',name:'Concluído'}], cards:[] })
@@ -541,10 +557,12 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
           if (typeof b.name === 'string' && b.name.trim()) wd.name = b.name.trim()
           if (typeof b.description === 'string') wd.description = b.description.trim()
           if (typeof b.icon === 'string' && iconCatalog().includes(b.icon)) wd.icon = b.icon
+          if (typeof b.repo === 'string') wd.repo = b.repo.trim() || undefined
           await writeJ(join(DATA, INDEX), idx)
-          const meta = (await readJ(join(dir,'meta.json'))) || {}
+          const meta: Record<string, any> = (await readJ(join(dir,'meta.json'))) || {}
           meta.name = wd.name; meta.description = wd.description
           if (wd.icon) meta.icon = wd.icon
+          if (wd.repo) meta.repo = wd.repo; else delete meta.repo
           await writeJ(join(dir,'meta.json'), meta)
           send(200, wd); return
         }
@@ -586,9 +604,10 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         }
         // approve -> so de 'review'; CI gate antes de mergear dev->main
         if (card.colId !== 'review') { send(409, { error: 'card not in review' }); return }
-        const gate = await runCIGate()
+        const repo = await repoDir(slug)
+        const gate = await runCIGate(repo)
         if (!gate.ok) { send(500, { error: 'CI gate falhou (' + gate.step + '): ' + gate.out }); return }
-        const mgr = await mergeDevToMain()
+        const mgr = await mergeDevToMain(repo)
         if (!mgr.ok) { send(500, { error: 'merge dev->main falhou: ' + mgr.out }); return }
         card.colId = 'done'
         card.reviewed = true
@@ -655,7 +674,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         const slug = parts[1], cardId = parts[3]
         const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0)
         if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
-        const runsDir = join(WT_ROOT, 'runs', slug)
+        const runsDir = join(wtRoot(await repoDir(slug)), 'runs', slug)
         const logPath = join(runsDir, cardId + '.log')
         const stPath = join(runsDir, cardId + '.status')
         const st = (await readJ(stPath).catch(() => null)) || null
