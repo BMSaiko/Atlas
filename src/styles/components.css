@@ -445,3 +445,18 @@ a.link:hover { color:var(--gold-soft); }
 .bulkbar { display:flex; gap:var(--s3); align-items:center; padding:10px 14px; margin-bottom:14px; background:var(--bg-2); border:1px solid var(--gold); border-radius:var(--r2); flex-wrap:wrap; }
 .bulkbar select { padding:8px 10px; border-radius:var(--r1); background:var(--bg-3); border:1px solid var(--line); color:var(--text); font-size:.85rem; cursor:pointer; }
 .bulkbar select:disabled, .bulkbar .btn:disabled { opacity:.5; cursor:not-allowed; }
+
+/* Terminal headless — log do run por card (modal "Ver terminal / log do run") */
+.term-wrap { display:flex; flex-direction:column; gap:8px; }
+.term-view { margin:0; padding:12px 14px; max-height:60dvh; overflow:auto; background:#0a1018;
+  color:#d7e2ec; font-family:ui-monospace,"Cascadia Code",Consolas,monospace; font-size:.8rem;
+  line-height:1.5; white-space:pre-wrap; word-break:break-word; border:1px solid var(--line);
+  border-radius:var(--r2); }
+.term-view::-webkit-scrollbar { width:8px; }
+.term-view::-webkit-scrollbar-thumb { background:var(--line); border-radius:999px; }
+.term-status { font-size:.75rem; font-weight:600; color:var(--pipe-doing); letter-spacing:.04em;
+  text-transform:uppercase; display:flex; align-items:center; gap:6px; }
+.term-status::before { content:''; width:7px; height:7px; border-radius:50%; background:var(--pipe-doing);
+  box-shadow:0 0 8px var(--pipe-doing); animation:sess-pulse 1.6s infinite; }
+.term-status.err { color:var(--danger); }
+.term-status.err::before { background:var(--danger); box-shadow:0 0 8px var(--danger); animation:none; }

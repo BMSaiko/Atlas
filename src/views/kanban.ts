@@ -136,6 +136,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
           <div class="kops">
             <button class="btn-icon btn-ghost" data-act="run" aria-label="Executar no Hermes">${icon('play', 15)}</button>
+            <button class="btn-icon btn-ghost" data-act="term" aria-label="Ver terminal / log do run">${icon('term', 16)}</button>
             <button class="btn-icon btn-ghost" data-act="move" data-dir="-1" ${prev?'':'disabled'} aria-label="Mover atrás">${icon('back', 15)}</button>
             <button class="btn-icon btn-ghost" data-act="move" data-dir="1" ${next?'':'disabled'} aria-label="Mover frente">${icon('forward', 15)}</button>
             <button class="btn-icon btn-ghost" data-act="edit" aria-label="Editar">${icon('pencil', 15)}</button>
@@ -219,6 +220,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       if (act === 'edit' && c) { cardModal(c); return }
       if (act === 'del' && c) { confirmDialog({ title: 'Eliminar cartão', message: 'Apagar este cartão?' }).then(ok => { if (!ok) return; board.cards = board.cards.filter(x => x.id !== c.id); save().then(render); toast('Eliminado') }); return }
       if (act === 'run' && c) { runCard(c); return }
+      if (act === 'term' && c) { viewTerminal(c); return }
 if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquivado'); return }
       if (act === 'approve' && c) { approveCard(c); return }
       if (act === 'reject' && c) { rejectCard(c); return }
@@ -252,9 +254,45 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cardId: c.id }),
     }).then(r => r.json()).then((d: any) => {
-      if (d && d.ok) { c.colId = 'doing'; c.startedAt = Date.now(); save().then(render) }
+      if (d && d.ok) { c.colId = 'doing'; c.startedAt = Date.now(); save().then(render); toast('A executar em segundo plano (headless)') }
       else toast((d && d.error) || 'Erro ao executar')
     }).catch(() => toast('Falha ao abrir Hermes'))
+  }
+
+  // ponytail: terminal do run em modo headless — abre um modal que faz stream do log (offset-based).
+  // Mostra o run "a trabalhar" (chunk novo a cada tick) e os erros/afins gravados em disco.
+  function viewTerminal(c: Card) {
+    let offset = 0
+    let pre = document.createElement('pre')
+    pre.className = 'term-view'
+    pre.textContent = 'A ligar ao run...'
+    let timer: ReturnType<typeof setInterval> | undefined
+    const body = () => `<div class="term-wrap">${pre.outerHTML}<div class="term-status" id="${esc(c.id)}-tstatus">a trabalhar…</div></div>`
+    const m = openModal({
+      title: 'Terminal · ' + c.title, submitText: 'Fechar', cancelText: 'Fechar',
+      body,
+      onSubmit: () => { if (timer) clearInterval(timer) },
+    })
+    // recomecar o body real (openModal ja montou o pre via outerHTML; vamos buscar o elemento vivo)
+    pre = m.root.querySelector('.term-view') as HTMLPreElement
+    const statusEl = m.root.querySelector('.term-status') as HTMLElement
+    const tick = async () => {
+      try {
+        const d = await api.run.output(slug, c.id, offset)
+        if (d && d.chunk) { pre.textContent += d.chunk; pre.scrollTop = pre.scrollHeight }
+        offset = d ? d.offset : offset
+        if (d && d.done) {
+          if (timer) clearInterval(timer)
+          statusEl.textContent = d.code === 0 ? 'concluído ✓' : ('terminou com erro (código ' + d.code + ') — vê o log acima')
+          statusEl.classList.toggle('err', !!(d && d.code !== 0))
+        }
+      } catch { /* aguenta — server pode reiniciar */ }
+    }
+    timer = setInterval(tick, 1000)
+    tick()
+    // parar polling quando o modal fechar (backdrop removido)
+    const obs = new MutationObserver(() => { if (!m.root.isConnected) { if (timer) clearInterval(timer); obs.disconnect() } })
+    obs.observe(document.body, { childList: true })
   }
 
   function approveCard(c: Card) {
