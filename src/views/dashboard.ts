@@ -1,6 +1,7 @@
 import { api, Card, Nota } from '../api'
 import { icon } from '../ui/icons'
 import { navigate } from '../router'
+import { today, week } from '../ui/stats'
 
 interface Wd { slug: string; name: string; description?: string; icon?: string }
 interface Row { wd: Wd; notes: Nota[]; board: { columns: { id: string; name: string }[]; cards: Card[] } }
@@ -133,6 +134,17 @@ function stat(label: string, val: string, sub: string, ico: Parameters<typeof ic
   `
 }
 
+function focusSection(): string {
+  const t = today(), w = week()
+  return `
+    <div class="focus">
+      <div class="focus-head">${icon('timer', 14)} Foco de hoje</div>
+      ${stat('Sessões', String(t.sessions), `${w.sessions} na semana`, 'aura', 'var(--pipe-doing)')}
+      ${stat('Pomodoros', String(t.pomodoros), 'concluídos hoje', 'check', 'var(--pipe-done)')}
+      ${stat('Tempo em foco', fmtElapsed(t.focusMs), `semana: ${fmtElapsed(w.focusMs)}`, 'timer', 'var(--gold)')}
+    </div>`
+}
+
 function searchResults(rows: Row[], q: string): { html: string; count: number } {
   const ql = q.trim().toLowerCase()
   if (!ql) return { html: '', count: 0 }
@@ -204,7 +216,10 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
 
       <section class="dash-sec">
         <h2>${icon('forward', 16)} Pipeline de trabalho</h2>
-        ${pipeline(total)}
+        <div class="dash-pipe-row">
+          <div class="pipe-col">${pipeline(total)}</div>
+          ${focusSection()}
+        </div>
       </section>
 
       <section class="dash-sec">
@@ -289,7 +304,10 @@ export async function renderWorldDashboard(panel: HTMLElement, wd: Wd) {
 
       <section class="dash-sec">
         <h2>${icon('forward', 16)} Pipeline de trabalho</h2>
-        ${pipeline(t)}
+        <div class="dash-pipe-row">
+          <div class="pipe-col">${pipeline(t)}</div>
+          ${focusSection()}
+        </div>
       </section>
 
       <section class="dash-sec">
