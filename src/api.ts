@@ -32,6 +32,10 @@ export const api = {
     get: (slug: string) => j<{ ver: number; columns: Coluna[]; cards: Card[] }>(`/api/w/${slug}/kanban`),
     put: (slug: string, doc: { ver: number; columns: Coluna[]; cards: Card[] }) => j<{ ok: boolean; ver?: number }>(`/api/w/${slug}/kanban`, 'PUT', doc),
   },
+  orchestrator: {
+    start: () => j<{ ok: boolean; moved: number }>('/api/orchestrator/start', 'POST'),
+  },
+
   review: {
     approve: (slug: string, cardId: string) => j<{ ok: boolean; merge?: string }>(`/api/w/${slug}/review/approve`, 'POST', { cardId }),
     reject: (slug: string, cardId: string, note: string) => j<{ ok: boolean }>(`/api/w/${slug}/review/reject`, 'POST', { cardId, note }),

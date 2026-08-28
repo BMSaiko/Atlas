@@ -1,6 +1,7 @@
 import { api, Card, Nota } from '../api'
 import { icon } from '../ui/icons'
 import { navigate } from '../router'
+import { toast } from '../ui/toast'
 import { today, week } from '../ui/stats'
 
 interface Wd { slug: string; name: string; description?: string; icon?: string }
@@ -208,6 +209,7 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
             <div id="globResults" class="glob-results" hidden></div>
           </div>
           ${first ? `<a class="btn btn-ghost" href="/w/${first.slug}" data-nav="/w/${first.slug}">${icon('sphere', 16)} Ir para o mundo ativo</a>` : ''}
+          <button class="btn btn-ghost" id="orch-btn" title="Move todos os cartões TODO (não arquivados) de todos os mundos para Em Curso">${icon('term', 16)} Ativar orquestrador</button>
         </div>
       </header>
 
@@ -277,6 +279,20 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
       if (cur) cur.click()
       else runSearch(gq.value)
     }
+  })
+
+  // ponytail: orquestrador = gatilho; move TODO->doing em todos os mundos e re-render p/ atualizar counts
+  const orch = panel.querySelector<HTMLButtonElement>('#orch-btn')
+  orch?.addEventListener('click', () => {
+    const b = orch
+    b.disabled = true
+    api.orchestrator.start()
+      .then(d => {
+        toast(d.moved ? `Orquestrador ativado — ${d.moved} tarefa${d.moved === 1 ? '' : 's'} TODO → Em Curso` : 'Orquestrador: sem TODOs para mover (0)')
+        return renderDashboard(panel, items)
+      })
+      .catch(e => toast('Orquestrador: ' + e.message))
+      .finally(() => { b.disabled = false })
   })
 }
 
