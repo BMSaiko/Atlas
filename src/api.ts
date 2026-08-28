@@ -28,6 +28,7 @@ export const api = {
     put: (slug: string, doc: { ver: number; items: Nota[] }) => j<{ ok: boolean; ver?: number }>(`/api/w/${slug}/notes`, 'PUT', doc),
   },
   importRoadmap: (slug: string, path: string) => j<{ ok: boolean; addedCards: number; addedNotes: number; skipped: number; total: number }>(`/api/w/${slug}/import-roadmap`, 'POST', { path }),
+  exportNotes: (slug: string) => j<{ ok: boolean; count: number }>(`/api/w/${slug}/export`, 'POST'),
   kanban: {
     get: (slug: string) => j<{ ver: number; columns: Coluna[]; cards: Card[] }>(`/api/w/${slug}/kanban`),
     put: (slug: string, doc: { ver: number; columns: Coluna[]; cards: Card[] }) => j<{ ok: boolean; ver?: number }>(`/api/w/${slug}/kanban`, 'PUT', doc),

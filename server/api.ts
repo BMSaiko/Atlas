@@ -710,6 +710,26 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         send(200, { ok: true, addedCards, addedNotes, skipped, total: tasks.length })
         return
       }
+      // /api/w/:slug/export -> exporta notas não-arquivadas para markdown na vault (docs/notas.md)
+      if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'export' && m === 'POST') {
+        const slug = parts[1]
+        if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
+        const doc = (await readJ(join(DATA, slug, 'notes.json'))) || { items: [] }
+        const active = (doc.items || []).filter((n: any) => !n.archived).sort((a: any, b: any) => (a.ts || 0) - (b.ts || 0))
+        if (!active.length) { send(200, { ok: true, count: 0 }); return }
+        const md = active.map((n: any) => {
+          const tags = Array.isArray(n.tags) && n.tags.length ? `\ntags: [${n.tags.map((t: string) => t.includes(' ') ? `"${t}"` : t).join(', ')}]` : ''
+          const criado = n.ts ? new Date(n.ts).toISOString() : ''
+          return `---\nid: ${n.id}${tags}\ncriado: ${criado}\n---\n# ${n.title}\n\n${n.text}`
+        }).join('\n\n---\n\n')
+        const target = join(VAULT, 'knowledge', 'projects', slug, 'docs', 'notas.md')
+        try {
+          mkdirSync(dirname(target), { recursive: true })
+          await writeFile(target, md, 'utf8')
+        } catch (e: any) { send(500, { error: 'falha ao exportar notas: ' + e.message }); return }
+        send(200, { ok: true, count: active.length })
+        return
+      }
       if (parts[0] === 'w' && parts.length === 3) {
         const slug = parts[1], kind = parts[2]
         if (!SLUG.test(slug) || !['notes','kanban','meta'].includes(kind)) { send(400,{error:'bad request'}); return }
