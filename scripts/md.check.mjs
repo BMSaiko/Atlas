@@ -1,0 +1,17 @@
+import assert from 'node:assert'
+const { renderMd } = await import(`../src/ui/text.ts`)
+const has = (h, s) => assert.ok(h.includes(s), 'missing: ' + s)
+const not = (h, s) => assert.ok(!h.includes(s), 'unexpected: ' + s)
+has(renderMd('# T'), '<h2 class="md-h">T</h2>')
+has(renderMd('## T'), '<h3 class="md-h">T</h3>')
+has(renderMd('### T'), '<h4 class="md-h">T</h4>')
+has(renderMd('#### T'), '<h4 class="md-h">T</h4>')
+assert.deepStrictEqual(renderMd('- a\n- b'), '<ul class="md-ul"><li>a</li><li>b</li></ul>')
+has(renderMd('x **b** y'), '<strong>b</strong>')
+has(renderMd('`c`'), '<code>c</code>')
+has(renderMd('```\na<b>\n```'), '<code>a&lt;b&gt;</code>')
+has(renderMd('`*` not bold, **bold**'), '<code>*</code>')
+has(renderMd('vê https://x.com/a.'), '<a class="link" href="https://x.com/a" target="_blank" rel="noopener noreferrer">https://x.com/a</a>')
+not(renderMd('<script>'), '<script>')
+not(renderMd('~~**x'), '<strong>')   // unclosed bold stays literal
+console.log('renderMd OK')

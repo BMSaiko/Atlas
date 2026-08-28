@@ -4,7 +4,7 @@ import { openModal } from '../ui/modal'
 import { refreshTabCounts } from '../ui/counts'
 import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
-import { linkify } from '../ui/text'
+import { renderMd } from '../ui/text'
 import { navigate } from '../router'
 
 export const parseTags = (v: string) => Array.from(new Set(v.split(/[,\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean)))
@@ -134,7 +134,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       <article class="${n.archived ? 'note-card archived' : 'note-card'}${sel.has(n.id) ? ' sel' : ''}" data-id="${n.id}" tabindex="0">
         ${selMode ? `<input type="checkbox" class="nselbox" data-sel="${n.id}" ${sel.has(n.id) ? 'checked' : ''} aria-label="Selecionar ${esc(n.title)}">` : ''}
         <h4>${esc(n.title)}</h4>
-        <div class="note-text">${linkify(n.text)}</div>
+        <div class="note-text">${renderMd(n.text)}</div>
         ${(n.tags && n.tags.length) ? `<div class="note-tags">${n.tags.map(t => `<button class="tag-chip" data-tag="${esc(t)}" aria-label="Filtrar por ${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}
         <div class="note-date">${showArch ? unhide('Arquivada') : ''}${fmt(n.ts)}</div>
         <div class="note-actions">
@@ -235,19 +235,24 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       title: n.title, submitText: 'Editar',
       body: () => `<div style="font-size:.85rem;color:var(--text-dim);margin-bottom:10px">${fmt(n.ts)}${n.archived ? ' <span style="color:var(--gold)">· Arquivada</span>' : ''}</div>
         ${(n.tags && n.tags.length) ? `<div class="note-tags" style="margin-bottom:10px">${n.tags.map(t => `<span class="tag-chip on">${esc(t)}</span>`).join('')}</div>` : ''}
-        <div class="note-view-text">${linkify(n.text)}</div>`,
+        <div class="note-view-text">${renderMd(n.text)}</div>`,
       onSubmit: () => noteModal(n),
     })
   }
 
   function noteModal(n: Nota | null) {
-    openModal({
+    const m = openModal({
       title: n ? 'Editar nota' : 'Nova nota', submitText: n ? 'Guardar' : 'Criar',
       body: () => `<div class="field"><label for="nt-title">Título</label><input id="nt-title" name="title" required value="${esc(n?.title || '')}"></div>
-                   <div class="field"><label for="nt-text">Texto</label><textarea id="nt-text" name="text">${esc(n?.text || '')}</textarea></div>
+                   <div class="md-tabs">
+                     <button type="button" class="md-tab on" data-tab="edit">Editar</button>
+                     <button type="button" class="md-tab" data-tab="preview">Pré-visualização</button>
+                   </div>
+                   <div class="field md-pane md-pane-edit"><label for="nt-text">Texto</label><textarea id="nt-text" name="text">${esc(n?.text || '')}</textarea></div>
+                   <div class="field md-pane md-pane-preview" style="display:none"><label>Pré-visualização</label><div class="md-preview"></div></div>
                    <div class="field"><label for="nt-tags">Tags</label><input id="nt-tags" name="tags" placeholder="separadas por espaço ou vírgula" value="${esc((n?.tags || []).join(', '))}"></div>`,
       onSubmit: () => {
-        const form = document.querySelector('.modal form') as HTMLFormElement
+        const form = m.root.querySelector('form') as HTMLFormElement
         const title = (form.querySelector('[name=title]') as HTMLInputElement).value.trim()
         const text = (form.querySelector('[name=text]') as HTMLTextAreaElement).value
         const tags = parseTags((form.querySelector('[name=tags]') as HTMLInputElement).value)
@@ -257,7 +262,23 @@ export async function renderNotes(root: HTMLElement, slug: string) {
         save().then(() => { doRender(searchInput.value); toast(n ? 'Nota guardada' : 'Nota criada') })
       },
     })
-    bindTagAutocomplete(document.querySelector('.modal [name=tags]') as HTMLInputElement, existingTags(notes))
+    const ta = m.root.querySelector('[name=text]') as HTMLTextAreaElement
+    const preview = m.root.querySelector('.md-preview') as HTMLElement
+    // ponytail: tab-switch local no corpo do modal (modal.ts nao tem tabs): Editar | Pré-visualização
+    const show = (side: string) => {
+      m.root.querySelectorAll<HTMLElement>('.md-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === side))
+      const edit = m.root.querySelector('.md-pane-edit') as HTMLElement
+      const prev = m.root.querySelector('.md-pane-preview') as HTMLElement
+      edit.style.display = side === 'edit' ? '' : 'none'
+      prev.style.display = side === 'preview' ? '' : 'none'
+      if (side === 'edit') ta.focus()
+      else preview.innerHTML = renderMd(ta.value)
+    }
+    m.root.querySelectorAll<HTMLElement>('.md-tab').forEach(b => b.addEventListener('click', () => show(b.dataset.tab!)))
+    ta.addEventListener('input', () => {
+      if ((m.root.querySelector('.md-tab.on') as HTMLElement).dataset.tab === 'preview') preview.innerHTML = renderMd(ta.value)
+    })
+    bindTagAutocomplete(m.root.querySelector('[name=tags]') as HTMLInputElement, existingTags(notes))
   }
 
   // ponytail: bulk — barra + handlers (arquivar/restaurar consoante a vista)
