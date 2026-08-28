@@ -5,6 +5,7 @@ import { refreshTabCounts } from '../ui/counts'
 import { renderNotes } from './notes'
 import { renderKanban } from './kanban'
 import { renderSettings } from './settings'
+import { renderWorldDashboard } from './dashboard'
 import { linkify } from '../ui/text'
 
 class NotFound extends Error {}
@@ -31,18 +32,21 @@ export async function renderWorkspace(panel: HTMLElement, slug: string, isSettin
 
   panel.innerHTML = `<div class="ws">${header}
       <nav class="ws-tabs" id="tabs">
-        <button class="ws-tab active" data-tab="notes" id="tab-notes">${icon('note', 16)} Notas</button>
+        <button class="ws-tab active" data-tab="dash" id="tab-dash">${icon('sphere', 16)} Dashboard</button>
+        <button class="ws-tab" data-tab="notes" id="tab-notes">${icon('note', 16)} Notas</button>
         <button class="ws-tab" data-tab="kanban" id="tab-kanban">${icon('board', 16)} Kanban</button>
       </nav>
       <div id="ws-content"></div>
     </div>`
   bindNav(panel)
   const tabKey = `atlas.tab.\${slug}`
-  let tab: 'notes' | 'kanban' = (() => { try { return localStorage.getItem(tabKey) === 'kanban' ? 'kanban' : 'notes' } catch { return 'notes' } })()
+  let tab: 'dash' | 'notes' | 'kanban' = (() => { const v = (() => { try { return localStorage.getItem(tabKey) } catch { return null } })(); return (v === 'notes' || v === 'kanban' || v === 'dash') ? v : 'dash' })()
   const content = panel.querySelector('#ws-content') as HTMLElement
   const show = async () => {
     panel.querySelectorAll('.ws-tab').forEach(t => t.classList.toggle('active', t.getAttribute('data-tab') === tab))
-    if (tab === 'notes') await renderNotes(content, slug); else await renderKanban(content, slug)
+    if (tab === 'dash') await renderWorldDashboard(content, { slug, name: wdm.name, description: wdm.description, icon: wdm.icon })
+    else if (tab === 'notes') await renderNotes(content, slug)
+    else await renderKanban(content, slug)
     await refreshTabCounts(slug)
   }
   show()

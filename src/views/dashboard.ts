@@ -124,6 +124,15 @@ function projCard(wd: Wd, t: Tally): string {
     </a>`
 }
 
+function stat(label: string, val: string, sub: string, ico: Parameters<typeof icon>[0], hue?: string) {
+  return `
+    <div class="stat" style="--accent:${hue || 'var(--gold)'}">
+      <div class="stat-ico" style="color:${hue || 'var(--gold)'};border-color:color-mix(in srgb,${hue || 'var(--gold)'} 45%,transparent);background:color-mix(in srgb,${hue || 'var(--gold)'} 13%,transparent)">${icon(ico, 18)}</div>
+      <div class="stat-body"><div class="stat-val" style="color:${hue || 'var(--gold)'}">${val}</div><div class="stat-lbl">${label}</div><div class="stat-sub">${sub}</div></div>
+    </div>
+  `
+}
+
 export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
   const rows: Row[] = []
   for (const wd of items) {
@@ -136,11 +145,7 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
   const { total, byWd } = tally(rows)
   const first = items[0]
 
-  const stat = (label: string, val: string, sub: string, ico: Parameters<typeof icon>[0], hue?: string) => `
-    <div class="stat" style="--accent:${hue || 'var(--gold)'}">
-      <div class="stat-ico" style="color:${hue || 'var(--gold)'};border-color:color-mix(in srgb,${hue || 'var(--gold)'} 45%,transparent);background:color-mix(in srgb,${hue || 'var(--gold)'} 13%,transparent)">${icon(ico, 18)}</div>
-      <div class="stat-body"><div class="stat-val" style="color:${hue || 'var(--gold)'}">${val}</div><div class="stat-lbl">${label}</div><div class="stat-sub">${sub}</div></div>
-    </div>`
+
 
   panel.innerHTML = `
     <div class="dash">
@@ -181,6 +186,44 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
     </div>`
 
   panel.querySelectorAll('[data-nav]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); navigate(a.getAttribute('data-nav')!) }))
+}
+
+
+export async function renderWorldDashboard(panel: HTMLElement, wd: Wd) {
+  const [notes, board] = await Promise.all([
+    api.notes.get(wd.slug).catch(() => [] as Nota[]),
+    api.kanban.get(wd.slug).catch(() => ({ columns: [], cards: [] } as Row['board'])),
+  ])
+  const rows: Row[] = [{ wd, notes, board }]
+  const { byWd } = tally(rows)
+  const t = byWd.get(wd.slug)!
+  panel.innerHTML = `
+    <div class="dash dash-world">
+      <header class="dash-head">
+        <div class="dash-head-title">
+          <span class="dash-kicker">${icon(wd.icon ? 'sphere' : 'sphere', 13)} ${esc(wd.name)} · o seu mundo</span>
+          <h1>Dashboard</h1>
+          ${wd.description ? `<p class="dash-sub">${esc(wd.description)}</p>` : ''}
+        </div>
+      </header>
+
+      <div class="stat-grid">
+        ${stat('Notas ativas', String(t.notes - t.notesArch), t.notesArch ? `${t.notesArch} arquivadas` : 'neste mundo', 'note', 'var(--pipe-done)')}
+        ${stat('Em curso', String(t.doing), 'tarefas a decorrer', 'aura', 'var(--pipe-doing)')}
+        ${stat('Em aberto', String(openCards(t)), 'todo · doing · review', 'board', 'var(--pipe-todo)')}
+        ${stat('Concluídos', String(t.done), 'feitos neste mundo', 'check', 'var(--pipe-done)')}
+      </div>
+
+      <section class="dash-sec">
+        <h2>${icon('forward', 16)} Pipeline de trabalho</h2>
+        ${pipeline(t)}
+      </section>
+
+      <section class="dash-sec">
+        <h2>${icon('aura', 16)} Sessões / terminais ativos neste mundo</h2>
+        ${sessions(rows)}
+      </section>
+    </div>`
 }
 
 function esc(s: unknown) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
