@@ -164,19 +164,29 @@ export async function renderKanban(root: HTMLElement, slug: string) {
         </div>` : ''}
         <div class="kfoot">
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
-          <div class="kops">
-            <button class="btn-icon btn-ghost" data-act="run" aria-label="Executar no Hermes">${icon('play', 15)}</button>
-            <button class="btn-icon btn-ghost" data-act="dp" aria-label="Gerar DP (design plan)">${icon('doc', 15)}</button>
-            <button class="btn-icon btn-ghost" data-act="term" aria-label="Ver terminal / log do run">${icon('term', 16)}</button>
-            <button class="btn-icon btn-ghost" data-act="move" data-dir="-1" ${prev?'':'disabled'} aria-label="Mover atrás">${icon('back', 15)}</button>
-            <button class="btn-icon btn-ghost" data-act="move" data-dir="1" ${next?'':'disabled'} aria-label="Mover frente">${icon('forward', 15)}</button>
-            <button class="btn-icon btn-ghost" data-act="edit" aria-label="Editar">${icon('pencil', 15)}</button>
-            <button class="btn-icon btn-ghost" data-act="arch" aria-label="Arquivar">${icon('archive', 15)}</button>
-            <button class="btn-icon btn-ghost" data-act="del" aria-label="Eliminar" style="color:var(--danger)">${icon('trash', 15)}</button>
-          </div>
+          ${kops(c, prev, next)}
         </div>
       </article>`
     }).join('')
+  }
+
+  // ponytail: composição condicional do .kops por coluna — só a ação de ciclo de vida relevante ao estado.
+  // start/play só em todo; restart(reset)+term só em doing; move/edit/arch/del em todas.
+  function kops(c: Card, prev?: string, next?: string): string {
+    const b: string[] = []
+    if (c.colId === 'todo') {
+      b.push(`<button class="btn-icon btn-ghost" data-act="run" aria-label="Executar no Hermes">${icon('play', 15)}</button>`)
+      b.push(`<button class="btn-icon btn-ghost" data-act="dp" aria-label="Gerar DP (design plan)">${icon('doc', 15)}</button>`)
+    } else if (c.colId === 'doing') {
+      b.push(`<button class="btn-icon btn-ghost" data-act="run" aria-label="Reiniciar execução">${icon('reset', 15)}</button>`)
+      b.push(`<button class="btn-icon btn-ghost" data-act="term" aria-label="Ver terminal / log do run">${icon('term', 16)}</button>`)
+    }
+    b.push(`<button class="btn-icon btn-ghost" data-act="move" data-dir="-1" ${prev?'':'disabled'} aria-label="Mover atrás">${icon('back', 15)}</button>`)
+    b.push(`<button class="btn-icon btn-ghost" data-act="move" data-dir="1" ${next?'':'disabled'} aria-label="Mover frente">${icon('forward', 15)}</button>`)
+    b.push(`<button class="btn-icon btn-ghost" data-act="edit" aria-label="Editar">${icon('pencil', 15)}</button>`)
+    b.push(`<button class="btn-icon btn-ghost" data-act="arch" aria-label="Arquivar">${icon('archive', 15)}</button>`)
+    b.push(`<button class="btn-icon btn-ghost" data-act="del" aria-label="Eliminar" style="color:var(--danger)">${icon('trash', 15)}</button>`)
+    return `<div class="kops">${b.join('')}</div>`
   }
 
   // ponytail: barra de operacoes em bulk — aparece quando selMode ativo
@@ -455,6 +465,13 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
         ${c.description
           ? `<div class="kdesc" style="font-size:1rem;white-space:pre-wrap">${esc(c.description)}</div>`
           : '<div class="muted">Sem descrição</div>'}
+        ${c.colId === 'todo' || c.colId === 'doing' ? `<div class="kmodal-actions" data-card-actions>
+          ${c.colId === 'todo'
+            ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="run">${icon('play',14)} Executar no Hermes</button>
+               <button type="button" class="btn btn-ghost btn-sm" data-card-act="dp">${icon('doc',14)} Gerar DP</button>`
+            : `<button type="button" class="btn btn-primary btn-sm" data-card-act="run">${icon('reset',14)} Reiniciar execução</button>
+               <button type="button" class="btn btn-ghost btn-sm" data-card-act="term">${icon('term',14)} Ver terminal</button>`}
+        </div>` : ''}
         ${c.dp
           ? `<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--line)"><div class="muted" style="font-size:.8rem;font-weight:600;margin-bottom:6px;color:var(--gold)">DP (Design Plan)</div>${dpHtml(c.dp)}</div>`
           : ''}
@@ -468,6 +485,16 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
       e.stopPropagation()
       navigator.clipboard.writeText(c.id).then(() => toast('ID copiado: ' + c.id)).catch(() => toast('Falha ao copiar'))
     })
+    // ponytail: ações contextuais do card no modal — reutilizam os mesmos handlers do grid
+    m.root.querySelector('[data-card-actions]')?.addEventListener('click', e => {
+      const actBtn = (e.target as HTMLElement).closest('[data-card-act]') as HTMLElement | null
+      if (!actBtn) return
+      const a = actBtn.dataset.cardAct
+      if (a === 'run') runCard(c)
+      else if (a === 'dp') dpCard(c)
+      else if (a === 'term') viewTerminal(c)
+    })
+    
   }
 
   function showArchivedModal() {
