@@ -103,6 +103,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       <input class="notes-search" id="nsearch" placeholder="Buscar notas ou tags…" aria-label="Buscar notas">
       <button class="btn btn-ghost" id="narch" aria-pressed="${showArch}" title="${showArch ? 'Ver ativas' : 'Ver arquivadas'}">${icon('archive', 16)} <span>Arquivadas</span><span class="side-count" id="narchcount">${archCount()}</span></button>
       <button class="btn btn-primary kbdhint" id="nadd" aria-describedby="nadd-tip">${icon('plus', 16)} Nova nota<span class="kbdhint-tip" id="nadd-tip" role="tooltip"><kbd>Ctrl</kbd>+<kbd>K</kbd></span></button>
+      <button class="btn btn-ghost" id="nexport" title="Exportar notas para markdown na vault (docs/notas.md)" aria-label="Exportar notas para markdown">${icon('doc', 16)} <span>Exportar</span></button>
       <button class="btn btn-ghost" id="nsel" title="Selecionar várias notas para operações em bulk" style="${selMode?'color:var(--gold)':''}">${icon('check', 16)} ${selMode ? 'Concluir' : 'Bulk'}</button>
       <button class="btn btn-ghost" id="nbrain" title="Brainstorm + SWOT do projeto (headless — cria notas novas)" aria-label="Brainstorm + SWOT do projeto">${icon('aura', 16)} Brainstorm</button>
     </div>
@@ -174,6 +175,9 @@ export async function renderNotes(root: HTMLElement, slug: string) {
   root.querySelector('#ntagbar')!.addEventListener('click', e => { const b = (e.target as HTMLElement).closest('[data-tag]') as HTMLElement | null; if (b) tickTag(b.dataset.tag!) })
 
   root.querySelector('#nadd')!.addEventListener('click', () => noteModal(null))
+  root.querySelector('#nexport')!.addEventListener('click', () => {
+    api.exportNotes(slug).then(r => toast(`Notas exportadas (${r.count})`)).catch(e => toast('Erro: ' + e.message))
+  })
   root.querySelector('#nsel')!.addEventListener('click', () => { selMode = !selMode; if (!selMode) sel.clear(); doRender(searchInput.value.toLowerCase()) })
   const brainBtn = root.querySelector('#nbrain') as HTMLButtonElement
   if (brainBtn) brainBtn.addEventListener('click', () => brainstorm(slug))
