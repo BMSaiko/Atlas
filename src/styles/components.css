@@ -500,3 +500,21 @@ a.link:hover { color:var(--gold-soft); }
 .glob-kind { font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-dim); border:1px solid var(--line); border-radius:100px; padding:1px 6px; flex-shrink:0; }
 .glob-text { display:block; width:100%; color:var(--text-dim); font-size:.82rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .glob-none { padding:var(--s3); color:var(--text-dim); }
+/* --- Markdown em notas --- */
+.md-h { margin:.3rem 0 .2rem; font-weight:700; color:var(--text); }
+.md-h2 { font-size:1.05rem; }
+.md-h3 { font-size:.98rem; }
+.md-h4 { font-size:.92rem; }
+.md-p { margin:.2rem 0; }
+.md-p:first-child, .md-h:first-child { margin-top:0; }
+.md-ul { margin:.2rem 0 .2rem 1.15rem; list-style:disc; }
+.md-ul li { margin:.1rem 0; }
+.md-code { display:block; margin:.25rem 0; padding:.4rem .6rem; background:var(--bg-3); border:1px solid var(--line); border-radius:var(--r1); overflow-x:auto; font-family:Consolas,'Cascadia Mono',Menlo,monospace; font-size:.82rem; white-space:pre-wrap; word-break:break-word; }
+.md-p code, .md-ul code { font-family:Consolas,'Cascadia Mono',Menlo,monospace; font-size:.85em; background:var(--bg-3); border:1px solid var(--line); border-radius:4px; padding:.05rem .3rem; }
+/* Aba Editar | Pré-visualização no modal de nota */
+.md-tabs { display:flex; gap:var(--s2); margin-bottom:var(--s3); }
+.md-tab { padding:6px 14px; border-radius:var(--r1); border:1px solid var(--line); background:var(--bg-2); color:var(--text-dim); font-size:.82rem; cursor:pointer; transition:border-color .15s,color .15s,background .15s; }
+.md-tab:hover { border-color:var(--gold); color:var(--text); }
+.md-tab.on { background:var(--gold); border-color:var(--gold); color:var(--bg-0); }
+.md-preview { border:1px solid var(--line); border-radius:var(--r1); background:var(--bg-2); padding:12px; min-height:90px; color:var(--text); font-size:.92rem; line-height:1.55; overflow-y:auto; word-break:break-word; }
+.md-preview a.link { color:var(--gold); }
