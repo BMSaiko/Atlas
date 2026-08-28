@@ -40,7 +40,11 @@ export async function renderWorkspace(panel: HTMLElement, slug: string, isSettin
     </div>`
   bindNav(panel)
   const tabKey = `atlas.tab.\${slug}`
-  let tab: 'dash' | 'notes' | 'kanban' = (() => { const v = (() => { try { return localStorage.getItem(tabKey) } catch { return null } })(); return (v === 'notes' || v === 'kanban' || v === 'dash') ? v : 'dash' })()
+  // ponytail: deep-link da busca global (?tab=notes|kanban&open=<id>) — prefere a tab pedida
+  const qp = new URLSearchParams(location.search)
+  const qtab = qp.get('tab') as 'notes' | 'kanban' | null
+  const openId = qp.get('open')
+  let tab: 'dash' | 'notes' | 'kanban' = qtab || (() => { const v = (() => { try { return localStorage.getItem(tabKey) } catch { return null } })(); return (v === 'notes' || v === 'kanban' || v === 'dash') ? v : 'dash' })()
   const content = panel.querySelector('#ws-content') as HTMLElement
   const show = async () => {
     panel.querySelectorAll('.ws-tab').forEach(t => t.classList.toggle('active', t.getAttribute('data-tab') === tab))
@@ -48,6 +52,12 @@ export async function renderWorkspace(panel: HTMLElement, slug: string, isSettin
     else if (tab === 'notes') await renderNotes(content, slug)
     else await renderKanban(content, slug)
     await refreshTabCounts(slug)
+    // ponytail: deep-link abre o modal do item-alvo via click (reusa handlers ja existentes de nota/cartao)
+    if (openId) {
+      const target = content.querySelector<HTMLElement>(`[data-id="${openId}"]`)
+      if (target) target.click()
+      history.replaceState(null, '', location.pathname)  // limpa o query p/ nao reabrir em re-renders
+    }
   }
   show()
   panel.querySelectorAll('.ws-tab').forEach(t => t.addEventListener('click', () => { tab = t.getAttribute('data-tab') as any; try { localStorage.setItem(tabKey, tab) } catch {}; show() }))
