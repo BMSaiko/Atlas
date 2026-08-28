@@ -267,7 +267,8 @@ async function launchBrainstorm(slug: string) {
   // ponytail: wrapper minimo (sem git) — hermes oneshot grava notas via API, sai com rc do processo
   const wrapper = [
     'import subprocess,sys',
-    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[1]])  // ponytail: sem cwd embutido (herda o cwd do spawn=ATLAS_REPO) -> evita SyntaxError \U no literal Python',
+    '# ponytail: sem cwd embutido (herda o cwd do spawn=ATLAS_REPO) -> evita SyntaxError \\U no literal Python em Windows',
+    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[1]])',
     'sys.exit(rc)',
   ].join('\n')
   const p = spawn(VENV_PY, ['-c', wrapper, prompt],
@@ -321,7 +322,7 @@ async function launchDp(slug: string, card: any) {
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
   const wrapper = [
     'import subprocess,sys',
-    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[1]],cwd="' + ATLAS_REPO + '")',
+    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[1]])',
     'sys.exit(rc)',
   ].join('\n')
   const p = spawn(VENV_PY, ['-c', wrapper, prompt],
