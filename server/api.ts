@@ -471,6 +471,7 @@ export default function atlasApi(): Plugin {
         const slug = parts[1]
         if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
         void launchBrainstorm(slug).catch(e => console.error('[brainstorm] ' + slug + ': ' + e.message))
+        send(200, { ok: true }); return
       }
       // /api/w/:slug/dp -> gera/reescreve o DP de um card (headless, nao toca em codigo/worktree)
       if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'dp' && m === 'POST') {
