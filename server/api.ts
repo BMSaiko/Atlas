@@ -473,7 +473,31 @@ export default function atlasApi(): Plugin {
       const parts = p.replace(/^\/api\//,'').split('/').filter(Boolean)
 
       // catalog de icons disponiveis para o picker/sidebar
-      if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { icons: iconCatalog() }); return }
+            // /api/orchestrator/start -> passa TODO(s) nao arquivados de todos os mundos para doing
+      // ponytail: escopo inicial = so move colIds (nao dispara runs headless nem toca review/done/archived)
+      if (parts[0] === 'orchestrator' && parts[1] === 'start' && parts.length === 2 && m === 'POST') {
+        const worldIdx = await readIdx()
+        let moved = 0
+        for (const wd of worldIdx) {
+          const file = join(DATA, wd.slug, 'kanban.json')
+          if (!inside(DATA, file)) continue
+          const board = await readJ(file)
+          if (!board || !Array.isArray(board.cards)) continue
+          let dirty = false
+          for (const card of board.cards) {
+            if (card.archived || card.colId !== 'todo') continue
+            card.colId = 'doing'
+            card.startedAt = Date.now()
+            delete card.result
+            delete card.reviewed
+            moved++; dirty = true
+          }
+          if (dirty) await writeJ(file, board)
+        }
+        send(200, { ok: true, moved }); return
+      }
+
+if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { icons: iconCatalog() }); return }
       // workdirs list / create
       if (parts[0] === 'workdirs' && parts.length === 1) {
         if (m === 'GET') { send(200, await readIdx()); return }
