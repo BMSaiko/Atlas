@@ -77,6 +77,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
         <button class="btn btn-primary kbdhint" id="kadd" aria-describedby="kadd-tip">${icon('plus', 16)} Novo cartão<span class="kbdhint-tip" id="kadd-tip" role="tooltip"><kbd>Ctrl</kbd>+<kbd>K</kbd></span></button>
         <button class="btn btn-ghost" id="karch">${icon('archive', 16)} Arquivados</button>
         <button class="btn btn-ghost" id="kimport" title="Importar tarefas de um roadmap (markdown)">${icon('forward', 16)} Importar</button>
+        <button class="btn btn-ghost" id="kortch" title="Move todos os cartões TODO (não arquivados) deste mundo para Em Curso">${icon('term', 16)} Orquestrar mundo</button>
         <button class="btn btn-ghost" id="ksel" title="Selecionar vários cartões para operações em bulk" style="${selMode?'color:var(--gold)':''}">${icon('check', 16)} ${selMode ? 'Concluir' : 'Bulk'}</button>
         <span class="kb-right">
           <span class="muted" style="font-size:.85rem">${board.cards.filter(c=>!c.archived).length} cartões</span>
@@ -105,6 +106,12 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     }))
     root.querySelector('#karch')!.addEventListener('click', showArchivedModal)
     root.querySelector('#kimport')!.addEventListener('click', importRoadmap)
+    root.querySelector('#kortch')!.addEventListener('click', () => {
+      api.orchestrator.start(slug).then(d => {
+        toast(d.moved ? `Orquestrador: ${d.moved} tarefa${d.moved === 1 ? '' : 's'} TODO → Em Curso` : 'Orquestrador: sem TODOs neste mundo (0)')
+        render()
+      }).catch(e => toast('Orquestrador: ' + e.message))
+    })
     root.querySelector('#ksel')!.addEventListener('click', () => { selMode = !selMode; if (!selMode) sel.clear(); render() })
     root.querySelector<HTMLElement>('#kboard')!.addEventListener('click', e => {
       const b = (e.target as HTMLElement).closest('[data-filter-prio]') as HTMLElement | null

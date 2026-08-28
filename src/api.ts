@@ -33,7 +33,7 @@ export const api = {
     put: (slug: string, doc: { ver: number; columns: Coluna[]; cards: Card[] }) => j<{ ok: boolean; ver?: number }>(`/api/w/${slug}/kanban`, 'PUT', doc),
   },
   orchestrator: {
-    start: () => j<{ ok: boolean; moved: number }>('/api/orchestrator/start', 'POST'),
+    start: (slug?: string) => j<{ ok: boolean; moved: number }>(slug ? `/api/orchestrator/start/${encodeURIComponent(slug)}` : '/api/orchestrator/start', 'POST'),
   },
 
   review: {

@@ -472,13 +472,15 @@ export default function atlasApi(): Plugin {
       if (!p.startsWith('/api/')) return next()   // static handled by vite, preview fallback below
       const parts = p.replace(/^\/api\//,'').split('/').filter(Boolean)
 
-      // catalog de icons disponiveis para o picker/sidebar
-            // /api/orchestrator/start -> passa TODO(s) nao arquivados de todos os mundos para doing
-      // ponytail: escopo inicial = so move colIds (nao dispara runs headless nem toca review/done/archived)
-      if (parts[0] === 'orchestrator' && parts[1] === 'start' && parts.length === 2 && m === 'POST') {
+      // /api/orchestrator/start[/<slug>] -> passa TODO(s) nao arquivados (de um mundo, se slug) para doing
+      // ponytail: so move colIds (nao dispara runs headless nem toca review/done/archived)
+      if (parts[0] === 'orchestrator' && parts[1] === 'start' && (parts.length === 2 || parts.length === 3) && m === 'POST') {
+        const only = parts.length === 3 ? decodeURIComponent(parts[2]) : ''
         const worldIdx = await readIdx()
+        const targets = only ? worldIdx.filter(w => w.slug === only) : worldIdx
+        if (only && targets.length === 0) { send(404, { error: 'mundo nao encontrado' }); return }
         let moved = 0
-        for (const wd of worldIdx) {
+        for (const wd of targets) {
           const file = join(DATA, wd.slug, 'kanban.json')
           if (!inside(DATA, file)) continue
           const board = await readJ(file)
