@@ -4,7 +4,7 @@ import { openModal } from '../ui/modal'
 import { refreshTabCounts } from '../ui/counts'
 import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
-import { linkify } from '../ui/text'
+import { renderMd } from '../ui/text'
 
 // ponytail: handle unico do poll — renderKanban re-corre em cada navegacao e criava um
 // setInterval novo por chamada. Limpa o anterior antes de criar. O poll so faz refresh
@@ -157,7 +157,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       const isSel = sel.has(c.id)
       return `<article class="kcard${c.result ? ' has-output' : ''}${isSel ? ' sel' : ''}" draggable="true" tabindex="0" data-id="${c.id}">
         <div class="ktitle">${selMode ? `<input type="checkbox" class="kselbox" data-sel="${c.id}" ${isSel ? 'checked' : ''} aria-label="Selecionar ${esc(c.title)}">` : ''}<h5>${esc(c.title)}</h5><span class="kdate">${fmtDate(c.ts)}</span></div>
-        ${c.description ? `<div class="kdesc">${linkify(c.description)}</div>` : ''}
+        ${c.description ? `<div class="kdesc">${renderMd(c.description)}</div>` : ''}
         ${c.colId === 'doing' && !c.result ? kdoing(c) : ''}
         ${c.result ? `${resultHtml(c.result)}` : ''}
         ${c.dp ? dpHtml(c.dp) : ''}
@@ -488,7 +488,7 @@ function runCard(c: Card) {
           <span class="muted"> · criado ${fmtDate(c.ts)}</span>
         </div>
         ${c.description
-          ? `<div class="kdesc" style="font-size:1rem;white-space:pre-wrap">${esc(c.description)}</div>`
+          ? `<div class="kdesc md-view">${renderMd(c.description)}</div>`
           : '<div class="muted">Sem descrição</div>'}
         <div class="kmodal-actions" data-card-actions>
           ${c.colId === 'todo'

@@ -232,6 +232,13 @@
 .field input, .field textarea, .field select { padding:10px 12px; border-radius:var(--r1); background:var(--bg-3); border:1px solid var(--line); color:var(--text); }
 .field textarea { resize:vertical; min-height:90px; }
 .modal-actions { display:flex; gap:var(--s2); justify-content:flex-end; margin-top:var(--s5); }
+.kmodal-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px; }
+.kmodal-actions .btn-sm { min-height:34px; }
+.kcopy { font-family:monospace; font-size:.8rem; background:none; border:1px solid var(--line); border-radius:4px; color:var(--muted); text-decoration:underline dotted; cursor:pointer; padding:1px 6px; margin-right:8px; }
+.kcopy:hover { color:var(--gold); border-color:var(--gold); }
+/* Kawalan de Markdown na vista do cartão (sem line-clamp: corpo completo) */
+.md-view .md-h { margin:.5rem 0 .2rem; }
+.md-view .md-p, .md-view .md-ul, .md-view .md-code { white-space:normal; }
 /* Large modals: cap modal height, scroll body inside, keep header+actions pinned */
 .modal { max-height: calc(100dvh - var(--s6)); display:flex; flex-direction:column; }
 .modal form { display:flex; flex-direction:column; min-height:0; flex:1; }
