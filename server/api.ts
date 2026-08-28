@@ -210,9 +210,12 @@ async function launchHermes(slug: string, card: any) {
   const stPath = join(runsDir, card.id + '.status')
   const ws = createWriteStream(logPath, { flags: 'a' })
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
+  // ponytail: spawn com pipe e reencaminha p/ o log — evita a corrida do fd (WriteStream{fd:null} no stdio)
   const p = spawn(VENV_PY, ['-c', wrapper, wt, branch, ATLAS_REPO, prompt],
-    { cwd: wt, detached: true, windowsHide: true, stdio: ['ignore', ws, ws], env: { ...process.env, HERMES_HOME } })
-  p.on('error', e => { void fail('spawn headless falhou: ' + e.message) })
+    { cwd: wt, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
+  p.stdout?.on('data', d => ws.write(d))
+  p.stderr?.on('data', d => ws.write(d))
+  p.on('error', e => { ws.end(); void fail('spawn headless falhou: ' + e.message) })
   p.on('close', async (code) => {
     ws.end()
     await writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {})
@@ -224,6 +227,48 @@ async function launchHermes(slug: string, card: any) {
       if (c && !c.result) { c.result = 'ERRO: processo terminou com código ' + code + ' — abre o terminal/card para ver o log.'; await writeJ(ff, board) }
     }
   })
+  p.unref()
+}
+async function launchBrainstorm(slug: string) {
+  // ponytail: brainstorm/SWOT nao toca em codigo nem kanban -> sem worktree/merge. So corre
+  // o hermes headless com um prompt de analise e ele ESCREVE notas novas no workdir. Log/status
+  // partilhados com o mecanismo /output do run-card (id ficticio "brainstorm").
+  const runsDir = join(WT_ROOT, 'runs', slug)
+  mkdirSync(runsDir, { recursive: true })
+  const logPath = join(runsDir, 'brainstorm.log')
+  const stPath = join(runsDir, 'brainstorm.status')
+  const meta = (await readJ(join(DATA, slug, 'meta.json')) || { name: slug, description: '' })
+  const prompt = [
+    'Tu es um agente autonomo. Faz um brainstorm e um SWOT ao projeto e cria notas com ideias para implementar.',
+    `Workdir: ${slug} («${meta.name}» — ${(meta.description || 'sem descricao').replace(/\n/g, ' ').slice(0, 120)})`,
+    `API notas (get/put): http://localhost:5173/api/w/${slug}/notes`,
+    `Source-tree do projeto a analisar: ${ATLAS_REPO}`,
+    '',
+    'TAREFA:',
+    '- Le o source-tree e o estado do workdir para perceberes o projeto.',
+    '- Faz uma analise SWOT (forcas, fraquezas, oportunidades, ameacas).',
+    '- Faz um brainstorm de coisas que podemos implementar (features, melhorias, correcoes).',
+    '- Cria notas novas nesse workdir: uma nota por ideia + uma nota com o SWOT. Para gravar, faz GET da lista atual em /api/w/' + slug + '/notes, faz append das novas e faz PUT com a lista completa.',
+    '',
+    'REGRAS:',
+    '- NAO apagues nem alteres notas existentes — so adiciona notas novas (append no array).',
+    '- NAO facas git commits, NAO mexas no kanban, NAO marques nada como done.',
+    '- No fim responde com um resumo curto do que criaste (quantas notas).',
+  ].join('\n')
+  const ws = createWriteStream(logPath, { flags: 'a' })
+  writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
+  // ponytail: wrapper minimo (sem git) — hermes oneshot grava notas via API, sai com rc do processo
+  const wrapper = [
+    'import subprocess,sys',
+    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[1]],cwd="' + ATLAS_REPO + '")',
+    'sys.exit(rc)',
+  ].join('\n')
+  const p = spawn(VENV_PY, ['-c', wrapper, prompt],
+    { cwd: ATLAS_REPO, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
+  p.stdout?.on('data', (d: Buffer) => ws.write(d))
+  p.stderr?.on('data', (d: Buffer) => ws.write(d))
+  p.on('error', () => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code: 1, ts: Date.now() }), 'utf8').catch(() => {}) })
+  p.on('close', (code: number) => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {}) })
   p.unref()
 }
 function body(req: any) { return new Promise<any>(res => { let d=''; req.on('data', (c: Buffer)=>d+=c); req.on('end', ()=>{ try{res(JSON.parse(d||'null'))}catch{res(null)} }) }) }
@@ -356,6 +401,15 @@ export default function atlasApi(): Plugin {
         delete card.reviewed
         await writeJ(file, board)
         await launchHermes(slug, card)
+        send(200, { ok: true })
+        return
+      }
+
+      // /api/w/:slug/brainstorm -> brainstorm + SWOT do projeto, escreve notas novas no workdir (headless)
+      if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'brainstorm' && m === 'POST') {
+        const slug = parts[1]
+        if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
+        void launchBrainstorm(slug).catch(e => console.error('[brainstorm] ' + slug + ': ' + e.message))
         send(200, { ok: true })
         return
       }
