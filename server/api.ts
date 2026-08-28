@@ -229,6 +229,60 @@ async function launchHermes(slug: string, card: any) {
   })
   p.unref()
 }
+// launchDp: gera um DP (design plan) para um card SEM tocar em codigo nem worktree.
+// ponytail: espelha o launchBrainstorm — uma sessao hermes headless recebe title+desc do card,
+// escreve um DP em markdown e GRAVA-O no proprio card via API (card.dp). Log/status partilhados
+// com o mecanismo /output do run-card (id ficticio "dp-"+cardId) p/ a UI streamear o terminal.
+async function launchDp(slug: string, card: any) {
+  const runsDir = join(WT_ROOT, 'runs', slug)
+  mkdirSync(runsDir, { recursive: true })
+  const rid = 'dp-' + card.id
+  const logPath = join(runsDir, rid + '.log')
+  const stPath = join(runsDir, rid + '.status')
+  const fail = async (msg: string) => {
+    console.error(`[dp:${slug}:${card.id}] ${msg}`)
+    const ff = join(DATA, slug, 'kanban.json')
+    const board = await readJ(ff)
+    const c = board?.cards?.find((x: any) => x.id === card.id)
+    if (c) { c.dp = 'ERRO: ' + msg; await writeJ(ff, board) }
+  }
+  const prompt = [
+    'Tu es um agente autonomo. Escreve um DP (Design Plan / Plano de Desenvolvimento) para o card de kanban abaixo.',
+    `Workdir: ${slug}`,
+    `Kanban JSON (em disco): ${join(DATA, slug, 'kanban.json')}`,
+    `Kanban API (para gravar o DP): http://localhost:5173/api/w/${slug}/kanban`,
+    `Source-tree do projeto a analisar: ${ATLAS_REPO}`,
+    '',
+    `CARTAO ID: ${card.id}`,
+    `TITULO: ${card.title}`,
+    'DESCRICAO:',
+    card.description || '(sem descricao)',
+    '',
+    'TAREFA:',
+    '- Le o source-tree e o estado atual para perceberes o pedido do card.',
+    '- Escreve um DP em markdown: objetivo, contexto/estado atual, abordagem proposta (passos com ficheiros afetados), criterios de aceite e riscos/consideracoes.',
+    '- Grava o DP no card: faz GET de /api/w/' + slug + '/kanban, encontra o card pelo id acima, define o campo `dp` com o markdown completo e faz PUT com o board inteiro.',
+    '',
+    'REGRAS:',
+    '- NAO mudes colId, NAO apagues result/descricao/outros campos do card.',
+    '- NAO facas git commits, NAO mexas no kanban exceto o campo dp deste card, NAO marques nada como done.',
+    '- No fim responde com 1 linha a resumir o DP (o que se vai implementar).',
+  ].join('\n')
+  const ws = createWriteStream(logPath, { flags: 'a' })
+  writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
+  const wrapper = [
+    'import subprocess,sys',
+    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[1]],cwd="' + ATLAS_REPO + '")',
+    'sys.exit(rc)',
+  ].join('\n')
+  const p = spawn(VENV_PY, ['-c', wrapper, prompt],
+    { cwd: ATLAS_REPO, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
+  p.stdout?.on('data', (d: Buffer) => ws.write(d))
+  p.stderr?.on('data', (d: Buffer) => ws.write(d))
+  p.on('error', () => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code: 1, ts: Date.now() }), 'utf8').catch(() => {}); void fail('spawn DP falhou') })
+  p.on('close', (code: number) => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {}) })
+  p.unref()
+}
 function body(req: any) { return new Promise<any>(res => { let d=''; req.on('data', (c: Buffer)=>d+=c); req.on('end', ()=>{ try{res(JSON.parse(d||'null'))}catch{res(null)} }) }) }
 async function readJ(p: string) { try { return JSON.parse(await readFile(p,'utf8')) } catch { return null } }
 async function writeJ(p: string, v: any) { await writeFile(p, JSON.stringify(v,null,2), 'utf8'); syncVault() }
@@ -359,6 +413,22 @@ export default function atlasApi(): Plugin {
         delete card.reviewed
         await writeJ(file, board)
         await launchHermes(slug, card)
+        send(200, { ok: true })
+        return
+      }
+      // /api/w/:slug/dp -> gera/reescreve o DP de um card (headless, nao toca em codigo/worktree)
+      if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'dp' && m === 'POST') {
+        const slug = parts[1]
+        if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
+        const b = (await body(req)) || {}
+        const id = typeof b.cardId === 'string' ? b.cardId : ''
+        if (!id) { send(400, { error: 'cardId required' }); return }
+        const file = join(DATA, slug, 'kanban.json')
+        const board = await readJ(file)
+        const card = board?.cards?.find((c: any) => c.id === id)
+        if (!card) { send(404, { error: 'card not found' }); return }
+        if (card.archived) { send(409, { error: 'card archived' }); return }
+        void launchDp(slug, card).catch(e => console.error('[dp] ' + slug + ': ' + e.message))
         send(200, { ok: true })
         return
       }
