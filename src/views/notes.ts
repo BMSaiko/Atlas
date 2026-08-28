@@ -6,7 +6,7 @@ import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
 import { linkify } from '../ui/text'
 
-const parseTags = (v: string) => Array.from(new Set(v.split(/[,\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean)))
+export const parseTags = (v: string) => Array.from(new Set(v.split(/[,\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean)))
 
 export async function renderNotes(root: HTMLElement, slug: string) {
   let notes = await api.notes.get(slug).catch(() => [] as Nota[])
