@@ -95,7 +95,12 @@ async function mergeDevToMain() {
 // runCmd: spawn promissificado p/ executar comandos no repo base (mesmo padrao de runGit).
 function runCmd(cmd: string, args: string[], cwd: string): Promise<{ ok: boolean; out: string }> {
   return new Promise(res => {
-    const c = spawn(cmd, args, { cwd, windowsHide: true })
+    // ponytail: .cmd/.bat nao sao lançaveis por CreateProcess (so binarios PE) -> spawn EINVAL no Windows.
+    // rodar via cmd.exe preservando os args (/d /s /c).
+    const isBatch = /\.(cmd|bat)$/i.test(cmd)
+    const bin = isBatch ? 'cmd' : cmd
+    const binArgs = isBatch ? ['/d', '/s', '/c', cmd, ...args] : args
+    const c = spawn(bin, binArgs, { cwd, windowsHide: true })
     let out = ''; c.stdout?.on('data', (d: Buffer) => out += d); c.stderr?.on('data', (d: Buffer) => out += d)
     c.on('error', e => res({ ok: false, out: e.message }))
     c.on('close', code => res({ ok: code === 0, out: out.trim() }))
