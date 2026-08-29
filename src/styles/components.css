@@ -224,9 +224,17 @@
 .prio.low .dot { background:var(--prio-low); }
 .prio.medium .dot { background:var(--prio-med); }
 .prio.high .dot { background:var(--prio-high); }
+.prio.urgent .dot { background:var(--prio-urgent); box-shadow:0 0 6px var(--prio-urgent); }
 .prio.low { color:var(--prio-low); }
 .prio.medium { color:var(--prio-med); }
 .prio.high { color:var(--prio-high); }
+.prio.urgent { color:var(--prio-urgent); }
+
+/* --- Due date / overdue --- */
+.kdue { display:inline-flex; align-items:center; gap:4px; font-size:.7rem; font-weight:600; letter-spacing:.02em; color:var(--text-dim); border:1px solid var(--line); border-radius:4px; padding:1px 6px; white-space:nowrap; }
+.kdue.over { color:var(--prio-urgent); border-color:var(--prio-urgent); background:color-mix(in srgb,var(--prio-urgent) 12%, transparent); }
+.kcard.overdue { border-color:var(--prio-urgent); box-shadow:0 0 0 1px var(--prio-urgent) inset; background:color-mix(in srgb,var(--prio-urgent) 5%, var(--bg-3)); }
+.kcard.overdue:hover { border-color:var(--prio-urgent); }
 
 /* --- Modal --- */
 .modal-backdrop { position:fixed; inset:0; background:rgba(3,5,10,.65); display:flex; align-items:center; justify-content:center; z-index:1800; padding:var(--s4); }
