@@ -601,6 +601,10 @@ a.link:hover { color:var(--gold-soft); }
 .md-p:first-child, .md-h:first-child { margin-top:0; }
 .md-ul { margin:.2rem 0 .2rem 1.15rem; list-style:disc; }
 .md-ul li { margin:.1rem 0; }
+/* checklists interativas: - [ ] / - [x] */
+.md-task { list-style:none; display:flex; align-items:flex-start; gap:7px; margin:.12rem 0; }
+.md-task .md-task-cb { margin-top:3px; accent-color:var(--pipe-done); cursor:pointer; flex:none; }
+.md-task[data-done] .md-task-txt { color:var(--text-dim); text-decoration:line-through; }
 .md-code { display:block; margin:.25rem 0; padding:.4rem .6rem; background:var(--bg-3); border:1px solid var(--line); border-radius:var(--r1); overflow-x:auto; font-family:Consolas,'Cascadia Mono',Menlo,monospace; font-size:.82rem; white-space:pre-wrap; word-break:break-word; }
 .md-p code, .md-ul code { font-family:Consolas,'Cascadia Mono',Menlo,monospace; font-size:.85em; background:var(--bg-3); border:1px solid var(--line); border-radius:4px; padding:.05rem .3rem; }
 /* Aba Editar | Pré-visualização no modal de nota */

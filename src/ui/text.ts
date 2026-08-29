@@ -25,9 +25,9 @@ export function renderMd(s: unknown): string {
   let buf: string[] = []
   let list: string[] | null = null
   const flushList = () => {
-    if (list) { html += `<ul class="md-ul">${list.map(x => `<li>${inline(x)}</li>`).join('')}</ul>`; list = null }
+    if (list) { html += `<ul class="md-ul">${list.map(x => x[0] === '<' ? x : `<li>${inline(x)}</li>`).join('')}</ul>`; list = null }
   }
-  for (const raw of lines) {
+  for (let idx = 0; idx < lines.length; idx++) { const raw = lines[idx]
     if (/^```\s*$/.test(raw)) {
       if (fence) { html += `<pre class="md-code"><code>${buf.join('\n')}</code></pre>`; buf = []; fence = false }
       else { flushList(); fence = true }
@@ -38,6 +38,13 @@ export function renderMd(s: unknown): string {
     if (h) { flushList(); const lv = Math.min(2 + h[1].length - 1, 4); html += `<h${lv} class="md-h">${inline(h[2])}</h${lv}>`; continue }
     const li = raw.match(/^[-*]\s+(.*)/)
     if (li) { if (!list) list = []; list.push(li[1]); continue }
+    const task = raw.match(/^[-*]\s+\[([ xX])\]\s*(.*)/)
+    if (task) {
+      const done = task[1].toLowerCase() === 'x'
+      if (!list) list = []
+      list.push(`<li class="md-task"${done ? ' data-done' : ''}><input type="checkbox" class="md-task-cb" data-i="${idx}" ${done ? 'checked' : ''} aria-label="Marcar"> <span class="md-task-txt">${inline(task[2])}</span></li>`)
+      continue
+    }
     flushList()
     if (raw.trim() === '') continue
     html += `<p class="md-p">${inline(raw)}</p>`

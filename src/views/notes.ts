@@ -282,6 +282,16 @@ export async function renderNotes(root: HTMLElement, slug: string) {
     const btn = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null
     const card = (e.target as HTMLElement).closest('.note-card') as HTMLElement | null
     const n = card ? notes.find(x => x.id === card.dataset.id) : undefined
+    const tcb = (e.target as HTMLElement).closest('.note-text input[data-i]') as HTMLInputElement | null
+    if (tcb && n) {
+      e.preventDefault(); e.stopPropagation()
+      const lines = n.text.split('\n')
+      const i = Number(tcb.dataset.i)
+      if (lines[i]) lines[i] = lines[i].replace(/^([-*]\s+)\[([ xX])\]/g, (_m, p1, p2) => p1 + (p2 === ' ' ? '[x]' : '[ ]'))
+      n.text = lines.join('\n')
+      save().then(() => doRender(searchInput.value))
+      return
+    }
     if (tagEl && n) { tickTag(tagEl.dataset.tag!); return }
     if (selMode && !btn && card) { const id = card.dataset.id!; if (sel.has(id)) sel.delete(id); else sel.add(id); refreshBulkNotes(); return }
     if (chk) { const id = chk.dataset.sel!; if (sel.has(id)) sel.delete(id); else sel.add(id); refreshBulkNotes(); return }
