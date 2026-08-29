@@ -397,7 +397,7 @@ async function launchBrainstorm(slug: string) {
     '- Le o source-tree e o estado do workdir para perceberes o projeto.',
     '- Faz uma analise SWOT (forcas, fraquezas, oportunidades, ameacas).',
     '- Faz um brainstorm de coisas que podemos implementar (features, melhorias, correcoes).',
-    '- Cria notas novas nesse workdir: uma nota por ideia + uma nota com o SWOT. Para gravar, faz GET da lista atual em /api/w/' + slug + '/notes (devolve {ver, items}), preserva o ver lido, faz append das novas em items e faz PUT com o objeto completo enviando o mesmo ver. Se receberes 409 (conflito de versao), re-faz GET e re-aplica.',
+    '- Cria notas novas nesse workdir: uma nota por ideia + uma nota com o SWOT. Para gravar, faz GET da lista atual em /api/w/' + slug + '/notes (devolve {ver, items}), preserva o ver lido, faz append das novas em items (cada item NOVO DEVE incluir um `id` curto alfanumerico, ex. "a1b2c3d4" — reutiliza o `uid()` do cliente ou gera tu proprio; sem `id` o cliente nao consegue clicar nas notas) e faz PUT com o objeto completo enviando o mesmo ver. Se receberes 409 (conflito de versao), re-faz GET e re-aplica.',
     '',
     'REGRAS:',
     '- NAO apagues nem alteres notas existentes — so adiciona notas novas (append no array).',
@@ -985,6 +985,16 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
             if (storedVer !== 0 && inVer !== storedVer) {
               send(409, { error: 'conflito de versao — re-faz GET e re-aplica as tuas mudancas', ver: storedVer }); return
             }
+          }
+          // ponytail: defesa — brainstorm/import/PUT manual pode trazer items sem `id`; sem id os
+          // handlers de click/data-id no cliente não resolvem nada. Sanitize em vez de 400.
+          if (kind === 'notes' && b && Array.isArray(b.items)) {
+            let missing = 0
+            for (const it of b.items) {
+              if (!it || typeof it !== 'object') continue
+              if (!it.id || (typeof it.id === 'string' && !it.id.trim())) { it.id = nid(); missing++ }
+            }
+            if (missing) console.warn('[atlas] note sem id — sanitize:', slug, 'added=' + missing)
           }
           await writeJ(file, b); send(200,{ok:true, ver: (b && typeof b === 'object') ? (Number(b.ver) || 0) : 0}); return
         }

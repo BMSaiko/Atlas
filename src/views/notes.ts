@@ -100,6 +100,8 @@ export async function openNewNoteModal(slug: string) {
   let notesDoc = await api.notes.get(slug).catch(() => null)
   if (!notesDoc) { toast('Falha a carregar notas'); return }
   const notes = notesDoc.items
+  // ponytail: garante ids antes do unshift local e PUT
+  for (const n of notes) if (!n.id || (typeof n.id === 'string' && !n.id.trim())) n.id = uid()
   const m = openModal({
     title: 'Nova nota', submitText: 'Criar',
     body: () => `<div class="field"><label for="nt-template">Template</label><select name="template" id="nt-template"><option value="">Novo a partir de template…</option></select></div>
@@ -175,6 +177,14 @@ export async function renderNotes(root: HTMLElement, slug: string) {
     }
   }
   const save = async () => { try { await putNotes() } catch (e: any) { toast((e && e.message) || 'Falha ao guardar') } refreshTabCounts(slug) }
+  // ponytail: defesa — se algum item chega sem `id` (brainstorm/import bug), atribui uid().
+  // Sem isto, data-id="null" parte todos os handlers de click. Custo: O(n) sobre items[].
+  const ensureIds = (items: Nota[]) => {
+    let fixed = 0
+    for (const n of items) if (!n.id || (typeof n.id === 'string' && !n.id.trim())) { n.id = uid(); fixed++ }
+    return fixed
+  }
+  ensureIds(notes)
   const fmt = (ts: number) => new Date(ts).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
   const archCount = () => notes.filter(n => n.archived).length
   // ponytail: ao converter nota->cartao (tocanban) o board muda fora de kanban.ts; re-sync sidebar aqui
