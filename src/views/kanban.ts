@@ -48,16 +48,17 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     item.querySelector('.side-count')?.remove()
     if (n) item.insertAdjacentHTML('beforeend', `<span class="side-count">${n}</span>`)
   }
-  const PRIO: Record<Prioridade, string> = { low:'low', medium:'medium', high:'high' }
+  const PRIO: Record<Prioridade, string> = { low:'low', medium:'medium', high:'high', urgent:'urgent' }
   const showArchived = false
   // ponytail: bulk — selecao de multiplos cards; selMode liga checkboxes, barra bulk no topo
   let selMode = false
   let sel = new Set<string>()
-  const P: Record<Prioridade, number> = { low: 0, medium: 1, high: 2 }
+  const P: Record<Prioridade, number> = { low: 0, medium: 1, high: 2, urgent: 3 }
   const PRIOS: Array<{ id: Prioridade; label: string }> = [
-    { id: 'low', label: 'Baixa' },
-    { id: 'medium', label: 'Média' },
+    { id: 'urgent', label: 'Urgente' },
     { id: 'high', label: 'Alta' },
+    { id: 'medium', label: 'Média' },
+    { id: 'low', label: 'Baixa' },
   ]
   type ColFilter = 'all' | Prioridade
   let colFilters: Record<string, ColFilter> = {}
@@ -168,14 +169,14 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     return f === 'all' || c.priority === f
   }
   function count(colId: string) { return board.cards.filter(c => c.colId === colId && !c.archived && matchesColFilter(c, colId)).length }
-  function prioLabel(p: Prioridade) { return p === 'high' ? 'Alta' : p === 'medium' ? 'Média' : 'Baixa' }
+  function prioLabel(p: Prioridade) { return p === 'urgent' ? 'Urgente' : p === 'high' ? 'Alta' : p === 'medium' ? 'Média' : 'Baixa' }
 
   function cardsOf(colId: string) {
     return board.cards.filter(c => c.colId === colId && !c.archived && matchesColFilter(c, colId)).sort((a,b) => cmp(a, b, keyOf(colId))).map(c => {
       const idx = board.columns.findIndex(x => x.id === c.colId)
       const prev = board.columns[idx-1]?.id, next = board.columns[idx+1]?.id
       const isSel = sel.has(c.id)
-      return `<article class="kcard${c.result ? ' has-output' : ''}${isSel ? ' sel' : ''}" draggable="true" tabindex="0" data-id="${c.id}">
+      return `<article class="kcard${c.result ? ' has-output' : ''}${isSel ? ' sel' : ''}${isOverdue(c) ? ' overdue' : ''}" draggable="true" tabindex="0" data-id="${c.id}">
         <div class="ktitle">${selMode ? `<input type="checkbox" class="kselbox" data-sel="${c.id}" ${isSel ? 'checked' : ''} aria-label="Selecionar ${esc(c.title)}">` : ''}<h5>${esc(c.title)}</h5><span class="kdate">${fmtDate(c.ts)}</span></div>
         ${c.description ? `<div class="kdesc">${renderMd(c.description)}</div>` : ''}
         ${c.colId === 'doing' && !c.result ? kdoing(c) : ''}
@@ -186,6 +187,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
           <button class="btn btn-ghost btn-sm" data-act="reject">${icon('pencil', 14)} Refinar</button>
         </div>` : ''}
         <div class="kfoot">
+          ${dueBadge(c)}
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
           ${kops(c, prev, next)}
         </div>
@@ -219,7 +221,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
         <span class="muted" style="font-size:.85rem"><span id="bulkcount">${sel.size}</span> selecionados</span>
         <select id="bulk-col" title="Mover para coluna" ${sel.size===0?'disabled':''}><option value="">Mover para coluna…</option>${cols}</select>
         <select id="bulk-prio" title="Mudar prioridade" ${sel.size===0?'disabled':''}><option value="">Prioridade…</option>
-          <option value="low">Baixa</option><option value="medium">Média</option><option value="high">Alta</option>
+          <option value="urgent">Urgente</option><option value="low">Baixa</option><option value="medium">Média</option><option value="high">Alta</option>
         </select>
         <button class="btn btn-ghost" id="bulk-arch" ${sel.size===0?'disabled':''}>${icon('archive',15)} Arquivar</button>
         <button class="btn btn-danger" id="bulk-del" ${sel.size===0?'disabled':''}>${icon('trash',15)} Eliminar</button>
@@ -479,21 +481,28 @@ function runCard(c: Card) {
       body: () => `<div class="field"><label for="k-title">Título</label><input id="k-title" name="title" required value="${esc(c?.title || '')}"></div>
         <div class="field"><label for="k-desc">Descrição</label><textarea id="k-desc" name="description">${esc(c?.description || '')}</textarea></div>
         <div class="field"><label for="k-prio">Prioridade</label><select id="k-prio" name="priority">
-          <option value="low" ${c?.priority==='low'?'selected':''}>Baixa</option>
-          <option value="medium" ${c?.priority==='medium'?'selected':''}>Média</option>
+          <option value="urgent" ${c?.priority==='urgent'?'selected':''}>Urgente</option>
           <option value="high" ${c?.priority==='high'?'selected':''}>Alta</option>
+          <option value="medium" ${c?.priority==='medium'?'selected':''}>Média</option>
+          <option value="low" ${c?.priority==='low'?'selected':''}>Baixa</option>
         </select></div>
+        <div class="field"><label for="k-due">Prazo (obrigatório)</label><input id="k-due" name="due" type="date" value="${c?.due ? toInputDate(c.due) : ''}"></div>
         <div class="field"><label for="k-col">Coluna</label><select id="k-col" name="colId">${cols}</select></div>`,
       onSubmit: () => {
         const form = document.querySelector('.modal form') as HTMLFormElement
         const title = (form.querySelector('[name=title]') as HTMLInputElement).value.trim()
         if (!title) return
+        const dueV = (form.querySelector('[name=due]') as HTMLInputElement).value
+        let due: number | undefined
+        if (dueV) { const [Y, M, D] = dueV.split('-').map(Number); due = new Date(Y, M - 1, D).getTime() }
         const data = {
           title, description: (form.querySelector('[name=description]') as HTMLTextAreaElement).value,
           priority: (form.querySelector('[name=priority]') as HTMLSelectElement).value as Prioridade,
           colId: (form.querySelector('[name=colId]') as HTMLSelectElement).value,
+          due,
         }
-        if (c) Object.assign(c, data); else board.cards.push({ id: uid(), ts: Date.now(), archived: false, ...data })
+        if (c) { Object.assign(c, data); if (!c.due) delete c.due }
+        else board.cards.push({ id: uid(), ts: Date.now(), archived: false, ...data, priority: data.priority ?? 'low' })
         save().then(render); toast(c ? 'Guardado' : 'Criado')
       },
     })
@@ -652,6 +661,18 @@ function fmtElapsed(ms: number): string {
   if (h > 0) return `h\u00e1 ${h}h ${String(m).padStart(2, '0')}m`
   if (m > 0) return `h\u00e1 ${m}m ${String(sec).padStart(2, '0')}s`
   return `h\u00e1 ${sec}s`
+}
+function isOverdue(c: Card): boolean { return !!c.due && c.due < Date.now() && c.colId !== 'done' }
+function dueBadge(c: Card): string {
+  if (!c.due) return ''
+  const over = isOverdue(c)
+  return `<span class="kdue${over ? ' over' : ''}" title="Prazo: ${fmtDate(c.due)}">${over ? '⚠ ' : '⏱ '}${fmtDue(c.due)}${over ? ' · Atrasada' : ''}</span>`
+}
+function fmtDue(ts: number): string {
+  return new Date(ts).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })
+}
+function toInputDate(ts: number): string {
+  const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 function fmtDate(ts: number): string {
   return new Date(ts).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' })
