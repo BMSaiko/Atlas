@@ -187,7 +187,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       <div class="kanban" id="kboard">${board.columns.map(col => `
         <section class="kcol" data-col="${col.id}">
           <h4>${esc(col.name)} <span class="muted" style="font-size:.78rem">${count(col.id)}</span></h4>
-          ${selMode ? `<button type="button" class="btn-icon btn-ghost kcol-sel" data-col-sel="${col.id}" title="Selecionar coluna (visíveis)">${icon('check',14)}</button>` : ''}
+          ${selMode ? `<button type="button" class="btn-icon btn-ghost kcol-sel" data-col-sel="${col.id}" title="Selecionar / limpar coluna (visíveis)">${icon('check',14)}</button>` : ''}
           <select class="k-sort" data-col="${col.id}" aria-label="Ordenar ${esc(col.name)}" title="Ordenar coluna">
             <option value="pos"   ${keyOf(col.id)==='pos'  ?'selected':''}>Posição</option>
             <option value="prio"  ${keyOf(col.id)==='prio' ?'selected':''}>Prioridade</option>
@@ -286,7 +286,10 @@ export async function renderKanban(root: HTMLElement, slug: string) {
 
   // ponytail: seleciona todos os cards visiveis da coluna (mesmo filtro de cardsOf)
   function selectCol(colId: string) {
-    board.cards.forEach(c => { if (c.colId === colId && !c.archived && matchesColFilter(c, colId)) sel.add(c.id) })
+    // toggle: marca toda a coluna visivel, ou desmarca se ja estiver toda selecionada
+    const vis = board.cards.filter(c => c.colId === colId && !c.archived && matchesColFilter(c, colId))
+    const allSel = vis.length > 0 && vis.every(c => sel.has(c.id))
+    vis.forEach(c => allSel ? sel.delete(c.id) : sel.add(c.id))
     refreshBulk()
   }
 
