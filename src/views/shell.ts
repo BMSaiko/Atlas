@@ -4,6 +4,7 @@ import { openModal } from '../ui/modal'
 import { toast } from '../ui/toast'
 import { navigate } from '../router'
 import { renderWorkspace } from './workspace'
+import { openPalette } from '../ui/palette'
 import { parseTags, bindTagAutocomplete } from './notes'
 import { renderDashboard } from './dashboard'
 import { startClockWidget } from '../ui/clock'
@@ -169,7 +170,7 @@ function bindKeydown() {
     if (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return
     if (document.querySelector('.modal-backdrop')) return
     if (e.ctrlKey) {
-      if (e.key === 'k' || e.key === 'K') { e.preventDefault(); quickAdd(state.slug); return }
+      if (e.key === 'k' || e.key === 'K') { e.preventDefault(); openPalette(state.slug); return }
       const n = parseInt(e.key); if (n >= 1 && n <= 9 && state.items[n - 1]) {
         e.preventDefault(); setActive(state.items[n - 1].slug); navigate('/w/' + state.items[n - 1].slug)
       }
@@ -191,7 +192,7 @@ function bindKeydown() {
   })
 }
 
-function quickAdd(slug: string | null) {
+export function quickAdd(slug: string | null) {
   if (!slug) return
   const m = openModal({
     title: 'Criar nota ou cartão', submitText: 'Criar',
@@ -256,7 +257,7 @@ function renderEmpty(panel: HTMLElement, items: Array<any>, root: HTMLElement) {
   if (reopen) reopen.addEventListener('click', () => { setActive(last); navigate('/w/' + last) })
 }
 
-function newWorkdir() {
+export function newWorkdir() {
   openModal({
     title: 'Novo workdir', submitText: 'Criar',
     body: () => `<div class="field"><label for="wd-name">Nome</label><input id="wd-name" name="name" required></div>
