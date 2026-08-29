@@ -5,6 +5,7 @@ import { refreshTabCounts } from '../ui/counts'
 import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
 import { renderMd } from '../ui/text'
+import { navigate } from '../router'
 
 // ponytail: handle unico do poll — renderKanban re-corre em cada navegacao e criava um
 // setInterval novo por chamada. Limpa o anterior antes de criar. O poll so faz refresh
@@ -23,6 +24,78 @@ export function launchRun(slug: string, c: Card): Promise<boolean> {
 let pollTimer: ReturnType<typeof setInterval> | undefined
 // ponitail: pollers de DP que sobrevivem ao fecho do modal p/ notificar conclusao
 const dpPollers: Record<string, { timer?: ReturnType<typeof setInterval> }> = {}
+
+// ponytail: modal complete de criar cartão — standalone (leva o seu board + retry 409), usado
+// TAKE: identical pneum BUTTON (#kadd) e palette quickAdd. Fonte unica do "Novo cartão". A
+// criacao re-sync ver no 409 e retenta 1x (mesmo putBoard da vista) e depois recarrega o tab.
+// ponytail: PUT com retry no 409 (escritor concorrente avançou `ver`) — re-sync + re-aplica criacao local e retenta 1x.
+async function putKanbanRetry(slug: string, doc: BoardDoc): Promise<BoardDoc> {
+  try { const r = await api.kanban.put(slug, doc); if (r?.ver) doc.ver = r.ver; return doc }
+  catch (e: any) {
+    if (e?.status !== 409) throw e
+    const fresh = await api.kanban.get(slug)
+    for (const c of doc.cards) if (!fresh.cards.some(f => f.id === c.id)) fresh.cards.push(c)
+    const r = await api.kanban.put(slug, fresh); if (r?.ver) fresh.ver = r.ver; return fresh
+  }
+}
+
+function wireCardTemplate(root: HTMLElement, slug: string) {
+  const sel = root.querySelector('[name=template]') as HTMLSelectElement | null
+  if (!sel) return
+  api.templates.get(slug).then(tpls => {
+    (tpls || []).filter(t => t.kind === 'card').forEach(t => {
+      const o = document.createElement('option'); o.value = t.id; o.textContent = t.name; sel.add(o)
+    })
+    sel.addEventListener('change', () => {
+      const t = (tpls || []).find(x => x.id === sel.value); if (!t) return
+      const title = root.querySelector('[name=title]') as HTMLInputElement
+      const desc = root.querySelector('[name=description]') as HTMLTextAreaElement
+      const prio = root.querySelector('[name=priority]') as HTMLSelectElement
+      const col = root.querySelector('[name=colId]') as HTMLSelectElement
+      if (t.title !== undefined) title.value = t.title
+      if (t.body !== undefined) desc.value = t.body
+      if (t.priority && [...prio.options].some(o => o.value === t.priority)) prio.value = t.priority
+      if (t.colId && [...col.options].some(o => o.value === t.colId)) col.value = t.colId
+    })
+  }).catch(() => {})
+}
+
+export async function openNewCardModal(slug: string) {
+  let board = await api.kanban.get(slug).catch(() => null)
+  if (!board) { toast('Falha a carregar o quadro'); return }
+  const cols = board.columns.map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')
+  const m = openModal({
+    title: 'Novo cartão', submitText: 'Criar',
+    body: () => `<div class="field"><label for="k-template">Template</label><select name="template" id="k-template"><option value="">Novo a partir de template…</option></select></div>
+      <div class="field"><label for="k-title">Título</label><input id="k-title" name="title" required></div>
+      <div class="field"><label for="k-desc">Descrição</label><textarea id="k-desc" name="description"></textarea></div>
+      <div class="field"><label for="k-prio">Prioridade</label><select id="k-prio" name="priority">
+        <option value="urgent">Urgente</option>
+        <option value="high">Alta</option>
+        <option value="medium">Média</option>
+        <option value="low">Baixa</option>
+      </select></div>
+      <div class="field"><label for="k-due">Prazo (obrigatório)</label><input id="k-due" name="due" type="date"></div>
+      <div class="field"><label for="k-col">Coluna</label><select id="k-col" name="colId">${cols}</select></div>`,
+    onSubmit: async () => {
+      const form = m.root.querySelector('form') as HTMLFormElement
+      const title = (form.querySelector('[name=title]') as HTMLInputElement).value.trim()
+      if (!title) return
+      const dueV = (form.querySelector('[name=due]') as HTMLInputElement).value
+      let due: number | undefined
+      if (dueV) { const [Y, M, D] = dueV.split('-').map(Number); due = new Date(Y, M - 1, D).getTime() }
+      board!.cards.push({
+        id: uid(), ts: Date.now(), archived: false,
+        title, description: (form.querySelector('[name=description]') as HTMLTextAreaElement).value,
+        priority: (form.querySelector('[name=priority]') as HTMLSelectElement).value as Prioridade,
+        colId: (form.querySelector('[name=colId]') as HTMLSelectElement).value, due,
+      })
+      try { board = await putKanbanRetry(slug, board!) } catch (e: any) { toast((e && e.message) || 'Falha ao criar') ; return }
+      toast('Criado'); navigate('/w/' + slug + '?tab=kanban')
+    },
+  })
+  wireCardTemplate(m.root, slug)
+}
 
 export async function renderKanban(root: HTMLElement, slug: string) {
   let board: BoardDoc = await api.kanban.get(slug).catch(() => ({ ver: 0, columns: [], cards: [] } as BoardDoc))
@@ -127,7 +200,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     bind()
     // ponytail: re-aplica running nos botoes DP apos re-render (o finish() dispara render; fonte de verdade = dpPollers)
     board.cards.forEach(cc => { if (dpPollers[`${slug}:dp-${cc.id}`]) setDpRunning(cc.id, true) })
-    root.querySelector('#kadd')!.addEventListener('click', () => cardModal(null))
+    root.querySelector('#kadd')!.addEventListener('click', () => openNewCardModal(slug))
     root.querySelectorAll<HTMLSelectElement>('.k-sort').forEach(sel => sel.addEventListener('change', e => {
       sortKey[sel.dataset.col!] = (e.target as HTMLSelectElement).value as SortKey
       localStorage.setItem(`atlas.kbsort.${slug}`, JSON.stringify(sortKey))
@@ -525,27 +598,6 @@ function runCard(c: Card) {
     })
     if (!c) wireCardTemplate(m.root, slug)
   }
-  function wireCardTemplate(root: HTMLElement, slug: string) {
-    const sel = root.querySelector('[name=template]') as HTMLSelectElement | null
-    if (!sel) return
-    api.templates.get(slug).then(tpls => {
-      (tpls || []).filter(t => t.kind === 'card').forEach(t => {
-        const o = document.createElement('option'); o.value = t.id; o.textContent = t.name; sel.add(o)
-      })
-      sel.addEventListener('change', () => {
-        const t = (tpls || []).find(x => x.id === sel.value); if (!t) return
-        const title = root.querySelector('[name=title]') as HTMLInputElement
-        const desc = root.querySelector('[name=description]') as HTMLTextAreaElement
-        const prio = root.querySelector('[name=priority]') as HTMLSelectElement
-        const col = root.querySelector('[name=colId]') as HTMLSelectElement
-        if (t.title !== undefined) title.value = t.title
-        if (t.body !== undefined) desc.value = t.body
-        if (t.priority && [...prio.options].some(o => o.value === t.priority)) prio.value = t.priority
-        if (t.colId && [...col.options].some(o => o.value === t.colId)) col.value = t.colId
-      })
-    }).catch(() => {})
-  }
-
   function viewModal(c: Card) {
     const col = board.columns.find(x => x.id === c.colId)?.name || ''
     const vidx = board.columns.findIndex(x => x.id === c.colId)

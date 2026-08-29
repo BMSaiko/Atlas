@@ -5,7 +5,8 @@ import { toast } from '../ui/toast'
 import { navigate } from '../router'
 import { renderWorkspace } from './workspace'
 import { openPalette } from '../ui/palette'
-import { parseTags, bindTagAutocomplete } from './notes'
+import { parseTags, bindTagAutocomplete, openNewNoteModal } from './notes'
+import { openNewCardModal } from './kanban'
 import { renderDashboard } from './dashboard'
 import { startClockWidget } from '../ui/clock'
 import { getTheme, setManual, setSeason, setAuto, setSeasonMode, autoShift, autoSeason, Shift, Season, SEASON_NAMES } from '../ui/theme'
@@ -192,55 +193,23 @@ function bindKeydown() {
   })
 }
 
+// ponytail: quickAdd (palette ctrl+K) DELEGA nos modais completos de criar (openNewCardModal /
+// openNewNoteModal) em vez do mini-form proprio — fonte unica do "novo cartão/nota". Range type fica a escolher.
 export function quickAdd(slug: string | null) {
   if (!slug) return
   const m = openModal({
-    title: 'Criar nota ou cartão', submitText: 'Criar',
+    title: 'Criar cartão ou nota', submitText: 'Seguinte',
     body: () => `<div class="field"><label for="qa-type">Tipo</label>
       <select id="qa-type" name="type">
-        <option value="note">Nota</option>
         <option value="card">Cartão</option>
-      </select></div>
-      <div class="field"><label for="qa-title">Título</label><input id="qa-title" name="title" required></div>
-      <div class="field"><label for="qa-text">Texto / Descrição</label><textarea id="qa-text" name="text"></textarea></div>
-      <div class="field qa-tags"><label for="qa-tags">Tags</label><input id="qa-tags" name="tags" placeholder="separadas por espaço ou vírgula"></div>`,
-    onSubmit: async () => {
-      const form = document.querySelector('.modal form') as HTMLFormElement
-      const type = (form.querySelector('[name=type]') as HTMLSelectElement).value
-      const title = (form.querySelector('[name=title]') as HTMLInputElement).value.trim()
-      if (!title) return
-      const text = (form.querySelector('[name=text]') as HTMLTextAreaElement).value
-      try {
-        if (type === 'note') {
-          const notes = await api.notes.get(slug)
-          const tags = parseTags((form.querySelector('[name=tags]') as HTMLInputElement).value)
-          notes.items.unshift({ id: uid(), title, text, ts: Date.now(), tags })
-          await api.notes.put(slug, notes)
-          toast(`Nota criada: "${title}"`)
-        } else {
-          const b = await api.kanban.get(slug)
-          const col = b.columns.find(c => c.id === 'todo' || c.id === 'doing')?.id || b.columns[0]?.id
-          if (col) {
-            b.cards.push({ id: uid(), title, description: text, priority: 'low', colId: col, ts: Date.now(), archived: false })
-            await api.kanban.put(slug, b)
-            toast(`Cartão criado: "${title}"`)
-          } else toast('Sem colunas no kanban')
-        }
-        navigate('/w/' + slug)
-      } catch (e: any) { toast('Erro: ' + e.message) }
+        <option value="note">Nota</option>
+      </select></div>`,
+    onSubmit: () => {
+      const type = (m.root.querySelector('[name=type]') as HTMLSelectElement).value
+      if (type === 'note') openNewNoteModal(slug)
+      else openNewCardModal(slug)
     },
   })
-
-  const qaType = m.root.querySelector('#qa-type') as HTMLSelectElement
-  const qaTags = m.root.querySelector('.qa-tags') as HTMLElement
-  const syncTags = () => {
-    qaTags.style.display = qaType.value === 'note' ? '' : 'none'
-    if (qaType.value !== 'note') document.querySelector('.tag-sugg.open')?.classList.remove('open')
-  }
-  qaType.addEventListener('change', syncTags); syncTags()
-  // autocomplete de tags so para Nota (cards nao tem tags); set de tags existentes carregado async
-  const qaIp = m.root.querySelector('#qa-tags') as HTMLInputElement
-  api.notes.get(slug).then(ns => bindTagAutocomplete(qaIp, Array.from(new Set(ns.items.flatMap(n => n.tags || []))).sort())).catch(() => {})
 }
 
 function renderEmpty(panel: HTMLElement, items: Array<any>, root: HTMLElement) {

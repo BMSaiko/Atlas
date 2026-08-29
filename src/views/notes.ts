@@ -73,6 +73,84 @@ export function bindTagAutocomplete(inp: HTMLInputElement, existing: string[]) {
   }
 }
 
+function wireNoteTemplate(root: HTMLElement, slug: string) {
+  const sel = root.querySelector('[name=template]') as HTMLSelectElement | null
+  if (!sel) return
+  api.templates.get(slug).then(tpls => {
+    (tpls || []).filter(t => t.kind === 'note').forEach(t => {
+      const o = document.createElement('option'); o.value = t.id; o.textContent = t.name; sel.add(o)
+    })
+    sel.addEventListener('change', () => {
+      const t = (tpls || []).find(x => x.id === sel.value); if (!t) return
+      const title = root.querySelector('[name=title]') as HTMLInputElement
+      const text = root.querySelector('[name=text]') as HTMLTextAreaElement
+      const tags = root.querySelector('[name=tags]') as HTMLInputElement
+      if (t.title !== undefined) title.value = t.title
+      if (t.body !== undefined) text.value = t.body
+      if (t.tags) tags.value = t.tags.join(', ')
+    })
+  }).catch(() => {})
+}
+
+// ponytail: bulk — barra + handlers (arquivar/restaurar consoante a vista)
+
+// ponytail: modal completo de criar nota — standalone (leva as notas + retry 409), usado pelas
+// BUTTON (#nadd) e palette quickAdd. Replica o body completo da noteModal (md tabs + tags + template).
+export async function openNewNoteModal(slug: string) {
+  let notesDoc = await api.notes.get(slug).catch(() => null)
+  if (!notesDoc) { toast('Falha a carregar notas'); return }
+  const notes = notesDoc.items
+  const m = openModal({
+    title: 'Nova nota', submitText: 'Criar',
+    body: () => `<div class="field"><label for="nt-template">Template</label><select name="template" id="nt-template"><option value="">Novo a partir de template…</option></select></div>
+      <div class="field"><label for="nt-title">Título</label><input id="nt-title" name="title" required></div>
+      <div class="md-tabs">
+        <button type="button" class="md-tab on" data-tab="edit">Editar</button>
+        <button type="button" class="md-tab" data-tab="preview">Pré-visualização</button>
+      </div>
+      <div class="field md-pane md-pane-edit"><label for="nt-text">Texto</label><textarea id="nt-text" name="text"></textarea></div>
+      <div class="field md-pane md-pane-preview" style="display:none"><label>Pré-visualização</label><div class="md-preview"></div></div>
+      <div class="field"><label for="nt-tags">Tags</label><input id="nt-tags" name="tags" placeholder="separadas por espaço ou vírgula"></div>`,
+    onSubmit: async () => {
+      const form = m.root.querySelector('form') as HTMLFormElement
+      const title = (form.querySelector('[name=title]') as HTMLInputElement).value.trim()
+      if (!title) return
+      const text = (form.querySelector('[name=text]') as HTMLTextAreaElement).value
+      const tags = parseTags((form.querySelector('[name=tags]') as HTMLInputElement).value)
+      notes.unshift({ id: uid(), title, text, ts: Date.now(), tags })
+      try { await putNotesRetry() } catch (e: any) { toast((e && e.message) || 'Falha ao criar') ; return }
+      toast('Nota criada'); navigate('/w/' + slug + '?tab=notes')
+    },
+  })
+  wireNoteTemplate(m.root, slug)
+  const ta = m.root.querySelector('[name=text]') as HTMLTextAreaElement
+  const preview = m.root.querySelector('.md-preview') as HTMLElement
+  const show = (side: string) => {
+    m.root.querySelectorAll<HTMLElement>('.md-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === side))
+    const edit = m.root.querySelector('.md-pane-edit') as HTMLElement
+    const prev = m.root.querySelector('.md-pane-preview') as HTMLElement
+    edit.style.display = side === 'edit' ? '' : 'none'
+    prev.style.display = side === 'preview' ? '' : 'none'
+    if (side === 'edit') ta.focus()
+    else preview.innerHTML = renderMd(ta.value)
+  }
+  m.root.querySelectorAll<HTMLElement>('.md-tab').forEach(b => b.addEventListener('click', () => show(b.dataset.tab!)))
+  ta.addEventListener('input', () => {
+    if ((m.root.querySelector('.md-tab.on') as HTMLElement).dataset.tab === 'preview') preview.innerHTML = renderMd(ta.value)
+  })
+  bindTagAutocomplete(m.root.querySelector('[name=tags]') as HTMLInputElement, existingTags(notes))
+  async function putNotesRetry() {
+    try { const r = await api.notes.put(slug, { ver: notesDoc!.ver, items: notes }); if (r?.ver) notesDoc!.ver = r.ver }
+    catch (e: any) {
+      if (e?.status !== 409) throw e
+      const fresh = await api.notes.get(slug)
+      for (const n of notes) if (!fresh.items.some(f => f.id === n.id)) fresh.items.push(n)
+      notesDoc = fresh; notes.length = 0; for (const n of fresh.items) notes.push(n)
+      const r = await api.notes.put(slug, { ver: notesDoc!.ver, items: notes }); if (r?.ver) notesDoc!.ver = r.ver
+    }
+  }
+}
+
 export async function renderNotes(root: HTMLElement, slug: string) {
   // optimistic concurrency: guarda o `ver` que leu p/ o enviar no PUT (etag); 409 -> re-faz GET
   const doc0 = await api.notes.get(slug).catch(() => null)
@@ -186,7 +264,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
   const tickTag = (tag: string) => { tagFilter = tagFilter === tag ? '' : tag; doRender(searchInput.value) }
   root.querySelector('#ntagbar')!.addEventListener('click', e => { const b = (e.target as HTMLElement).closest('[data-tag]') as HTMLElement | null; if (b) tickTag(b.dataset.tag!) })
 
-  root.querySelector('#nadd')!.addEventListener('click', () => noteModal(null))
+  root.querySelector('#nadd')!.addEventListener('click', () => openNewNoteModal(slug))
   root.querySelector('#nexport')!.addEventListener('click', () => {
     api.exportNotes(slug).then(r => toast(`Notas exportadas (${r.count})`)).catch(e => toast('Erro: ' + e.message))
   })
@@ -304,26 +382,6 @@ export async function renderNotes(root: HTMLElement, slug: string) {
     bindTagAutocomplete(m.root.querySelector('[name=tags]') as HTMLInputElement, existingTags(notes))
     if (!n) wireNoteTemplate(m.root, slug)
   }
-  function wireNoteTemplate(root: HTMLElement, slug: string) {
-    const sel = root.querySelector('[name=template]') as HTMLSelectElement | null
-    if (!sel) return
-    api.templates.get(slug).then(tpls => {
-      (tpls || []).filter(t => t.kind === 'note').forEach(t => {
-        const o = document.createElement('option'); o.value = t.id; o.textContent = t.name; sel.add(o)
-      })
-      sel.addEventListener('change', () => {
-        const t = (tpls || []).find(x => x.id === sel.value); if (!t) return
-        const title = root.querySelector('[name=title]') as HTMLInputElement
-        const text = root.querySelector('[name=text]') as HTMLTextAreaElement
-        const tags = root.querySelector('[name=tags]') as HTMLInputElement
-        if (t.title !== undefined) title.value = t.title
-        if (t.body !== undefined) text.value = t.body
-        if (t.tags) tags.value = t.tags.join(', ')
-      })
-    }).catch(() => {})
-  }
-
-  // ponytail: bulk — barra + handlers (arquivar/restaurar consoante a vista)
   function bulkBarNotes() {
     const label = showArch ? 'Restaurar' : 'Arquivar'
     const i = showArch ? 'back' : 'archive'
