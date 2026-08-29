@@ -18,7 +18,7 @@ async function j<T>(url: string, method = 'GET', body?: unknown): Promise<T> {
 }
 export const api = {
   workdirs: () => j<Workdir[]>('/api/workdirs'),
-  createWorkdir: (name: string, description?: string) => j<Workdir>('/api/workdirs', 'POST', { name, description }),
+  createWorkdir: (name: string, description?: string, repo?: string) => j<Workdir>('/api/workdirs', 'POST', { name, description, repo }),
   patchWorkdir: (slug: string, patch: { name?: string; description?: string; icon?: string; repo?: string }) => j<Workdir>(`/api/workdirs/${slug}`, 'PATCH', patch),
   reorderWorkdirs: (order: string[]) => j<Workdir[]>('/api/workdirs', 'PUT', { order }),
   icons: () => j<{ icons: string[] }>('/api/icons').then(r => r.icons),
