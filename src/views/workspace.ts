@@ -24,7 +24,7 @@ export async function renderWorkspace(panel: HTMLElement, slug: string, isSettin
   const header = `<div class="pan-head">
       <div class="pan-title"><h1>${esc(wdm.name)}</h1><div class="desc">${linkify(wdm.description || '')}</div></div>
       <div class="spacer"></div>
-      ${slug === 'atlas' ? `
+      ${(slug === 'atlas' || wdm.repo) ? `
         <a class="btn btn-ghost" href="#" id="git-merge-main" data-git="merge-main" title="Merge dev → main (headless)">${icon('forward', 16)} Merge to main</a>
         <a class="btn btn-ghost" href="#" id="git-resolve" data-git="resolve" title="Resolve merge conflito em dev (headless)">${icon('reset', 15)} Resolve conflito</a>` : ''}
       <a class="btn btn-ghost" href="/w/${slug}${isSettings ? '' : '/settings'}" data-nav="/w/${slug}${isSettings ? '' : '/settings'}">${icon(isSettings ? 'back' : 'gear', 18)} ${isSettings ? 'Voltar' : 'Definir'}</a>

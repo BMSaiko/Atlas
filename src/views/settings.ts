@@ -20,6 +20,7 @@ export async function renderSettings(root: HTMLElement, slug: string) {
         <form id="meta-form">
           <div class="field"><label for="s-name">Nome</label><input id="s-name" name="name" value="${esc(meta?.name || '')}" required></div>
           <div class="field"><label for="s-desc">Descrição</label><textarea id="s-desc" name="description">${esc(meta?.description || '')}</textarea></div>
+          <div class="field"><label for="s-repo">Repo (path absoluto)</label><input id="s-repo" name="repo" placeholder="ex. C:\Users\bruno\proj" value="${esc(meta?.repo || '')}"></div>
           <div class="field"><label>Icon do workdir</label>
             <div class="icon-grid" id="icon-grid">${(await api.icons()).map(n =>
               `<button type="button" class="icon-cell${n === (meta?.icon || '') ? ' sel' : ''}" data-icon="${n}" aria-label="${n.replace(/\.svg$/,'')}"><img src="/icons/${n}" alt=""></button>`).join('')}
@@ -136,8 +137,9 @@ export async function renderSettings(root: HTMLElement, slug: string) {
     const form = e.target as HTMLFormElement
     const name = (form.querySelector('[name=name]') as HTMLInputElement).value.trim()
     const description = (form.querySelector('[name=description]') as HTMLTextAreaElement).value
+    const repo = (form.querySelector('[name=repo]') as HTMLInputElement).value.trim()
     if (!name) { toast('Nome obrigatório'); return }
-    try { await api.patchWorkdir(slug, { name, description, icon: selIcon }); toast('Guardado'); navigate('/w/' + slug) }
+    try { await api.patchWorkdir(slug, { name, description, icon: selIcon, repo }); toast('Guardado'); navigate('/w/' + slug) }
     catch (err: any) { toast('Erro: ' + err.message) }
   })
 
