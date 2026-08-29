@@ -636,6 +636,10 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         if (!card) { send(404, { error: 'card not found' }); return }
         if (card.archived) { send(409, { error: 'card archived' }); return }
         if (action === 'reject') {
+          // template scaffold no modal refinar — overrides opcionais aplicados antes da nota
+          if (typeof b.title === 'string' && b.title.trim()) card.title = b.title.trim()
+          if (typeof b.description === 'string') card.description = b.description
+          if (typeof b.priority === 'string' && ['urgent','high','medium','low'].includes(b.priority)) card.priority = b.priority
           const note = typeof b.note === 'string' ? b.note.trim() : ''
           if (note) {
             // ponytail: guarda o refinamento como expansa da descricao (prompt original + nota)
@@ -834,7 +838,19 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
       }
       if (parts[0] === 'w' && parts.length === 3) {
         const slug = parts[1], kind = parts[2]
-        if (!SLUG.test(slug) || !['notes','kanban','meta'].includes(kind)) { send(400,{error:'bad request'}); return }
+        if (!SLUG.test(slug)) { send(400,{error:'bad request'}); return }
+      // templates: read-only — merge global (data/templates.json) + workdir (data/<slug>/templates.json);
+      // em colisao de id, o do workdir vence o global. JSON malformado -> lista vazia (nao 500).
+      if (kind === 'templates') {
+        if (m !== 'GET') { send(405, { error: 'method not allowed' }); return }
+        const globRaw = await readJ(join(DATA, 'templates.json'))
+        const wdRaw = await readJ(join(DATA, slug, 'templates.json'))
+        const byId = new Map<string, any>()
+        for (const t of Array.isArray(globRaw) ? globRaw : []) if (t && t.id) byId.set(t.id, t)
+        for (const t of Array.isArray(wdRaw) ? wdRaw : []) if (t && t.id) byId.set(t.id, t)
+        send(200, [...byId.values()]); return
+      }
+      if (!['notes','kanban','meta'].includes(kind)) { send(400,{error:'bad request'}); return }
         const file = join(DATA, slug, `${kind}.json`)
         if (!inside(DATA, file)) { send(400,{error:'bad path'}); return }
         if (m === 'GET') { send(200, (await readJ(file)) ?? (kind==='kanban'?{ver:0,columns:[],cards:[]}:{ver:0,items:[]})); return }

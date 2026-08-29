@@ -4,7 +4,9 @@ import { openModal } from '../ui/modal'
 import { toast } from '../ui/toast'
 import { navigate } from '../router'
 import { renderWorkspace } from './workspace'
-import { parseTags, bindTagAutocomplete } from './notes'
+import { openPalette } from '../ui/palette'
+import { parseTags, bindTagAutocomplete, openNewNoteModal } from './notes'
+import { openNewCardModal } from './kanban'
 import { renderDashboard } from './dashboard'
 import { startClockWidget } from '../ui/clock'
 import { getTheme, setManual, setSeason, setAuto, setSeasonMode, autoShift, autoSeason, Shift, Season, SEASON_NAMES } from '../ui/theme'
@@ -41,7 +43,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
           <div class="tz-pop" id="tz-pop" hidden><label for="tz-select">Fuso horário</label><select id="tz-select" aria-label="Escolher fuso horário"></select></div>
         </div>
         <div class="side-focus" id="foco"></div>
-        <div class="side-foot"><button class="btn btn-primary btn-block" id="side-new">${icon('plus', 16)} Novo workdir</button></div>
+        <div class="side-foot"><button class="btn btn-primary btn-block" id="side-new">${icon('plus', 16)} Novo mundo</button></div>
       </aside>
       <button class="hamb" id="hamb" aria-label="Abrir menu workdirs">${icon('menu', 22)}</button>
       <main class="panel" id="panel"></main>
@@ -169,7 +171,7 @@ function bindKeydown() {
     if (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return
     if (document.querySelector('.modal-backdrop')) return
     if (e.ctrlKey) {
-      if (e.key === 'k' || e.key === 'K') { e.preventDefault(); quickAdd(state.slug); return }
+      if (e.key === 'k' || e.key === 'K') { e.preventDefault(); openPalette(state.slug); return }
       const n = parseInt(e.key); if (n >= 1 && n <= 9 && state.items[n - 1]) {
         e.preventDefault(); setActive(state.items[n - 1].slug); navigate('/w/' + state.items[n - 1].slug)
       }
@@ -191,55 +193,23 @@ function bindKeydown() {
   })
 }
 
-function quickAdd(slug: string | null) {
+// ponytail: quickAdd (palette ctrl+K) DELEGA nos modais completos de criar (openNewCardModal /
+// openNewNoteModal) em vez do mini-form proprio — fonte unica do "novo cartão/nota". Range type fica a escolher.
+export function quickAdd(slug: string | null) {
   if (!slug) return
   const m = openModal({
-    title: 'Criar nota ou cartão', submitText: 'Criar',
+    title: 'Criar cartão ou nota', submitText: 'Seguinte',
     body: () => `<div class="field"><label for="qa-type">Tipo</label>
       <select id="qa-type" name="type">
-        <option value="note">Nota</option>
         <option value="card">Cartão</option>
-      </select></div>
-      <div class="field"><label for="qa-title">Título</label><input id="qa-title" name="title" required></div>
-      <div class="field"><label for="qa-text">Texto / Descrição</label><textarea id="qa-text" name="text"></textarea></div>
-      <div class="field qa-tags"><label for="qa-tags">Tags</label><input id="qa-tags" name="tags" placeholder="separadas por espaço ou vírgula"></div>`,
-    onSubmit: async () => {
-      const form = document.querySelector('.modal form') as HTMLFormElement
-      const type = (form.querySelector('[name=type]') as HTMLSelectElement).value
-      const title = (form.querySelector('[name=title]') as HTMLInputElement).value.trim()
-      if (!title) return
-      const text = (form.querySelector('[name=text]') as HTMLTextAreaElement).value
-      try {
-        if (type === 'note') {
-          const notes = await api.notes.get(slug)
-          const tags = parseTags((form.querySelector('[name=tags]') as HTMLInputElement).value)
-          notes.items.unshift({ id: uid(), title, text, ts: Date.now(), tags })
-          await api.notes.put(slug, notes)
-          toast(`Nota criada: "${title}"`)
-        } else {
-          const b = await api.kanban.get(slug)
-          const col = b.columns.find(c => c.id === 'todo' || c.id === 'doing')?.id || b.columns[0]?.id
-          if (col) {
-            b.cards.push({ id: uid(), title, description: text, priority: 'low', colId: col, ts: Date.now(), archived: false })
-            await api.kanban.put(slug, b)
-            toast(`Cartão criado: "${title}"`)
-          } else toast('Sem colunas no kanban')
-        }
-        navigate('/w/' + slug)
-      } catch (e: any) { toast('Erro: ' + e.message) }
+        <option value="note">Nota</option>
+      </select></div>`,
+    onSubmit: () => {
+      const type = (m.root.querySelector('[name=type]') as HTMLSelectElement).value
+      if (type === 'note') openNewNoteModal(slug)
+      else openNewCardModal(slug)
     },
   })
-
-  const qaType = m.root.querySelector('#qa-type') as HTMLSelectElement
-  const qaTags = m.root.querySelector('.qa-tags') as HTMLElement
-  const syncTags = () => {
-    qaTags.style.display = qaType.value === 'note' ? '' : 'none'
-    if (qaType.value !== 'note') document.querySelector('.tag-sugg.open')?.classList.remove('open')
-  }
-  qaType.addEventListener('change', syncTags); syncTags()
-  // autocomplete de tags so para Nota (cards nao tem tags); set de tags existentes carregado async
-  const qaIp = m.root.querySelector('#qa-tags') as HTMLInputElement
-  api.notes.get(slug).then(ns => bindTagAutocomplete(qaIp, Array.from(new Set(ns.items.flatMap(n => n.tags || []))).sort())).catch(() => {})
 }
 
 function renderEmpty(panel: HTMLElement, items: Array<any>, root: HTMLElement) {
@@ -249,24 +219,26 @@ function renderEmpty(panel: HTMLElement, items: Array<any>, root: HTMLElement) {
       <div class="logo">ATLAS</div>
       <p class="tagline">O titã que sustenta os céus — cada projecto, o seu próprio mundo.</p>
       ${items.length ? `${lastWd ? `<button class="btn btn-ghost" id="reopen">${icon('sphere', 16)} Reabrir ${esc(lastWd.name)}</button>` : ''}` : `<p class="muted">Ainda não há workdirs. Cria o primeiro.</p>`}
-      <button class="btn btn-primary" id="panel-new" style="margin-top:14px">${icon('plus', 16)} ${items.length ? 'Novo workdir' : 'Criar o primeiro workdir'}</button>
+      <button class="btn btn-primary" id="panel-new" style="margin-top:14px">${icon('plus', 16)} ${items.length ? 'Novo mundo' : 'Criar o primeiro mundo'}</button>
     </div>`
   root.querySelector('#panel-new')!.addEventListener('click', () => newWorkdir())
   const reopen = panel.querySelector('#reopen')
   if (reopen) reopen.addEventListener('click', () => { setActive(last); navigate('/w/' + last) })
 }
 
-function newWorkdir() {
+export function newWorkdir() {
   openModal({
-    title: 'Novo workdir', submitText: 'Criar',
+    title: 'Novo mundo', submitText: 'Criar',
     body: () => `<div class="field"><label for="wd-name">Nome</label><input id="wd-name" name="name" required></div>
-                 <div class="field"><label for="wd-desc">Descrição <span class="muted">(opcional)</span></label><input id="wd-desc" name="description"></div>`,
+                 <div class="field"><label for="wd-desc">Descrição <span class="muted">(opcional)</span></label><input id="wd-desc" name="description"></div>
+                 <div class="field"><label for="wd-repo">Repo do projeto <span class="muted">(opcional)</span></label><input id="wd-repo" name="repo" placeholder="C:\...\projeto"></div>`,
     onSubmit: async () => {
       const form = document.querySelector('.modal form') as HTMLFormElement | null; if (!form) return
       const name = (form.querySelector('[name=name]') as HTMLInputElement).value
       const description = (form.querySelector('[name=description]') as HTMLInputElement).value
+      const repo = (form.querySelector('[name=repo]') as HTMLInputElement)?.value.trim() || undefined
       if (!name.trim()) return
-      try { const wd = await api.createWorkdir(name, description); setActive(wd.slug); toast('Workdir criado'); navigate('/w/' + wd.slug) }
+      try { const wd = await api.createWorkdir(name, description, repo); setActive(wd.slug); toast('Workdir criado'); navigate('/w/' + wd.slug) }
       catch (e: any) { toast('Erro: ' + e.message) }
     },
   })
