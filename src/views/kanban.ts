@@ -190,28 +190,33 @@ export async function renderKanban(root: HTMLElement, slug: string) {
 
   function render() {
     root.innerHTML = `
-      <div class="kanban-toolbar" style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
+      <div class="kanban-toolbar">
         <button class="btn btn-primary kbdhint" id="kadd" aria-describedby="kadd-tip">${icon('plus', 16)} Novo cartão<span class="kbdhint-tip" id="kadd-tip" role="tooltip"><kbd>Ctrl</kbd>+<kbd>K</kbd></span></button>
-        <button class="btn btn-ghost" id="karch">${icon('archive', 16)} Arquivados</button>
-        <button class="btn btn-ghost" id="kimport" title="Importar tarefas de um roadmap (markdown)">${icon('forward', 16)} Importar</button>
-        <button class="btn btn-ghost" id="kortch" title="Move todos os cartões TODO (não arquivados) deste mundo para Em Curso">${icon('term', 16)} Orquestrar mundo</button>
-        <button class="btn btn-ghost" id="ksel" title="Selecionar vários cartões para operações em bulk" style="${selMode?'color:var(--gold)':''}">${icon('check', 16)} ${selMode ? 'Concluir' : 'Bulk'}</button>
-        <span class="kb-right">
-          <span class="muted" style="font-size:.85rem">${board.cards.filter(c=>!c.archived).length} cartões</span>
+        <span class="kt-sec">
+          <button class="btn-icon btn-ghost" id="karch" title="Cartões arquivados">${icon('archive', 16)}</button>
+          <button class="btn-icon btn-ghost" id="kimport" title="Importar roadmap (markdown)">${icon('forward', 16)}</button>
+          <button class="btn-icon btn-ghost" id="kortch" title="Orquestrar mundo (TODO → Em Curso)">${icon('term', 16)}</button>
+          <button class="btn-icon btn-ghost" id="ksel" title="${selMode ? 'Concluir seleção' : 'Selecionar para bulk'}" style="${selMode?'color:var(--gold)':''}">${icon('check', 16)}</button>
         </span>
+        <span class="kb-right"><span class="muted k-count">${board.cards.filter(c=>!c.archived).length} cartões</span></span>
       </div>
       ${selMode ? bulkBar() : ''}
       <div class="kanban" id="kboard">${board.columns.map(col => `
         <section class="kcol" data-col="${col.id}">
-          <h4>${esc(col.name)} <span class="muted" style="font-size:.78rem">${count(col.id)}</span></h4>
-          ${selMode ? `<button type="button" class="btn-icon btn-ghost kcol-sel" data-col-sel="${col.id}" title="Selecionar / limpar coluna (visíveis)">${icon('check',14)}</button>` : ''}
-          <select class="k-sort" data-col="${col.id}" aria-label="Ordenar ${esc(col.name)}" title="Ordenar coluna">
-            <option value="pos"   ${keyOf(col.id)==='pos'  ?'selected':''}>Posição</option>
-            <option value="prio"  ${keyOf(col.id)==='prio' ?'selected':''}>Prioridade</option>
-            <option value="date"  ${keyOf(col.id)==='date' ?'selected':''}>Data</option>
-            <option value="title" ${keyOf(col.id)==='title'?'selected':''}>Título</option>
-          </select>
-          ${kolFilter(col.id)}
+          <div class="khead">
+            <h4>${esc(col.name)}</h4>
+            <span class="kcount">${count(col.id)}</span>
+            <div class="kctrl">
+              ${selMode ? `<button type="button" class="btn-icon btn-ghost kcol-sel" data-col-sel="${col.id}" title="Selecionar / limpar coluna (visíveis)">${icon('check',14)}</button>` : ''}
+              <select class="k-sort" data-col="${col.id}" aria-label="Ordenar ${esc(col.name)}" title="Ordenar coluna">
+                <option value="pos"   ${keyOf(col.id)==='pos'  ?'selected':''}>Posição</option>
+                <option value="prio"  ${keyOf(col.id)==='prio' ?'selected':''}>Prioridade</option>
+                <option value="date"  ${keyOf(col.id)==='date' ?'selected':''}>Data</option>
+                <option value="title" ${keyOf(col.id)==='title'?'selected':''}>Título</option>
+              </select>
+              ${kolFilter(col.id)}
+            </div>
+          </div>
           <div class="kcards" data-col="${col.id}">${cardsOf(col.id)}</div>
         </section>`).join('')}
       </div>`
@@ -234,14 +239,31 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     })
     root.querySelector('#ksel')!.addEventListener('click', () => { selMode = !selMode; if (!selMode) sel.clear(); render() })
     root.querySelector<HTMLElement>('#kboard')!.addEventListener('click', e => {
-      const b = (e.target as HTMLElement).closest('[data-filter-prio]') as HTMLElement | null
-      if (!b) return
-      const colId = b.closest<HTMLElement>('.kcol')?.dataset.col || ''
-      if (!colId) return
-      const p = b.dataset.filterPrio
-      if (!p) return
+      // centinela externo: clicar fora de um popover fecha todos os menus abertos
+      const inKf = (e.target as HTMLElement).closest<HTMLElement>('[data-kf], [data-filter-toggle]')
+      if (!inKf) closeFilterMenus()
+      const tgl = (e.target as HTMLElement).closest<HTMLElement>('[data-filter-toggle]')
+      const tgt = (e.target as HTMLElement).closest<HTMLElement>('[data-filter-prio]')
+      if (!tgl && !tgt) return
+      if (tgl) {
+        const colId = tgl.dataset.filterToggle!
+        const menu = root.querySelector<HTMLElement>(`[data-kfmenu="${colId}"]`)
+        const open = menu && !menu.hidden
+        closeFilterMenus()
+        if (menu && !open) { menu.hidden = false; tgl.setAttribute('aria-expanded','true') }
+        return
+      }
+      // selecionou um item do menu
+      const colId = tgt!.closest<HTMLElement>('.kcol')?.dataset.col || ''
+      const p = tgt!.dataset.filterPrio
+      if (!colId || !p) return
       if (colFilters[colId] !== p) { colFilters[colId] = p as ColFilter; render() }
+      closeFilterMenus()
     })
+    function closeFilterMenus() {
+      root.querySelectorAll<HTMLElement>('[data-kfmenu]').forEach(m => { m.hidden = true })
+      root.querySelectorAll<HTMLElement>('[data-filter-toggle]').forEach(b2 => b2.setAttribute('aria-expanded','false'))
+    }
     const boardEl = root.querySelector('#kboard') as HTMLElement
     boardEl.addEventListener('keydown', e => {
       const tEl = e.target as HTMLElement
@@ -265,10 +287,15 @@ export async function renderKanban(root: HTMLElement, slug: string) {
 
   function kolFilter(colId: string) {
     const active = colFilters[colId] || 'all'
-    const chips = [{ id: 'all' as ColFilter, label: 'Todas' }, ...PRIOS].map(p =>
-      `<button type="button" class="tag-chip${active === p.id ? ' on' : ''}" data-filter-prio="${p.id}" aria-pressed="${active === p.id}">${p.id === 'all' ? 'Todas' : p.label}</button>`
+    const activeP = active === 'all' ? null : PRIOS.find(p => p.id === active)
+    const on = active !== 'all'
+    const items = [{ id: 'all' as ColFilter, label: 'Todas' }, ...PRIOS].map(p =>
+      `<button type="button" class="kf-item${active === p.id ? ' on' : ''}" data-filter-prio="${p.id}" aria-pressed="${active === p.id}">${active === p.id ? icon('check', 13) : ''}${p.label}</button>`
     ).join('')
-    return `<div class="kfilter" data-col-filter="${colId}">${chips}</div>`
+    return `<div class="kfwrap" data-kf="${colId}">
+      <button type="button" class="btn-icon btn-ghost kfilter-btn${on ? ' on' : ''}" data-filter-toggle="${colId}" aria-haspopup="menu" aria-expanded="false" title="${on ? `Filtro: ${activeP!.label}` : 'Filtrar por prioridade'}">${icon('filter', 15)}</button>
+      <div class="kfilter-menu" data-kfmenu="${colId}" hidden>${items}</div>
+    </div>`
   }
   function matchesColFilter(c: Card, colId: string) {
     const f = colFilters[colId] || 'all'
@@ -283,7 +310,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       const prev = board.columns[idx-1]?.id, next = board.columns[idx+1]?.id
       const isSel = sel.has(c.id)
       return `<article class="kcard${c.result ? ' has-output' : ''}${isSel ? ' sel' : ''}${dueState(c).cls === 'over' ? ' overdue' : ''}${dueState(c).cls === 'near' ? ' due-near' : ''}" draggable="true" tabindex="0" data-id="${c.id}">
-        <div class="ktitle">${selMode ? `<input type="checkbox" class="kselbox" data-sel="${c.id}" ${isSel ? 'checked' : ''} aria-label="Selecionar ${esc(c.title)}">` : ''}<h5>${esc(c.title)}</h5><span class="kdate">${fmtDate(c.ts)}</span></div>
+        <div class="ktitle">${selMode ? `<input type="checkbox" class="kselbox" data-sel="${c.id}" ${isSel ? 'checked' : ''} aria-label="Selecionar ${esc(c.title)}">` : ''}<h5 title="Criado em ${fmtDate(c.ts)}">${esc(c.title)}</h5></div>
         ${c.description ? `<div class="kdesc">${esc(previewText(c.description))}</div>` : ''}
         <div class="kstates">${stateChip(c)}${c.dp ? `<span class="kbadge kbadge-dp">DP</span>` : ''}${c.result ? `<span class="kbadge kbadge-out">resultado</span>` : ''}</div>
         <div class="kfoot">
