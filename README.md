@@ -23,6 +23,10 @@ Num Atlas, não trabalhas em pastas: atravessas **mundos**. Cada **mundo** é um
 - **Bulk actions** — modo seleção de múltiplos cartões (inclui selecionar a coluna inteira com toggle) e barra bulk: mover coluna, mudar prioridade, arquivar, eliminar.
 - **Visualização da tarefa em execução** — ao correr um card, um modal mostra o log do worker ao vivo (stream offset-based) com estado `a executar / concluído`; botões Brainstorm/DP com animação `running`.
 - **Data de criação no card (`kdate`)** — visível no título do card kanban (`title="Criado em …"`).
+- **Cards recorrentes + lembretes** — `recur` (diária/semanal/mensal) com badge `↻`; cards `due` em ≤30min disparam notificação/toast (dedup por `slug:id`); próximo ciclo materializa-se sozinho em `todo`.
+- **Dashboards de operação do Hermes** — API keys (`/api/hermes/keys`, com `access_token` censurado e `secret_fingerprint` sha256) e Usage (`/api/hermes/usage`, hoje/tokens/custo) em ambas as dashboards.
+- **Backup/Export/Import de workdir** — Definições → Backup: exportar notas+kanban+meta como JSON, ou importar (replace destrutivo); útil para migrar mundos entre máquinas.
+
 - **Notificações de review** — avisos globais quando um card está pronto a rever.
 - **Import roadmap** — um `.md` vira um card por tarefa + nota de detalhe, idempotente.
 - **Export notas** — exporta notas não-arquivadas para markdown na vault (`docs/notas.md`).
@@ -103,6 +107,9 @@ Endpoints embutidos no Vite (prefixo `/api`):
 | POST | `/api/w/:slug/git/resolve` | resolve conflito de merge em `dev` (headless, repo do mundo) |
 | POST | `/api/w/:slug/review/approve` | Card em `review` → `done` + **`merge dev → main`** (com CI gate) |
 | POST | `/api/w/:slug/review/reject` | Card → `doing` (refinamento) + re-corre a tarefa |
+| GET/PUT | `/api/w/:slug/bundle` | backup/restore do workdir inteiro (`meta+notes+kanban`); PUT não valida `ver` (replace destrutivo) |
+| GET | `/api/hermes/keys` | lista API keys do Hermes (censurado: `secret_fingerprint`, **sem** `access_token`) |
+| GET | `/api/hermes/usage` | agrega `usage.jsonl` por `key_id` (`since=` ISO opcional; default = início do dia local) |
 
 > `card.result` (resumo do que o worker fez) é gravado pelo worker no `kanban.json` e renderizado no card. `card.dp` guarda o Design Plan gerado por `/dp`. As rotas novas devem registar-se **acima** do bloco genérico `/api/w/:slug/{notes|kanban|meta}`.
 
