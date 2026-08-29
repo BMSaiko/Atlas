@@ -347,9 +347,16 @@ a.link:hover { color:var(--gold-soft); }
 .ring-b { inset:14px; border-color:color-mix(in srgb,var(--pipe-done) 35%, transparent); border-style:dashed; animation:ringspin 28s linear infinite reverse; }
 @keyframes ringspin { to { transform:rotate(360deg) } }
 
-/* Spinner de execucao para botoes Brainstorm (toolbar notas) e Gerar DP (kanban) */
-@keyframes spin { to { transform:rotate(360deg) } }
-.notes-toolbar #nbrain.running svg, [data-act="dp"].running svg, [data-card-act="dp"].running svg { animation: spin .8s linear infinite; }
+/* Borda em gradiente que muda de cor nos botoes Brainstorm (toolbar notas) e Gerar DP (kanban) enquanto correm */
+@keyframes gradrun { to { background-position: 100% 0, 0 0; } }
+.notes-toolbar #nbrain.running, [data-act="dp"].running, [data-card-act="dp"].running {
+  border:2px solid transparent;
+  background:
+    linear-gradient(var(--bg-2), var(--bg-2)) padding-box,
+    linear-gradient(115deg, var(--gold), var(--focus), color-mix(in srgb, var(--gold) 35%, #9b5bff), var(--gold)) border-box;
+  background-size:100% 100%, 300% 100%;
+  animation:gradrun 3s linear infinite;
+}
 .dash-head h1 { font-size:clamp(2rem, 5vw, 3rem); font-weight:600; }
 .dash-sub { color:var(--text-dim); margin-top:var(--s2); }
 .dash-actions { margin-left:auto; display:flex; gap:var(--s2); align-self:center; }
