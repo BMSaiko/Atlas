@@ -230,13 +230,15 @@ export function newWorkdir() {
   openModal({
     title: 'Novo workdir', submitText: 'Criar',
     body: () => `<div class="field"><label for="wd-name">Nome</label><input id="wd-name" name="name" required></div>
-                 <div class="field"><label for="wd-desc">Descrição <span class="muted">(opcional)</span></label><input id="wd-desc" name="description"></div>`,
+                 <div class="field"><label for="wd-desc">Descrição <span class="muted">(opcional)</span></label><input id="wd-desc" name="description"></div>
+                 <div class="field"><label for="wd-repo">Repo do projeto <span class="muted">(opcional)</span></label><input id="wd-repo" name="repo" placeholder="C:\...\projeto"></div>`,
     onSubmit: async () => {
       const form = document.querySelector('.modal form') as HTMLFormElement | null; if (!form) return
       const name = (form.querySelector('[name=name]') as HTMLInputElement).value
       const description = (form.querySelector('[name=description]') as HTMLInputElement).value
+      const repo = (form.querySelector('[name=repo]') as HTMLInputElement)?.value.trim() || undefined
       if (!name.trim()) return
-      try { const wd = await api.createWorkdir(name, description); setActive(wd.slug); toast('Workdir criado'); navigate('/w/' + wd.slug) }
+      try { const wd = await api.createWorkdir(name, description, repo); setActive(wd.slug); toast('Workdir criado'); navigate('/w/' + wd.slug) }
       catch (e: any) { toast('Erro: ' + e.message) }
     },
   })
