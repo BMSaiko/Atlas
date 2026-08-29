@@ -61,6 +61,15 @@ export async function renderSettings(root: HTMLElement, slug: string) {
         <p class="muted" style="margin-bottom:12px">Notificações do navegador avisam quando um cartão entra em revisão e no fim do pomodoro.</p>
         <button class="btn" id="notif-btn" type="button"></button>
       </div>
+      <div class="card-block">
+        <h3>Backup</h3>
+        <p class="muted" style="margin-bottom:12px">Descarregar ou carregar o workdir inteiro (meta + notas + kanban) como um único ficheiro JSON. Útil para portabilidade entre instalações e para um snapshot fora do git.</p>
+        <div class="actions-row">
+          <button class="btn" id="bk-export" type="button">Exportar bundle (.json)</button>
+          <button class="btn btn-ghost" id="bk-import-btn" type="button">Importar bundle…</button>
+          <input type="file" id="bk-import" accept="application/json,.json" hidden>
+        </div>
+      </div>
       <div class="card-block danger-zone">
         <h3>Zona perigosa</h3>
         <p class="muted" style="margin-bottom:12px">Eliminar este workdir apaga todas as notas e cartões. Irreversível.</p>
@@ -147,6 +156,45 @@ export async function renderSettings(root: HTMLElement, slug: string) {
     const ok = await confirmDialog({ title: 'Eliminar workdir', message: `Eliminar definitivamente "${meta?.name || slug}"? Esta acção não pode ser desfeita.` })
     if (!ok) return
     await api.deleteWorkdir(slug); toast('Workdir eliminado'); navigate('/')
+  })
+
+  // --- Backup: exportar / importar bundle (meta+notes+kanban) ---
+  root.querySelector('#bk-export')!.addEventListener('click', async () => {
+    try {
+      const b = await api.bundle.get(slug)
+      const blob = new Blob([JSON.stringify(b, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const ymd = new Date().toISOString().slice(0, 10)
+      a.href = url; a.download = `atlas-${slug}-${ymd}.json`
+      document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      toast('Bundle exportado')
+    } catch (err: any) { toast('Erro a exportar: ' + err.message) }
+  })
+  root.querySelector('#bk-import-btn')!.addEventListener('click', () => (root.querySelector('#bk-import') as HTMLInputElement).click())
+  root.querySelector('#bk-import')!.addEventListener('change', async e => {
+    const file = (e.target as HTMLInputElement).files?.[0]; if (!file) return
+    let bundle: any
+    try {
+      const text = await file.text()
+      bundle = JSON.parse(text)
+    } catch { toast('Ficheiro JSON invalido'); (e.target as HTMLInputElement).value = ''; return }
+    // ponytail: valida shape minimo — recusar bundle malformado NAO sobrescreve estado.
+    if (!bundle || typeof bundle !== 'object' || !bundle.meta || !bundle.notes || !bundle.kanban) {
+      toast('Bundle invalido: requer meta+notes+kanban'); (e.target as HTMLInputElement).value = ''; return
+    }
+    const ok = await confirmDialog({
+      title: 'Importar bundle',
+      message: `Sobrescrever "${meta?.name || slug}" com o conteudo do bundle? Os dados actuais do workdir serao substituidos (a vault guarda um auto-commit do estado anterior).`,
+    })
+    if (!ok) { (e.target as HTMLInputElement).value = ''; return }
+    try {
+      await api.bundle.put(slug, { meta: bundle.meta, notes: bundle.notes, kanban: bundle.kanban })
+      toast('Bundle importado')
+      navigate('/w/' + slug + '/settings')
+    } catch (err: any) { toast('Erro a importar: ' + err.message) }
+    finally { (e.target as HTMLInputElement).value = '' }
   })
 }
 function colRow(id: string, name: string) {

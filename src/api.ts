@@ -30,6 +30,10 @@ export const api = {
   },
   importRoadmap: (slug: string, path: string) => j<{ ok: boolean; addedCards: number; addedNotes: number; skipped: number; total: number }>(`/api/w/${slug}/import-roadmap`, 'POST', { path }),
   exportNotes: (slug: string) => j<{ ok: boolean; count: number }>(`/api/w/${slug}/export`, 'POST'),
+  bundle: {
+    get: (slug: string) => j<WorkdirBundle>(`/api/w/${slug}/bundle`),
+    put: (slug: string, doc: { meta: WorkdirMeta; notes: { ver: number; items: Nota[] }; kanban: { ver: number; columns: Coluna[]; cards: Card[] } }) => j<{ ok: boolean }>(`/api/w/${slug}/bundle`, 'PUT', doc),
+  },
   templates: { get: (slug: string) => j<Template[]>(`/api/w/${slug}/templates`) },
   kanban: {
     get: (slug: string) => j<{ ver: number; columns: Coluna[]; cards: Card[] }>(`/api/w/${slug}/kanban`),
@@ -79,5 +83,13 @@ export interface HermesUsage {
   since: number
   generated_at: number
   totals_by_key: Record<string, HermesUsageKey>
+}
+// bundle -> snapshot portatil do workdir (meta+notes+kanban). Backup/restore manual, fora do git.
+export interface WorkdirBundle {
+  slug: string
+  meta: WorkdirMeta
+  notes: { ver: number; items: Nota[] }
+  kanban: { ver: number; columns: Coluna[]; cards: Card[] }
+  ts: number
 }
 export const uid = () => Math.random().toString(36).slice(2, 10)

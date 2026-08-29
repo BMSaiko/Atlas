@@ -935,6 +935,35 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         send(200, { ok: true, addedCards, addedNotes, skipped, total: tasks.length })
         return
       }
+      // /api/w/:slug/bundle -> snapshot portatil do workdir inteiro (meta+notes+kanban).
+      // GET serializa os 3 ficheiros; PUT restaura sem validar `ver` (operação destrutiva — replace completo).
+      // Uso: portabilidade manual e backup fora do git (imune a git reset / corrupção do repo).
+      if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'bundle') {
+        const slug = parts[1]
+        if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
+        const dir = join(DATA, slug)
+        const metaFile = join(dir, 'meta.json'), notesFile = join(dir, 'notes.json'), kanbanFile = join(dir, 'kanban.json')
+        if (!inside(DATA, metaFile) || !inside(DATA, notesFile) || !inside(DATA, kanbanFile)) { send(400, { error: 'bad path' }); return }
+        if (m === 'GET') {
+          const meta = await readJ(metaFile) || {}
+          const notes = await readJ(notesFile) || { ver: 0, items: [] }
+          const kanban = await readJ(kanbanFile) || { ver: 0, columns: [], cards: [] }
+          send(200, { slug, meta, notes, kanban, ts: Date.now() }); return
+        }
+        if (m === 'PUT') {
+          const b = (await body(req)) || {}
+          // ponytail: valida shape minimo (recusar bundle malformado NAO sobrescreve estado). Aceita
+          // {meta, notes, kanban} no payload. Faltar qualquer um -> 400 sem tocar em disco.
+          if (!b || typeof b !== 'object' || !('meta' in b) || !('notes' in b) || !('kanban' in b)) {
+            send(400, { error: 'bundle invalido: requer meta+notes+kanban' }); return
+          }
+          await writeJ(metaFile, b.meta)
+          await writeJ(notesFile, b.notes)
+          await writeJ(kanbanFile, b.kanban)
+          send(200, { ok: true }); return
+        }
+        send(405, { error: 'method not allowed' }); return
+      }
       // /api/w/:slug/export -> exporta notas não-arquivadas para markdown na vault (docs/notas.md)
       if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'export' && m === 'POST') {
         const slug = parts[1]
