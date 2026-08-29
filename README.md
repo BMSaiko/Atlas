@@ -1,13 +1,26 @@
 # ATLAS
 
-> O titã que sustenta os céus — hub pessoal de produtividade com **workdirs isolados** (quicknotes + kanban por projecto).
+> O titã que sustenta os céus. Cada projeto é um **mundo** que Atlas carrega nos ombros — notas, kanban e relógio próprios, virados para cima para nunca se misturarem.
 
-Cada projecto é um **workdir** independente: ao entrar vês apenas as quicknotes, o kanban e o relógio desse trabalho. Trocar de trabalho = trocar de contexto, nunca misturar.
+Num Atlas, não trabalhas em pastas: atravessas **mundos**. Cada **mundo** é um workspace isolado (quicknotes + kanban próprios, com icon, fuso horário e tema à sua medida). Entrar num mundo é trocar de contexto de vez — nunca se mistura o que não deve, e `Alt+↑/↓` deixa-te viajar entre mundos num sopro.
+
+## Características
+
+- **Dashboard hub (`/`)** — visão geral de todos os mundos com stat-grid, pipeline em stepper e anéis de conclusão por projeto.
+- **Icons por mundo** — catálogo de 60 orbs SVG; cada mundo com a sua identidade na sidebar e no dashboard.
+- **Tags nas notas** — adiciona, pesquisa e filtra por chips.
+- **Seletor de fuso horário** — relógio da sidebar em ~13 zonas comuns via `Intl`.
+- **Tema auto/manual** — dia ↔ entardecer ↔ noite (day/dusk/night) seguem as horas, ou fixas manualmente.
+- **Sessões de foco** — overlay imersivo com cronómetro + pomodoro (fases focus/pausa).
+- **Notificações de review** — avisos globais quando um card está pronto a revisar.
+- **Import roadmap** — um `.md` vira um card por tarefa + nota de detalhe, idempotente.
+- **Live-data + CI** — dados versionados com auto-backup na vault e GitHub Actions (typecheck + build).
+- **Review como coluna default** + cards em 2 tamanhos, `Alt+↑/↓` entre mundos.
 
 ## Stack
 
 - **Vite + TypeScript** (vanilla, zero framework de UI pesado) — SPA com shell/sidebar + painel
-- Persistência local em **ficheiros JSON** por workdir (`data/<slug>/{meta,notes,kanban}.json`), servida por uma **mini-API embutida** no Vite dev/preview
+- Persistência local em **ficheiros JSON** por mundo (`data/<slug>/{meta,notes,kanban}.json`), servida por uma **mini-API embutida** no Vite dev/preview
 - **Drag & Drop nativo** (HTML5), zero libs de runtime
 - Task-runner: cada card kanban pode disparar uma **tarefa autónoma** (WezTerm + Hermes oneshot), com branch git própria por card
 
@@ -25,8 +38,8 @@ npm run preview  # serve o build + API (persistência funciona igual)
 ## Estrutura
 
 ```
-data/                 # persistência (versionada no git) — fronteira dura por slug
-  index.json          #   lista de workdirs
+data/                 # persistência (versionada no git) — fronteira dura por slug (mundo)
+  index.json          #   lista de mundos (workdirs)
   <slug>/{meta,notes,kanban}.json
 live-data/            # junction para a vault — datas locais fora do repo, auto-backup
 server/
@@ -39,14 +52,14 @@ src/
   ui/                 # icons, modal, toast, confirm, clock, text, theme, notifs, pomodoro, timezones
   views/              # shell, workspace, dashboard, notes, kanban, settings
   styles/             # tokens.css (cosmos/noite), base.css, components.css
-public/icons/         # 60 orbs SVG (catálogo de icons por workdir)
+public/icons/         # 60 orbs SVG (catálogo de icons por mundo)
 ```
 
 ## Rotas frontend
 
-- `/` — **main dashboard**: visão geral de todos os trabalhos (projetos, notas, pipeline, sessões ativas)
+- `/` — **main dashboard**: visão geral de todos os mundos (projetos, notas, pipeline, sessões ativas)
 - `/w/:slug` — workspace (tabs **Notas | Kanban**)
-- `/w/:slug/settings` — editar trabalho, tema, colunas, icon, notificações, eliminar
+- `/w/:slug/settings` — editar mundo, tema, colunas, icon, notificações, eliminar
 
 ## API
 
@@ -54,12 +67,12 @@ Endpoints embutidos no Vite (prefixo `/api`):
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| GET/POST | `/api/workdirs` | listar / criar workdir (`{name, description?}`) |
+| GET/POST | `/api/workdirs` | listar / criar mundo (`{name, description?}`) |
 | PUT | `/api/workdirs` | reordenar (bloco de todos) — `{order: [slug...]}` |
-| PATCH/DELETE | `/api/workdirs/:slug` | editar (nome/descrição/icon) / apagar trabalho |
+| PATCH/DELETE | `/api/workdirs/:slug` | editar (nome/descrição/icon) / apagar mundo |
 | GET | `/api/icons` | catálogo de icons disponíveis (órbitas SVG) |
-| GET/PUT | `/api/w/:slug/{notes,kanban,meta}` | ler / gravar dados do workdir |
-| GET | `/api/w/:slug` | lê `meta.json` do workdir |
+| GET/PUT | `/api/w/:slug/{notes,kanban,meta}` | ler / gravar dados do mundo |
+| GET | `/api/w/:slug` | lê `meta.json` do mundo |
 | POST | `/api/w/:slug/run` | **corre card kanban** — marca `doing`, abre WezTerm+Hermes (tarefa = `description`) |
 | POST | `/api/w/:slug/import-roadmap` | importa um roadmap `.md` → notas + cards (idempotente) |
 | POST | `/api/w/:slug/review/approve` | Card em `review` → `done` + **`merge dev → main`** |
@@ -104,5 +117,5 @@ Endpoints embutidos no Vite (prefixo `/api`):
 - Cosmos azul-noite → quase-preto; accents gold/mármore
 - Auto-shift dia (blue/sky) ↔ entardecer (cobre/âmbar) ↔ noite (gold); paletas AA-safe
 - Modo automático segue a hora (07h dia, 17h entardecer, 20h noite); manual fixo — escolher nas Definições; indicador clicável na sidebar
-- workdir/icon próprio por trabalho; relógio global com fuso horário selecionável; foco overlay (cronómetro + pomodoro)
+- icon próprio por mundo; relógio global com fuso horário selecionável; foco overlay (cronómetro + pomodoro)
 - Acessível: contrastes AA, `prefers-reduced-motion`, focos visíveis
