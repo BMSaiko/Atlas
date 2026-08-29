@@ -181,6 +181,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
   root.querySelector('#nsel')!.addEventListener('click', () => { selMode = !selMode; if (!selMode) sel.clear(); doRender(searchInput.value.toLowerCase()) })
   const brainBtn = root.querySelector('#nbrain') as HTMLButtonElement
   if (brainBtn) brainBtn.addEventListener('click', () => brainstorm(slug))
+  applyBsRunning()  // re-aplica estado running no botao apos re-render (survive renderNotes)
   grid.addEventListener('keydown', e => {
     const t = e.target as HTMLElement
     if (t.classList.contains('note-card') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); const n = notes.find(x => x.id === t.dataset.id); if (n) noteView(n) }
@@ -332,17 +333,26 @@ export async function renderNotes(root: HTMLElement, slug: string) {
     }).catch(e => toast('Erro: ' + e.message))
   }
 }
+let bsRunning = false  // fonte de verdade do estado "a executar" do brainstorm (sobrevive a re-renders)
+function applyBsRunning() {
+  const b = document.getElementById('nbrain') as HTMLButtonElement | null
+  if (!b) return
+  b.classList.toggle('running', bsRunning)
+  b.disabled = bsRunning
+}
+
 // ponytail: botão Brainstorm na toolbar de notas — corre um hermes headless que analisa o
 // source-tree, faz SWOT + brainstorm e escreve notas novas no workdir. Log streameado do
 // mecanismo /output do run-card (id ficticio "brainstorm"); ao concluir, refresca a lista.
 function brainstorm(slug: string) {
   fetch(`/api/w/${slug}/brainstorm`, { method: 'POST' })
     .then(r => r.json()).then((d: any) => {
-      if (d && d.ok) { toast('Brainstorm a correr em segundo plano (headless)'); viewBrainstorm(slug) }
+      if (d && d.ok) { bsRunning = true; applyBsRunning(); toast('Brainstorm a correr em segundo plano (headless)'); viewBrainstorm(slug) }
       else toast((d && d.error) || 'Erro ao iniciar brainstorm')
     }).catch(() => toast('Falha ao iniciar brainstorm'))
 }
 function viewBrainstorm(slug: string) {
+  const started = Date.now()
   let offset = 0
   let pre = document.createElement('pre')
   pre.className = 'term-view'
@@ -357,12 +367,15 @@ function viewBrainstorm(slug: string) {
   pre = m.root.querySelector('.term-view') as HTMLPreElement
   const statusEl = m.root.querySelector('.term-status') as HTMLElement
   const tick = async () => {
+    // ponytail: cap de seguranca — para o poller apos 30 min se nunca acabar (evita flag presa a girar)
+    if (Date.now() - started > 30 * 60 * 1000) { if (timer) clearInterval(timer); bsRunning = false; applyBsRunning(); return }
     try {
       const d = await api.run.output(slug, 'brainstorm', offset)
       if (d && d.chunk) { pre.textContent += d.chunk; pre.scrollTop = pre.scrollHeight }
       offset = d ? d.offset : offset
       if (d && d.done) {
         if (timer) clearInterval(timer)
+        bsRunning = false; applyBsRunning()
         statusEl.textContent = d.code === 0 ? 'concluído ✓ (notas criadas)' : ('terminou com erro (código ' + d.code + ') — vê o log acima')
         statusEl.classList.toggle('err', !!(d && d.code !== 0))
         // ponytail: refresca as notas quando o brainstorm acaba (o worker escreveu notas novas via API)

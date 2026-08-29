@@ -98,6 +98,8 @@ export async function renderKanban(root: HTMLElement, slug: string) {
         </section>`).join('')}
       </div>`
     bind()
+    // ponytail: re-aplica running nos botoes DP apos re-render (o finish() dispara render; fonte de verdade = dpPollers)
+    board.cards.forEach(cc => { if (dpPollers[`${slug}:dp-${cc.id}`]) setDpRunning(cc.id, true) })
     root.querySelector('#kadd')!.addEventListener('click', () => cardModal(null))
     root.querySelectorAll<HTMLSelectElement>('.k-sort').forEach(sel => sel.addEventListener('change', e => {
       sortKey[sel.dataset.col!] = (e.target as HTMLSelectElement).value as SortKey
@@ -186,7 +188,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     const b: string[] = []
     if (c.colId === 'todo') {
       b.push(`<button class="btn-icon btn-ghost" data-act="run" aria-label="Executar no Hermes">${icon('play', 15)}</button>`)
-      b.push(`<button class="btn-icon btn-ghost" data-act="dp" aria-label="Gerar DP (design plan)">${icon('doc', 15)}</button>`)
+      b.push(`<button class="btn-icon btn-ghost" data-act="dp" data-card="${c.id}" aria-label="Gerar DP (design plan)">${icon('doc', 15)}</button>`)
     } else if (c.colId === 'doing') {
       b.push(`<button class="btn-icon btn-ghost" data-act="run" aria-label="Reiniciar execução">${icon('reset', 15)}</button>`)
       b.push(`<button class="btn-icon btn-ghost" data-act="term" aria-label="Ver terminal / log do run">${icon('term', 16)}</button>`)
@@ -300,13 +302,21 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
     })
   }
 
+  function setDpRunning(cardId: string, on: boolean) {
+    // ponytail: toggla .running + disabled nos botoes DP (grid e modal) por card; fonte de verdade = dpPollers
+    document.querySelectorAll<HTMLElement>(`[data-act="dp"][data-card="${cardId}"], [data-card-act="dp"][data-card="${cardId}"]`).forEach(el => {
+      el.classList.toggle('running', on)
+      ;(el as HTMLButtonElement).disabled = on
+    })
+  }
+
   function dpCard(c: Card) {
     // ponytail: botao DP por card — corre hermes headless que escreve o design plan e grava-o no card (card.dp)
     fetch(`/api/w/${slug}/dp`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cardId: c.id }),
     }).then(r => r.json()).then((d: any) => {
-      if (d && d.ok) { toast('A gerar DP em segundo plano (headless)'); viewDp(c) }
+      if (d && d.ok) { setDpRunning(c.id, true); toast('A gerar DP em segundo plano (headless)'); viewDp(c) }
       else toast((d && d.error) || 'Erro ao gerar DP')
     }).catch(() => toast('Falha ao iniciar DP'))
   }
@@ -334,12 +344,13 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
       // ponitail: NOTIFICACAO quando o DP acaba — dispara mesmo com o modal ja fechado
       toast(code === 0 ? ('DP concluído ✓ · ' + c.title) : ('DP terminou com erro (código ' + code + ') · ' + c.title))
       if (dpPollers[key]) { clearInterval(dpPollers[key].timer); delete dpPollers[key] }
+      setDpRunning(c.id, false)
       // ponitail: re-le o board p/ o card.dp (gravado pelo worker via API) aparecer logo ao fechar
       if (code === 0) api.kanban.get(slug).then(fresh => { board = fresh; render() })
     }
     const tick = async () => {
       // ponitail: cap de seguranca — para o poller detachado apos 30 min se nunca acabar (evita leak)
-      if (Date.now() - started > 30 * 60 * 1000) { if (dpPollers[key]) { clearInterval(dpPollers[key].timer); delete dpPollers[key] } return }
+      if (Date.now() - started > 30 * 60 * 1000) { if (dpPollers[key]) { clearInterval(dpPollers[key].timer); delete dpPollers[key] } setDpRunning(c.id, false); return }
       try {
         const d = await api.run.output(slug, 'dp-' + c.id, offset)
         if (d && d.chunk) { pre.textContent += d.chunk; pre.scrollTop = pre.scrollHeight }
@@ -500,7 +511,7 @@ function runCard(c: Card) {
         <div class="kmodal-actions" data-card-actions>
           ${c.colId === 'todo'
             ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="run">${icon('play',14)} Executar no Hermes</button>
-               <button type="button" class="btn btn-ghost btn-sm" data-card-act="dp">${icon('doc',14)} Gerar DP</button>`
+               <button type="button" class="btn btn-ghost btn-sm" data-card-act="dp" data-card="${c.id}">${icon('doc',14)} Gerar DP</button>`
             : c.colId === 'doing'
               ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="run">${icon('reset',14)} Reiniciar execução</button>
                  <button type="button" class="btn btn-ghost btn-sm" data-card-act="term">${icon('term',14)} Ver terminal</button>`

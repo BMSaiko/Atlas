@@ -346,6 +346,10 @@ a.link:hover { color:var(--gold-soft); }
 .ring-a { animation:ringspin 18s linear infinite; }
 .ring-b { inset:14px; border-color:color-mix(in srgb,var(--pipe-done) 35%, transparent); border-style:dashed; animation:ringspin 28s linear infinite reverse; }
 @keyframes ringspin { to { transform:rotate(360deg) } }
+
+/* Spinner de execucao para botoes Brainstorm (toolbar notas) e Gerar DP (kanban) */
+@keyframes spin { to { transform:rotate(360deg) } }
+.notes-toolbar #nbrain.running svg, [data-act="dp"].running svg, [data-card-act="dp"].running svg { animation: spin .8s linear infinite; }
 .dash-head h1 { font-size:clamp(2rem, 5vw, 3rem); font-weight:600; }
 .dash-sub { color:var(--text-dim); margin-top:var(--s2); }
 .dash-actions { margin-left:auto; display:flex; gap:var(--s2); align-self:center; }
