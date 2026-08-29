@@ -52,10 +52,11 @@ function wireCardTemplate(root: HTMLElement, slug: string) {
       const desc = root.querySelector('[name=description]') as HTMLTextAreaElement
       const prio = root.querySelector('[name=priority]') as HTMLSelectElement
       const col = root.querySelector('[name=colId]') as HTMLSelectElement
-      if (t.title !== undefined) title.value = t.title
-      if (t.body !== undefined) desc.value = t.body
-      if (t.priority && [...prio.options].some(o => o.value === t.priority)) prio.value = t.priority
-      if (t.colId && [...col.options].some(o => o.value === t.colId)) col.value = t.colId
+      if (t.title !== undefined && title) title.value = t.title
+      if (t.body !== undefined && desc) desc.value = t.body
+      // ponytail: prio/col opcionais (modal de refinar nao tem colId)
+      if (t.priority && prio && [...prio.options].some(o => o.value === t.priority)) prio.value = t.priority
+      if (t.colId && col && [...col.options].some(o => o.value === t.colId)) col.value = t.colId
     })
   }).catch(() => {})
 }
@@ -530,17 +531,30 @@ function runCard(c: Card) {
       })
   }
   function rejectCard(c: Card) {
-    openModal({
+    const prioOpts = `<option value="urgent" ${c.priority==='urgent'?'selected':''}>Urgente</option>
+      <option value="high" ${c.priority==='high'?'selected':''}>Alta</option>
+      <option value="medium" ${c.priority==='medium'?'selected':''}>Média</option>
+      <option value="low" ${c.priority==='low'?'selected':''}>Baixa</option>`
+    const m = openModal({
       title: 'Refinar tarefa', submitText: 'Enviar para Em Curso',
-      body: () => `<div class="field"><label>Nota de revisão (o que ajustar — será anexado à tarefa)</label><textarea id="r-note" placeholder="Ex.: o resultado está aproximado, refina o prompt para..."></textarea></div>`,
+      body: () => `<div class="field"><label for="r-template">Template</label><select name="template" id="r-template"><option value="">Manter estrutura atual…</option></select></div>
+        <div class="field"><label for="r-title">Título</label><input id="r-title" name="title" required value="${esc(c.title)}"></div>
+        <div class="field"><label for="r-desc">Descrição</label><textarea id="r-desc" name="description">${esc(c.description || '')}</textarea></div>
+        <div class="field"><label for="r-prio">Prioridade</label><select id="r-prio" name="priority">${prioOpts}</select></div>
+        <div class="field"><label>Nota de revisão (o que ajustar — será anexado à tarefa)</label><textarea id="r-note" placeholder="Ex.: o resultado está aproximado, refina o prompt para..."></textarea></div>`,
       onSubmit: () => {
-        const note = (document.querySelector('#r-note') as HTMLTextAreaElement)?.value || ''
-        api.review.reject(slug, c.id, note).then(d => {
-          // server já appends a nota à descrição; re-fetch p/ não gravar descricao obsoleta
+        const title = (m.root.querySelector('[name=title]') as HTMLInputElement).value.trim()
+        if (!title) return
+        const description = (m.root.querySelector('[name=description]') as HTMLTextAreaElement).value
+        const priority = (m.root.querySelector('[name=priority]') as HTMLSelectElement).value as Prioridade
+        const note = (m.root.querySelector('#r-note') as HTMLTextAreaElement)?.value || ''
+        api.review.reject(slug, c.id, { note, title, description, priority }).then(d => {
+          // server aplica overrides + appends a nota; re-fetch p/ não gravar descricao obsoleta
           return api.kanban.get(slug).then(fresh => { board = fresh; render(); toast('Voltou para Em Curso') })
         }).catch(e => toast('Erro: ' + e.message))
       },
     })
+    wireCardTemplate(m.root, slug)
   }
 
   function bindDnd(boardEl: HTMLElement) {

@@ -41,7 +41,7 @@ export const api = {
 
   review: {
     approve: (slug: string, cardId: string) => j<{ ok: boolean; merge?: string }>(`/api/w/${slug}/review/approve`, 'POST', { cardId }),
-    reject: (slug: string, cardId: string, note: string) => j<{ ok: boolean }>(`/api/w/${slug}/review/reject`, 'POST', { cardId, note }),
+    reject: (slug: string, cardId: string, p: { note?: string; title?: string; description?: string; priority?: Prioridade }) => j<{ ok: boolean }>(`/api/w/${slug}/review/reject`, 'POST', { cardId, ...p }),
   },
   run: {
     // stream incremental do log do run headless (terminal a trabalhar / debugging)
