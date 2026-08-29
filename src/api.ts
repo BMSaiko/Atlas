@@ -47,5 +47,20 @@ export const api = {
     // stream incremental do log do run headless (terminal a trabalhar / debugging)
     output: (slug: string, cardId: string, offset = 0) => j<{ ok: boolean; started: boolean; done: boolean; code: number | null; chunk: string; offset: number; size: number }>(`/api/w/${slug}/output/${cardId}?offset=${offset}`),
   },
+  hermes: {
+    keys: () => j<HermesKey[]>('/api/hermes/keys'),
+  },
+}
+// hermes/keys -> lista de API keys configuradas no Hermes (censor: NUNCA traz access_token do server).
+export type HermesKeyStatus = 'active' | 'exhausted' | 'error' | 'unknown'
+export interface HermesKey {
+  provider: string; id: string | null; label: string | null; source: string | null
+  auth_type: string | null; base_url: string | null; priority: number | null
+  status: HermesKeyStatus
+  last_status: number | null; last_status_at: string | null
+  last_error_code: number | null; last_error_reason: string | null
+  last_error_message: string | null; last_error_reset_at: string | null
+  request_count: number; secret_fingerprint: string | null
+  has_token: boolean
 }
 export const uid = () => Math.random().toString(36).slice(2, 10)

@@ -2,6 +2,7 @@ import type { Plugin, Connect } from 'vite'
 import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { readFile, writeFile, rm } from 'node:fs/promises'
 import { createWriteStream } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { join, dirname, delimiter, normalize, extname, relative, sep } from 'node:path'
 import { parseRoadmap } from './roadmap'
@@ -731,6 +732,53 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
         await cleanupRuns(slug); await cleanupWorktrees()
         send(200, { ok: true }); return
+      }
+
+      // /api/hermes/keys -> lista as API keys configuradas no Hermes (lê auth.json, censura access_token).
+      // ponytail: status derivado do último erro (auth.json NAO carrega estado "exhausted" canónico — usamos
+      // 429/401 + reason conhecido como proxy de "esgotada"; 5xx/other = "error"; tudo null = "unknown").
+      // access_token NUNCA sai do atlas (whitelist de campos + fingerprint derivado).
+      if (parts[0] === 'hermes' && parts[1] === 'keys' && parts.length === 2 && m === 'GET') {
+        const auth = await readJ(join(HERMES_HOME, 'auth.json'))
+        const cp = (auth && typeof auth === 'object' && auth.credential_pool && typeof auth.credential_pool === 'object') ? auth.credential_pool : {}
+        const out: any[] = []
+        for (const [provider, list] of Object.entries(cp)) {
+          if (!Array.isArray(list)) continue
+          for (const k of list) {
+            if (!k || typeof k !== 'object') continue
+            const code = typeof k.last_error_code === 'number' ? k.last_error_code : null
+            const reason = typeof k.last_error_reason === 'string' ? k.last_error_reason : null
+            let status: 'active' | 'exhausted' | 'error' | 'unknown' = 'unknown'
+            if (code === 429 || /quota|rate.?limit|exhaust/i.test(reason || '')) status = 'exhausted'
+            else if (code && code >= 400) status = 'error'
+            else if (typeof k.last_status === 'number' && k.last_status >= 200 && k.last_status < 300) status = 'active'
+            // ponytail: deriva fingerprint do token SEM o enviar. sha256(access_token).slice(0,10).
+            // whitelist abaixo é a única coisa que sai — access_token omitido por construção.
+            const tok = typeof (k as any).access_token === 'string' ? (k as any).access_token : ''
+            const fp = tok ? createHash('sha256').update(tok).digest('hex').slice(0, 10) : null
+            out.push({
+              provider,
+              id: typeof k.id === 'string' ? k.id : null,
+              label: typeof k.label === 'string' ? k.label : null,
+              source: typeof k.source === 'string' ? k.source : null,
+              auth_type: typeof k.auth_type === 'string' ? k.auth_type : null,
+              base_url: typeof k.base_url === 'string' ? k.base_url : null,
+              priority: typeof k.priority === 'number' ? k.priority : null,
+              status,
+              last_status: typeof k.last_status === 'number' ? k.last_status : null,
+              last_status_at: k.last_status_at ?? null,
+              last_error_code: code,
+              last_error_reason: reason,
+              last_error_message: typeof k.last_error_message === 'string' ? k.last_error_message : null,
+              last_error_reset_at: k.last_error_reset_at ?? null,
+              request_count: typeof k.request_count === 'number' ? k.request_count : 0,
+              secret_fingerprint: fp,
+              has_token: !!tok,
+            })
+          }
+        }
+        out.sort((a, b) => (a.provider.localeCompare(b.provider)) || ((a.priority ?? 999) - (b.priority ?? 999)))
+        send(200, out); return
       }
 
       // /api/w/:slug/output/:cardId -> stream do log do run headless (offset-based, p/ debugging/erros)
