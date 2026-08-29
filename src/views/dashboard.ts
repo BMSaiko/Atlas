@@ -1,4 +1,4 @@
-import { api, Card, Nota, HermesKey } from '../api'
+import { api, Card, Nota, HermesKey, HermesUsage, HermesUsageKey } from '../api'
 import { icon } from '../ui/icons'
 import { navigate } from '../router'
 import { toast } from '../ui/toast'
@@ -158,13 +158,24 @@ function fmtNum(n: number | null | undefined): string {
   if (n == null || !isFinite(n as number)) return '—'
   return (n as number).toLocaleString('pt-PT')
 }
-// card 1hztk0ry (v1): estado das keys + requests totais (Passo 3 — captura de usage p/ "hoje"/tokens/custo — fica noutro card).
-// ponytail: o que NAO sabemos aparece como '—'; secret_fingerprint vem do server (access_token nunca sai do hermes).
-function keysSection(keys: HermesKey[] | null): string {
+// card ebvqt746 (v2 = Passo 3 leitura): junta colunas "hoje / tokens / custo" agregadas do JSONL.
+// Fonte: GET /api/hermes/usage (HEIMDALL grava 1 linha por pedido em HERMES_HOME/logs/atlas/usage.jsonl).
+// Quando usage e null/vazio, todas as colunas novas mostram '—' (estado pre-hook) — sem erro visivel.
+// ponytail: o que NAO sabemos aparece como '—'; secret_fingerprint vem do server (access_token nunca sai).
+function keysSection(keys: HermesKey[] | null, usage: HermesUsage | null): string {
   const list = keys ?? []
+  const totals = (usage && usage.totals_by_key) || {}
+  const hasUsage = Object.keys(totals).length > 0
   const active = list.filter(k => k.status === 'active').length
   const exhausted = list.filter(k => k.status === 'exhausted').length
   const totalReqs = list.reduce((a, k) => a + (k.request_count || 0), 0)
+  const costToday = Object.values(totals).reduce((a, k) => a + (k.cost_usd || 0), 0)
+  const costCell = hasUsage ? `$${costToday.toFixed(4)}` : '—'
+  const costSub = hasUsage ? 'hoje (USD)' : 'captura por request ainda não ligada'
+  const uFor = (k: HermesKey): HermesUsageKey | null => {
+    if (!k.id) return null
+    return totals[k.id] || null
+  }
   return `
     <section class="dash-sec">
       <h2>${icon('tag', 16)} API keys &amp; uso</h2>
@@ -172,23 +183,34 @@ function keysSection(keys: HermesKey[] | null): string {
         ${stat('Keys activas', String(active), list.length ? `${list.length} configuradas` : '—', 'check', 'var(--pipe-done)')}
         ${stat('Esgotadas', String(exhausted), exhausted ? 'free tier queimado' : '—', 'bell', 'var(--pipe-todo)')}
         ${stat('Requests totais', fmtNum(totalReqs), 'lifetime (auth.json)', 'forward', 'var(--gold)')}
-        ${stat('Custo estimado', '—', 'captura por request ainda não ligada', 'tag', 'var(--text-dim)')}
+        ${stat('Custo estimado', costCell, costSub, 'tag', hasUsage ? 'var(--gold)' : 'var(--text-dim)')}
       </div>
       ${list.length ? `
         <table class="keys-table">
           <thead><tr>
             <th>label</th><th>provider</th><th>origem</th>
-            <th>estado</th><th class="num">requests</th><th>último erro</th>
+            <th>estado</th><th class="num">hoje</th><th class="num">tokens hoje</th><th class="num">custo hoje</th><th>último erro</th>
           </tr></thead>
-          <tbody>${list.map(k => `
+          <tbody>${list.map(k => {
+            const u = uFor(k)
+            const reqs = u ? u.requests : 0
+            const tok = u ? u.prompt_tokens + u.completion_tokens : 0
+            const cost = u ? u.cost_usd : 0
+            const reqsCell = u ? fmtNum(reqs) : '<span class="col-uso">—</span>'
+            const tokCell = u ? `${fmtNum(u.prompt_tokens)} / ${fmtNum(u.completion_tokens)}` : '<span class="col-uso">—</span>'
+            const costCellRow = u && cost > 0 ? `$${cost.toFixed(4)}` : (u ? '$0.0000' : '<span class="col-uso">—</span>')
+            return `
             <tr>
               <td>${esc(k.label || k.id || '—')}</td>
               <td><code>${esc(k.provider)}</code></td>
               <td>${esc(k.source || '—')}</td>
               <td>${statusPill(k.status)}</td>
-              <td class="num">${fmtNum(k.request_count)}</td>
+              <td class="num">${reqsCell}</td>
+              <td class="num">${tokCell}</td>
+              <td class="num usd">${costCellRow}</td>
               <td>${k.last_error_code ? `${k.last_error_code} ${esc(k.last_error_reason || '')}` : '—'}</td>
-            </tr>`).join('')}
+            </tr>`
+          }).join('')}
           </tbody>
         </table>
       ` : `<div class="keys-empty">${icon('tag', 14)} Sem keys configuradas em auth.json.</div>`}
@@ -235,8 +257,12 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
     rows.push({ wd, notes: notes?.items ?? [] as Nota[], board: board ?? { columns: [], cards: [] } })
   }
   const { total, byWd } = tally(rows)
-  // API keys: 1 chamada global, independente dos mundos (vê auth.json do hermes).
-  const keys = await api.hermes.keys().catch(() => null)
+  // API keys + uso: 2 chamadas globais, paralelas (auth.json + usage.jsonl do hermes).
+  // card ebvqt746: usage complementa "hoje / tokens / custo" — sem ficheiro = '—' (v1 intacta).
+  const [keys, usage] = await Promise.all([
+    api.hermes.keys().catch(() => null),
+    api.hermes.usage().catch(() => null),
+  ])
   const first = items[0]
 
 
@@ -276,7 +302,7 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
         </div>
       </section>
 
-      ${keysSection(keys)}
+      ${keysSection(keys, usage)}
 
       <section class="dash-sec">
         <h2>${icon('sphere', 16)} Projetos</h2>
@@ -348,10 +374,11 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
 
 
 export async function renderWorldDashboard(panel: HTMLElement, wd: Wd) {
-  const [notes, board, keys] = await Promise.all([
+  const [notes, board, keys, usage] = await Promise.all([
     api.notes.get(wd.slug).catch(() => null),
     api.kanban.get(wd.slug).catch(() => null),
     api.hermes.keys().catch(() => null),
+    api.hermes.usage().catch(() => null),
   ])
   const rows: Row[] = [{ wd, notes: notes?.items ?? [] as Nota[], board: board ?? { columns: [], cards: [] } }]
   const { byWd } = tally(rows)
@@ -384,7 +411,7 @@ export async function renderWorldDashboard(panel: HTMLElement, wd: Wd) {
         </div>
       </section>
 
-      ${keysSection(keys)}
+      ${keysSection(keys, usage)}
 
       <section class="dash-sec">
         <h2>${icon('aura', 16)} Sessões / terminais ativos neste mundo</h2>

@@ -49,6 +49,7 @@ export const api = {
   },
   hermes: {
     keys: () => j<HermesKey[]>('/api/hermes/keys'),
+    usage: () => j<HermesUsage>('/api/hermes/usage'),
   },
 }
 // hermes/keys -> lista de API keys configuradas no Hermes (censor: NUNCA traz access_token do server).
@@ -62,5 +63,21 @@ export interface HermesKey {
   last_error_message: string | null; last_error_reset_at: string | null
   request_count: number; secret_fingerprint: string | null
   has_token: boolean
+}
+// hermes/usage -> agregado por key_id do JSONL de usage (HERMES_HOME/logs/atlas/usage.jsonl).
+// Server aplica since=inicio-do-dia local quando ausente. Sem ficheiro -> totals_by_key: {} (rc 200).
+export interface HermesUsageKey {
+  requests: number
+  prompt_tokens: number
+  completion_tokens: number
+  cost_usd: number
+  last_ts?: number
+  model?: string
+  provider?: string
+}
+export interface HermesUsage {
+  since: number
+  generated_at: number
+  totals_by_key: Record<string, HermesUsageKey>
 }
 export const uid = () => Math.random().toString(36).slice(2, 10)

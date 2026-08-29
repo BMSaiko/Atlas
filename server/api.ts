@@ -803,6 +803,49 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         send(200, out); return
       }
 
+      // /api/hermes/usage -> agregacao por key_id do JSONL capturado pelo HEIMDALL em cada pedido LLM
+      // (HERMES_HOME/logs/atlas/usage.jsonl, 1 linha por request).
+      // Schema esperado por linha: { ts:number, model:string, prompt_tokens:number, completion_tokens:number,
+      //   cost_usd:number, key_id:string, provider?:string }. Linhas malformadas ou campos em falta sao
+      // ignoradas silenciosamente — 1 request corrupta nao derruba o dashboard. Linhas sem key_id caem
+      // no balde '__unknown__' para nao se misturarem com chaves reais.
+      // Captura (escrita no JSONL) e da responsabilidade do HEIMDALL; este endpoint e read-only.
+      // ponytail: leitura inteira do ficheiro por GET e O(N) em memoria — aceitavel ate dezenas de milhar
+      // de linhas (meses de uso). Upgrade path: tail + line-count se passar disso.
+      if (parts[0] === 'hermes' && parts[1] === 'usage' && parts.length === 2 && m === 'GET') {
+        const sinceQ = parseInt(url.searchParams.get('since') || '0', 10)
+        const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
+        const since = Number.isFinite(sinceQ) && sinceQ > 0 ? sinceQ : startOfToday.getTime()
+        const rows: any[] = []
+        const totals: Record<string, any> = {}
+        const file = join(HERMES_HOME, 'logs', 'atlas', 'usage.jsonl')
+        try {
+          const text = await readFile(file, 'utf8')
+          for (const line of text.split('\n')) {
+            if (!line) continue
+            let r: any
+            try { r = JSON.parse(line) } catch { continue }
+            const ts = typeof r?.ts === 'number' ? r.ts : 0
+            if (!ts || ts < since) continue
+            const keyId = typeof r?.key_id === 'string' && r.key_id ? r.key_id : '__unknown__'
+            const pt = typeof r?.prompt_tokens === 'number' ? r.prompt_tokens : 0
+            const ct = typeof r?.completion_tokens === 'number' ? r.completion_tokens : 0
+            const cost = typeof r?.cost_usd === 'number' ? r.cost_usd : 0
+            const model = typeof r?.model === 'string' ? r.model : undefined
+            const provider = typeof r?.provider === 'string' ? r.provider : undefined
+            rows.push({ ts, key_id: keyId, model, prompt_tokens: pt, completion_tokens: ct, cost_usd: cost, provider })
+            const t = totals[keyId] || (totals[keyId] = { requests: 0, prompt_tokens: 0, completion_tokens: 0, cost_usd: 0, last_ts: 0, model, provider })
+            t.requests += 1
+            t.prompt_tokens += pt
+            t.completion_tokens += ct
+            t.cost_usd += cost
+            if (ts > t.last_ts) { t.last_ts = ts; if (model) t.model = model; if (provider) t.provider = provider }
+          }
+        } catch { /* ficheiro ausente / ilegivel -> resposta vazia, dashboard cai para "—" */ }
+        send(200, { rows, totals_by_key: totals, since, generated_at: Date.now() })
+        return
+      }
+
       // /api/w/:slug/output/:cardId -> stream do log do run headless (offset-based, p/ debugging/erros)
       if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'output' && m === 'GET') {
         const slug = parts[1], cardId = parts[3]

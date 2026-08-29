@@ -639,6 +639,8 @@ a.link:hover { color:var(--gold-soft); }
 .keys-table tbody tr:last-child td { border-bottom:none; }
 .keys-table tbody tr:hover { background:color-mix(in srgb, var(--gold) 6%, transparent); }
 .keys-table td.num, .keys-table th.num { text-align:right; font-variant-numeric:tabular-nums; }
+.keys-table td.usd { font-variant-numeric:tabular-nums; }
+.keys-table .col-uso { color:var(--text-dim); }
 .keys-table code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.82rem; color:var(--text-dim); }
 .keys-pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:.72rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--bg-0); background:var(--pill, var(--text-dim)); }
 .keys-empty { margin-top:var(--s4); padding:var(--s5); background:var(--bg-2); border:1px dashed var(--line); border-radius:var(--r2); color:var(--text-dim); display:flex; align-items:center; gap:var(--s2); }
