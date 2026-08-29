@@ -310,7 +310,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       const prev = board.columns[idx-1]?.id, next = board.columns[idx+1]?.id
       const isSel = sel.has(c.id)
       return `<article class="kcard${c.result ? ' has-output' : ''}${isSel ? ' sel' : ''}${dueState(c).cls === 'over' ? ' overdue' : ''}${dueState(c).cls === 'near' ? ' due-near' : ''}" draggable="true" tabindex="0" data-id="${c.id}">
-        <div class="ktitle">${selMode ? `<input type="checkbox" class="kselbox" data-sel="${c.id}" ${isSel ? 'checked' : ''} aria-label="Selecionar ${esc(c.title)}">` : ''}<h5 title="Criado em ${fmtDate(c.ts)}">${esc(c.title)}</h5></div>
+        <div class="ktitle">${selMode ? `<input type="checkbox" class="kselbox" data-sel="${c.id}" ${isSel ? 'checked' : ''} aria-label="Selecionar ${esc(c.title)}">` : ''}<h5>${esc(c.title)}</h5><span class="kdate" title="Criado em ${fmtDate(c.ts)}">${fmtDate(c.ts)}</span></div>
         ${c.description ? `<div class="kdesc">${esc(previewText(c.description))}</div>` : ''}
         <div class="kstates">${stateChip(c)}${c.dp ? `<span class="kbadge kbadge-dp">DP</span>` : ''}${c.result ? `<span class="kbadge kbadge-out">resultado</span>` : ''}</div>
         <div class="kfoot">
