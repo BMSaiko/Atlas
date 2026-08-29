@@ -111,6 +111,10 @@ Endpoints embutidos no Vite (prefixo `/api`):
 | GET | `/api/hermes/keys` | lista API keys do Hermes (censurado: `secret_fingerprint`, **sem** `access_token`) |
 | GET | `/api/hermes/usage` | agrega `usage.jsonl` por `key_id` (`since=` ISO opcional; default = início do dia local) |
 
+### Write token (anti-corrida)
+
+`PUT /api/w/:slug/{notes,kanban,bundle}` exige o header `X-Atlas-Token` igual a `cfg.wtoken`. O server imprime o token no boot (`[atlas] write token: <hex>`); o cliente recolhe-o via `?token=<hex>` no URL (fica em `localStorage` para reloads). Para setups persistentes, fixa `ATLAS_WTOKEN` no `.env` (`npm run dev:token` gera um hex novo). GETs nunca são gated.
+
 > `card.result` (resumo do que o worker fez) é gravado pelo worker no `kanban.json` e renderizado no card. `card.dp` guarda o Design Plan gerado por `/dp`. As rotas novas devem registar-se **acima** do bloco genérico `/api/w/:slug/{notes|kanban|meta}`.
 
 ## Workflow kanban (task-runner)

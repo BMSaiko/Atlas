@@ -148,7 +148,13 @@ export async function openNewNoteModal(slug: string) {
       const fresh = await api.notes.get(slug)
       for (const n of notes) if (!fresh.items.some(f => f.id === n.id)) fresh.items.push(n)
       notesDoc = fresh; notes.length = 0; for (const n of fresh.items) notes.push(n)
-      const r = await api.notes.put(slug, { ver: notesDoc!.ver, items: notes }); if (r?.ver) notesDoc!.ver = r.ver
+      try { const r = await api.notes.put(slug, { ver: notesDoc!.ver, items: notes }); if (r?.ver) notesDoc!.ver = r.ver }
+      catch (e2: any) {
+        if (e2?.status !== 409) throw e2
+        toast('Conflito persistente — refresh manual')
+        const f = await api.notes.get(slug); notesDoc = f; notes.length = 0; for (const n of f.items) notes.push(n)
+        throw e2
+      }
     }
   }
 }
@@ -173,7 +179,14 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       const fresh = await api.notes.get(slug)
       for (const n of notes) if (!fresh.items.some(f => f.id === n.id)) fresh.items.push(n)
       notes = fresh.items; notesVer = fresh.ver
-      adoptVer(await api.notes.put(slug, { ver: notesVer, items: notes }))
+      try { adoptVer(await api.notes.put(slug, { ver: notesVer, items: notes })) }
+      catch (e2: any) {
+        if (e2?.status !== 409) throw e2
+        // ponytail: 2o 409 seguido = writer persistente (ex: agent a sobrescrever a MESMA nota); toast + re-fetch.
+        toast('Conflito persistente — refresh manual')
+        const f = await api.notes.get(slug); notes = f.items; notesVer = f.ver
+        throw e2
+      }
     }
   }
   const save = async () => { try { await putNotes() } catch (e: any) { toast((e && e.message) || 'Falha ao guardar') } refreshTabCounts(slug) }

@@ -569,7 +569,7 @@ export default function atlasApi(): Plugin {
       if (m === 'PUT' && /^\/api\/w\/[^/]+\/(notes|kanban|bundle)$/.test(p)) {
         const got = (req.headers['x-atlas-token'] || '') as string
         if (!got || got !== cfg.wtoken) { send(401, { error: 'unauthorized: missing or invalid X-Atlas-Token' }); return }
-      } below
+      }
       const parts = p.replace(/^\/api\//,'').split('/').filter(Boolean)
 
       // /api/orchestrator/start[/<slug>] -> passa TODO(s) nao arquivados (de um mundo, se slug) para doing

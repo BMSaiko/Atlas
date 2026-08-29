@@ -150,7 +150,14 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       const fresh = await api.kanban.get(slug)
       for (const c of board.cards) if (!fresh.cards.some(f => f.id === c.id)) fresh.cards.push(c)
       board = fresh
-      adopt(await api.kanban.put(slug, board))
+      try { adopt(await api.kanban.put(slug, board)) }
+      catch (e2: any) {
+        if (e2?.status !== 409) throw e2
+        // ponytail: 2o 409 seguido = conflito persistente (writer a sobrescrever o MESMO card); toast + re-fetch.
+        toast('Conflito persistente — refresh manual')
+        board = await api.kanban.get(slug)
+        throw e2
+      }
     }
   }
   // ponytail: sidebar count computed once at renderShell; keep in sync on every board mutation

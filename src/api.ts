@@ -3,6 +3,17 @@ export interface Nota { id: string; title: string; text: string; ts: number; arc
 export interface Card { id: string; colId: string; title: string; description: string; priority: Prioridade; due?: number; ts: number; archived: boolean; result?: string; dp?: string; reviewed?: boolean; startedAt?: number; recur?: 'daily' | 'weekly' | 'monthly'; occurrenceOf?: string }
 export interface Coluna { id: string; name: string }
 export interface Board { columns: Coluna[]; cards: Card[] }
+// ponytail: write-token fence (card iykn11lg) — header global em TODOS os PUTs (j<T> é o unico helper
+// que toca fetch no cliente). Token vem do URL ?token=... ou localStorage (sobrevive a reloads); sem
+// token, o server devolve 401 e o utilizador ve o motivo no toast. Instalacao sem token cai em 401 — esperado.
+const ATLAS_TOKEN: string = (() => {
+  try {
+    const q = new URL(location.href).searchParams.get('token')
+    if (q) { localStorage.setItem('atlas.wtoken', q); return q }
+    return localStorage.getItem('atlas.wtoken') || ''
+  } catch { return '' }
+})()
+
 // optimistic concurrency: payloads com etag `ver` (escapam ao last-write-wins do PUT)
 export type BoardDoc = { ver: number; columns: Coluna[]; cards: Card[] }
 export type NotesDoc = { ver: number; items: Nota[] }
@@ -11,7 +22,9 @@ export interface Workdir { slug: string; name: string; description?: string; cre
 export interface WorkdirMeta { slug: string; name: string; description: string; createdAt: number; icon?: string; repo?: string }
 
 async function j<T>(url: string, method = 'GET', body?: unknown): Promise<T> {
-  const r = await fetch(url, { method, headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined, body: body !== undefined ? JSON.stringify(body) : undefined })
+  const headers: Record<string, string> = body !== undefined ? { 'Content-Type': 'application/json' } : {}
+  if (ATLAS_TOKEN) headers['X-Atlas-Token'] = ATLAS_TOKEN  // card iykn11lg: fence anti-corrida
+  const r = await fetch(url, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined })
   const data = await r.json().catch(() => null)
   if (!r.ok) { const err = new Error((data && data.error) || r.statusText); (err as any).status = r.status; throw err }
   return data as T
