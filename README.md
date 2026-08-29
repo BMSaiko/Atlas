@@ -9,18 +9,20 @@ Num Atlas, não trabalhas em pastas: atravessas **mundos**. Cada **mundo** é um
 - **Dashboard hub (`/`)** — visão geral de todos os mundos com stat-grid, pipeline em stepper e anéis de conclusão por projeto, incluindo sessões/terminais ativos.
 - **Icons por mundo** — catálogo de 60 orbs SVG; cada mundo com a sua identidade na sidebar e no dashboard.
 - **Tags nas notas** — adiciona, pesquisa e filtra por chips.
+- **Checklists nas notas** — `- [ ]` / `- [x]` editáveis com toggle (clique no checkbox) e persistência na nota.
 - **Seletor de fuso horário** — relógio da sidebar em ~13 zonas comuns via `Intl`.
 - **Tema auto/manual** — dia ↔ entardecer ↔ noite (day/dusk/night) seguem as horas, ou fixas manualmente (botão: esquerdo = manual, direito = auto).
 - **Época do ano (estação)** — dimensão paralela ao shift: Inverno (Out–Dez), Primavera (Jan–Mar), Verão (Abr–Jun), Outono (Jul–Set); automática pelo mês ou manual. Botão de estação na sidebar (esquerdo cicla, direito volta a auto).
 - **Command palette (`Ctrl+K`)** — atalhos por teclado para mundos, notas, cartões e ações (novo mundo, novas notas/cartões), com modais completos delegados.
 - **Templates** — cria notas e cartões a partir de templates (globais + por mundo); no modal Refinar, o template aplica-se à nota de revisão.
 - **Brainstorm** — botão por mundo: gera brainstorm + SWOT do projeto e escreve notas novas (headless, sem tocar no código).
-- **Gerar DP** — botão por card: gera/reescreve o Design Plan (DP) do card em segundo plano (headless); resultado streamado no modal e notificado ao concluir.
+- **Gerar DP** — botão por card: gera/reescreve o Design Plan (DP) do card em segundo plano (headless); resultado streamado no modal e notificado ao concluir. O `dp` e o `result` do card renderizam **Markdown legível** (`renderMd`) no modal.
 - **Sessões de foco** — overlay imersivo com cronómetro + pomodoro (fases focus/pausa).
 - **Prazos (deadlines)** — `due date` por card com badge; cor progressiva por proximidade: a <48h fica laranja, ultrapassado vermelho (done nunca alarme).
 - **Prioridades** — urgente/alta/média/baixa com sort e deteção de overdue.
 - **Bulk actions** — modo seleção de múltiplos cartões (inclui selecionar a coluna inteira com toggle) e barra bulk: mover coluna, mudar prioridade, arquivar, eliminar.
 - **Visualização da tarefa em execução** — ao correr um card, um modal mostra o log do worker ao vivo (stream offset-based) com estado `a executar / concluído`; botões Brainstorm/DP com animação `running`.
+- **Data de criação no card (`kdate`)** — visível no título do card kanban (`title="Criado em …"`).
 - **Notificações de review** — avisos globais quando um card está pronto a rever.
 - **Import roadmap** — um `.md` vira um card por tarefa + nota de detalhe, idempotente.
 - **Export notas** — exporta notas não-arquivadas para markdown na vault (`docs/notas.md`).
@@ -106,14 +108,14 @@ Endpoints embutidos no Vite (prefixo `/api`):
 
 ## Workflow kanban (task-runner)
 
-1. **Run** (`▶` no card) → card vai a **Em Curso** e abre uma janela WezTerm a correr Hermes autónomo numa **worktree isolada** da branch `dev` (`feature/<card-slug>`).
+1. **Run** (`▶` no card) → card vai a **Em Curso** e abre uma janela WezTerm a correr Hermes autónomo numa **worktree isolada** da branch default do repo do mundo (ex. `dev`) — `feature/<card-slug>`.
 2. O worker faz commit localmente, e no fim move o card para **Review** (coluna `review`) com um campo `result`.
 3. **`status`:** a view faz polling do board enquanto houver card em `doing`; o `result` é renderizado com destaque assim que aparece. O botão **Gerar DP** corre `/dp` em segundo plano e notifica ao concluir.
 4. **Review (só BMS):** `approve` → mergem `dev → main` e card para **done**; `reject` → volta a `doing` com nota de refinamento e re-corre. **`done` é sempre manual** (validação BMS), nunca automático.
 
 ### Task-runner interno (`server/api.ts::launchHermes`)
 
-- Cria **uma worktree por card**: `git worktree add -B feature/<slug>-<cardId> <code>/data/.wt/<slug>/<cardId> dev`.
+- Cria **uma worktree por card**: `git worktree add -B feature/<slug>-<cardId> <code>/data/.wt/<slug>/<cardId> <baseBranch>` — a base é a **branch default real do repo do mundo** (não hardcoded `dev`).
 - `cwd` do spawn = a worktree do card (nunca o repo raiz).
 - Spawn não-bloqueante: `WEZTERM start -- <python> -m hermes_cli.main -z "<prompt>"` com `{detached:true, stdio:'ignore'}` e `p.unref()`.
 - Qualquer falha escreve `card.result` (ex. `ERRO: …`) — **nunca** return silencioso.
