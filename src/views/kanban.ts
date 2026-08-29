@@ -284,18 +284,12 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       const isSel = sel.has(c.id)
       return `<article class="kcard${c.result ? ' has-output' : ''}${isSel ? ' sel' : ''}${dueState(c).cls === 'over' ? ' overdue' : ''}${dueState(c).cls === 'near' ? ' due-near' : ''}" draggable="true" tabindex="0" data-id="${c.id}">
         <div class="ktitle">${selMode ? `<input type="checkbox" class="kselbox" data-sel="${c.id}" ${isSel ? 'checked' : ''} aria-label="Selecionar ${esc(c.title)}">` : ''}<h5>${esc(c.title)}</h5><span class="kdate">${fmtDate(c.ts)}</span></div>
-        ${c.description ? `<div class="kdesc">${renderMd(c.description)}</div>` : ''}
-        ${c.colId === 'doing' && !c.result ? kdoing(c) : ''}
-        ${c.result ? `${resultHtml(c.result)}` : ''}
-        ${c.dp ? dpHtml(c.dp) : ''}
-        ${c.colId === 'review' ? `<div class="kreview">
-          <button class="btn btn-primary btn-sm" data-act="approve">${icon('check', 14)} Aprovar</button>
-          <button class="btn btn-ghost btn-sm" data-act="reject">${icon('pencil', 14)} Refinar</button>
-        </div>` : ''}
+        ${c.description ? `<div class="kdesc">${esc(previewText(c.description))}</div>` : ''}
+        <div class="kstates">${stateChip(c)}${c.dp ? `<span class="kbadge kbadge-dp">DP</span>` : ''}${c.result ? `<span class="kbadge kbadge-out">resultado</span>` : ''}</div>
         <div class="kfoot">
           ${dueBadge(c)}
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
-          ${kops(c, prev, next)}
+          ${kops(c)}
         </div>
       </article>`
     }).join('')
@@ -312,7 +306,8 @@ export async function renderKanban(root: HTMLElement, slug: string) {
 
   // ponytail: composição condicional do .kops por coluna — só a ação de ciclo de vida relevante ao estado.
   // start/play só em todo; restart(reset)+term só em doing; move/edit/arch/del em todas.
-  function kops(c: Card, prev?: string, next?: string): string {
+  // ponytail: card = snippet frio — só ações de fluxo (run/dp/term). Gestão (move/edit/arch/del/approve/reject) vive no modal.
+  function kops(c: Card): string {
     const b: string[] = []
     if (c.colId === 'todo') {
       b.push(`<button class="btn-icon btn-ghost" data-act="run" aria-label="Executar no Hermes">${icon('play', 15)}</button>`)
@@ -321,11 +316,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       b.push(`<button class="btn-icon btn-ghost" data-act="run" aria-label="Reiniciar execução">${icon('reset', 15)}</button>`)
       b.push(`<button class="btn-icon btn-ghost" data-act="term" aria-label="Ver terminal / log do run">${icon('term', 16)}</button>`)
     }
-    b.push(`<button class="btn-icon btn-ghost" data-act="move" data-dir="-1" ${prev?'':'disabled'} aria-label="Mover atrás">${icon('back', 15)}</button>`)
-    b.push(`<button class="btn-icon btn-ghost" data-act="move" data-dir="1" ${next?'':'disabled'} aria-label="Mover frente">${icon('forward', 15)}</button>`)
-    b.push(`<button class="btn-icon btn-ghost" data-act="edit" aria-label="Editar">${icon('pencil', 15)}</button>`)
-    b.push(`<button class="btn-icon btn-ghost" data-act="arch" aria-label="Arquivar">${icon('archive', 15)}</button>`)
-    b.push(`<button class="btn-icon btn-ghost" data-act="del" aria-label="Eliminar" style="color:var(--danger)">${icon('trash', 15)}</button>`)
+    if (!b.length) return ''
     return `<div class="kops">${b.join('')}</div>`
   }
 
@@ -647,40 +638,46 @@ function runCard(c: Card) {
     const m = openModal({
       title: c.title, submitText: 'Editar',
       body: () => `
-        <div style="font-size:.95rem;margin-bottom:8px">
-          <button type="button" class="kcopy" data-id="${c.id}" title="Copiar ID"
-            style="font-family:monospace;font-size:.8rem;background:none;border:1px solid var(--line);border-radius:4px;color:var(--muted);text-decoration:underline dotted;cursor:pointer;padding:1px 6px;margin-right:8px">#${c.id}</button>
+        <div class="kmodal-head">
+          <button type="button" class="kcopy" data-id="${c.id}" title="Copiar ID">#${c.id}</button>
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
           <span class="muted"> · ${esc(col)}</span>
           <span class="muted"> · criado ${fmtDate(c.ts)}</span>
           ${c.due ? `${dueBadge(c)}` : ''}
         </div>
+        ${stateChip(c) ? `<div class="kmodal-status">${stateChip(c)}</div>` : ''}
         ${c.description
           ? `<div class="kdesc md-view">${renderMd(c.description)}</div>`
           : '<div class="muted">Sem descrição</div>'}
-        <div class="kmodal-actions" data-card-actions>
-          ${c.colId === 'todo'
-            ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="run">${icon('play',14)} Executar no Hermes</button>
-               <button type="button" class="btn btn-ghost btn-sm" data-card-act="dp" data-card="${c.id}">${icon('doc',14)} Gerar DP</button>`
-            : c.colId === 'doing'
-              ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="run">${icon('reset',14)} Reiniciar execução</button>
-                 <button type="button" class="btn btn-ghost btn-sm" data-card-act="term">${icon('term',14)} Ver terminal</button>`
-              : c.colId === 'review'
-                ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="approve">${icon('check',14)} Aprovar</button>
-                   <button type="button" class="btn btn-ghost btn-sm" data-card-act="reject">${icon('pencil',14)} Refinar</button>`
-                : ''}
-          <button type="button" class="btn-icon btn-ghost" data-card-act="move" data-dir="-1" ${prev?'':'disabled'} title="Mover atrás">${icon('back',15)}</button>
-          <button type="button" class="btn-icon btn-ghost" data-card-act="move" data-dir="1" ${next?'':'disabled'} title="Mover frente">${icon('forward',15)}</button>
-          <button type="button" class="btn-icon btn-ghost" data-card-act="edit" title="Editar">${icon('pencil',15)}</button>
-          <button type="button" class="btn-icon btn-ghost" data-card-act="arch" title="Arquivar">${icon('archive',15)}</button>
-          <button type="button" class="btn-icon btn-ghost" data-card-act="del" title="Eliminar" style="color:var(--danger)">${icon('trash',15)}</button>
-        </div>
         ${c.dp
-          ? `<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--line)"><div class="muted" style="font-size:.8rem;font-weight:600;margin-bottom:6px;color:var(--gold)">DP (Design Plan)</div>${dpHtml(c.dp)}</div>`
+          ? `<section class="kmodal-sec"><h6 class="kmodal-sec-t">${icon('doc',14)} Design Plan · DP</h6><div class="kmodal-sec-body">${dpHtml(c.dp)}</div></section>`
           : ''}
         ${c.result
-          ? `<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--line)"><div class="muted" style="font-size:.8rem;font-weight:600;margin-bottom:6px;color:var(--gold)">Resultado</div>${resultHtml(c.result)}</div>`
-          : ''}`
+          ? `<section class="kmodal-sec"><h6 class="kmodal-sec-t">${icon('check',14)} Resultado</h6><div class="kmodal-sec-body">${resultHtml(c.result)}</div></section>`
+          : ''}
+        <div class="kmodal-actions" data-card-actions>
+          <div class="kmodal-actions-primary">
+            ${c.colId === 'todo'
+              ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="run">${icon('play',14)} Executar no Hermes</button>
+                 <button type="button" class="btn btn-ghost btn-sm" data-card-act="dp" data-card="${c.id}">${icon('doc',14)} Gerar DP</button>`
+              : c.colId === 'doing'
+                ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="run">${icon('reset',14)} Reiniciar execução</button>
+                   <button type="button" class="btn btn-ghost btn-sm" data-card-act="term">${icon('term',14)} Ver terminal</button>`
+                : c.colId === 'review'
+                  ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="approve">${icon('check',14)} Aprovar</button>
+                     <button type="button" class="btn btn-ghost btn-sm" data-card-act="reject">${icon('pencil',14)} Refinar</button>`
+                  : '<span class="muted" style="font-size:.82rem">Sem ações para esta coluna</span>'}
+          </div>
+          <div class="kmodal-actions-meta">
+            <button type="button" class="btn-icon btn-ghost" data-card-act="move" data-dir="-1" ${prev?'':'disabled'} title="Mover atrás">${icon('back',15)}</button>
+            <button type="button" class="btn-icon btn-ghost" data-card-act="move" data-dir="1" ${next?'':'disabled'} title="Mover frente">${icon('forward',15)}</button>
+            <button type="button" class="btn-icon btn-ghost" data-card-act="edit" title="Editar">${icon('pencil',15)}</button>
+          </div>
+          <div class="kmodal-actions-danger">
+            <button type="button" class="btn-icon btn-ghost" data-card-act="arch" title="Arquivar">${icon('archive',15)}</button>
+            <button type="button" class="btn-icon btn-ghost" data-card-act="del" title="Eliminar" style="color:var(--danger)">${icon('trash',15)}</button>
+          </div>
+        </div>`
       ,
       onSubmit: () => cardModal(c),
     })
@@ -773,6 +770,26 @@ function kdoing(c: Card): string {
   const start = c.startedAt || c.ts
   return `<div class="kdoing"><span class="kword">${w}</span><span class="kdot" style="--i:0"></span><span class="kdot" style="--i:1"></span><span class="kdot" style="--i:2"></span><span class="ktimer" data-start="${start}">${fmtElapsed(Date.now() - start)}</span></div>`
 }
+// ponytail: preview cru no card — arranca markdown, 1-2 linhas clamp via CSS (.kdesc). Full md fica no modal.
+function previewText(md: string): string {
+  return md
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gm, ' ')
+    .replace(/[*_~`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+// ponytail: chip de estado no card — doing=acao+clock, review/done=badge. Sem conteudo, so sinal.
+function stateChip(c: Card): string {
+  if (c.colId === 'doing' && !c.result) return `<div class="kstates-live">${kdoing(c)}</div>`
+  if (c.colId === 'review') return `<span class="kbadge kbadge-review">REVISAO</span>`
+  if (c.colId === 'done') return `<span class="kbadge kbadge-out"><span class="dot" style="background:var(--gold)"></span>Concluido</span>`
+  return ''
+}
+
 function dpHtml(dp: string): string {
   // ponytail: DP apresentado como bloco destacado (primeira linha = cabecalho), cor distinta do result
   const nl = dp.indexOf('\n')

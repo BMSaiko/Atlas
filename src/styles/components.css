@@ -209,8 +209,8 @@
 .kcard .kdate { font-size:.7rem; color:var(--text-dim); white-space:nowrap; }
 .kops [data-act="run"] { background:color-mix(in srgb,var(--gold) 14%, transparent); color:var(--gold); }
 /* Conteudo do card limitado a 3 linhas -> altura uniforme; texto completo via clique (modal) */
-.kcard .kdesc { color:var(--text-dim); font-size:.85rem; white-space:pre-wrap; margin-bottom:8px;
-  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.kcard .kdesc { color:var(--text-dim); font-size:.85rem; white-space:pre-wrap; margin-bottom:6px;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 /* Variante de output (tem result): mostra bloco do resultado, conteudo continua clampado */
 .kcard.has-output .kdesc { -webkit-line-clamp:2; }
 .kcard .kfoot { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
@@ -218,6 +218,13 @@
 /* Botões compactos: cabem na largura reduzida do card sem sair para fora */
 .kcard .btn-icon { min-height:34px; min-width:34px; padding:6px; }
 .kcard .kops svg { width:14px; height:14px; }
+.kcard .kstates { display:flex; flex-wrap:wrap; gap:4px; align-items:center; margin:2px 0 6px; }
+.kstates-live { display:contents; }
+.kbadge { display:inline-flex; align-items:center; gap:4px; font-size:.62rem; font-weight:700; letter-spacing:.07em;
+  text-transform:uppercase; border:1px solid var(--line); border-radius:4px; padding:1px 6px; color:var(--muted); white-space:nowrap; }
+.kbadge-dp { color:var(--sky); border-color:var(--sky); background:color-mix(in srgb,var(--sky) 10%, transparent); }
+.kbadge-out { color:var(--gold); border-color:var(--gold); background:color-mix(in srgb,var(--gold) 10%, transparent); }
+.kbadge-review { color:var(--gold); border-color:var(--gold); background:color-mix(in srgb,var(--gold) 10%, transparent); animation:kdblink 1.2s infinite; }
 .kcard.archived { opacity:.5; filter:grayscale(.6); }
 .prio { display:inline-flex; align-items:center; gap:6px; font-size:.72rem; font-weight:600; letter-spacing:.03em; text-transform:uppercase; }
 .prio .dot { width:8px; height:8px; border-radius:50%; }
@@ -247,8 +254,18 @@
 .field input, .field textarea, .field select { padding:10px 12px; border-radius:var(--r1); background:var(--bg-3); border:1px solid var(--line); color:var(--text); }
 .field textarea { resize:vertical; min-height:90px; }
 .modal-actions { display:flex; gap:var(--s2); justify-content:flex-end; margin-top:var(--s5); }
-.kmodal-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px; }
+.kmodal-actions { display:flex; flex-direction:column; align-items:stretch; gap:0; margin-top:14px; }
+.kmodal-actions-primary { display:flex; gap:8px; flex-wrap:wrap; }
+.kmodal-actions-meta { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:10px; padding-top:10px; border-top:1px solid var(--line); }
+.kmodal-actions-danger { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:10px; padding-top:10px;
+  border-top:1px dashed color-mix(in srgb,var(--danger) 45%, transparent); }
 .kmodal-actions .btn-sm { min-height:34px; }
+.kmodal-head { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:.9rem; margin-bottom:12px; }
+.kmodal-status { margin:10px 0 4px; display:flex; align-items:center; gap:6px; }
+.kmodal-sec { margin-top:14px; padding-top:10px; border-top:1px solid var(--line); }
+.kmodal-sec-t { display:flex; align-items:center; gap:6px; margin:0 0 8px; font-size:.74rem; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+.kmodal-sec-body .kdp, .kmodal-sec-body .kresult { margin-left:0; margin-right:0; }
 .kcopy { font-family:monospace; font-size:.8rem; background:none; border:1px solid var(--line); border-radius:4px; color:var(--muted); text-decoration:underline dotted; cursor:pointer; padding:1px 6px; margin-right:8px; }
 .kcopy:hover { color:var(--gold); border-color:var(--gold); }
 /* Kawalan de Markdown na vista do cartão (sem line-clamp: corpo completo) */
