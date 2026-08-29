@@ -653,6 +653,7 @@ function runCard(c: Card) {
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
           <span class="muted"> · ${esc(col)}</span>
           <span class="muted"> · criado ${fmtDate(c.ts)}</span>
+          ${c.due ? `${dueBadge(c)}` : ''}
         </div>
         ${c.description
           ? `<div class="kdesc md-view">${renderMd(c.description)}</div>`
