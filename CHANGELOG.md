@@ -5,6 +5,8 @@ Todas as mudanças notáveis do Atlas. Formato baseado em [Keep a Changelog](htt
 ## [Unreleased]
 
 ### Added
+- **docs:** README temático Atlas — metáfora "mundo" (workdir) como voz central na documentação, sincronizada com as features de `dev`.
+- **docs (refinamento 29/08):** README cobre agora também épocas do ano/estações, command palette (`Ctrl+K`), templates, botões Brainstorm e Gerar DP, visualização da tarefa em execução (stream de log), prazos/deadlines, prioridades urgentes e bulk actions — voz Atlas/"mundo" mantida sem perder precisão técnica.
 - **Main dashboard** no root (`/`, `src/views/dashboard.ts`): visão geral de todos os workdirs — stat-grid (projetos, notas, cartões em aberto, concluídos), pipeline de trabalho em stepper com conectores + paleta por etapa (todo/doing/review/done nos 3 shifts), projetos com anel orbital de conclusão e sessões/terminais ativos (tempo decorrido com ticker de 1s). `src/views/dashboard.ts`.
 - **Icons por workdir** — catálogo de 60 orbs SVG + picker nas Definições; cada trabalho com icon próprio na sidebar/dashboard (`/api/icons`).
 - **Tags nas notas** — adicionar, pesquisar e filtrar por chips de tag; barra de tags na view de notas.
