@@ -84,7 +84,19 @@ export async function renderNotes(root: HTMLElement, slug: string) {
   // ponytail: bulk — selecao de multiplas notas
   let selMode = false
   let sel = new Set<string>()
-  const save = async () => { adoptVer(await api.notes.put(slug, { ver: notesVer, items: notes })); refreshTabCounts(slug) }
+  // ponytail: PUT com retry — 409 (outro escritor avancou `ver`) fazia o item \"nao aparecer\". Re-sync
+  // ver + re-aplica criacoes locais e retenta 1x (mesmo padrao do kanban.ts).
+  const putNotes = async () => {
+    try { adoptVer(await api.notes.put(slug, { ver: notesVer, items: notes })) }
+    catch (e: any) {
+      if (e?.status !== 409) throw e
+      const fresh = await api.notes.get(slug)
+      for (const n of notes) if (!fresh.items.some(f => f.id === n.id)) fresh.items.push(n)
+      notes = fresh.items; notesVer = fresh.ver
+      adoptVer(await api.notes.put(slug, { ver: notesVer, items: notes }))
+    }
+  }
+  const save = async () => { try { await putNotes() } catch (e: any) { toast((e && e.message) || 'Falha ao guardar') } refreshTabCounts(slug) }
   const fmt = (ts: number) => new Date(ts).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
   const archCount = () => notes.filter(n => n.archived).length
   // ponytail: ao converter nota->cartao (tocanban) o board muda fora de kanban.ts; re-sync sidebar aqui
