@@ -562,7 +562,14 @@ export default function atlasApi(): Plugin {
     const m = req.method || 'GET'
     const send = (code: number, v: any) => { res.statusCode=code; res.setHeader('Content-Type','application/json'); res.end(JSON.stringify(v)) }
     try {
-      if (!p.startsWith('/api/')) return next()   // static handled by vite, preview fallback below
+      if (!p.startsWith('/api/')) return next()   // static handled by vite, preview fallback (ex: dist/index.html em produção)
+      // ponytail: fence anti-corrida (card iykn11lg) — writers externos (PUT notes/kanban/bundle) tem de apresentar
+      // X-Atlas-Token a bater com cfg.wtoken. Sem token -> 401. Escritas internas (writeJ chamado pelo proprio
+      // server em launchHermes/dp worker) NAO passam pelo middleware HTTP, ficam trusted. GETs livre (UI+meta).
+      if (m === 'PUT' && /^\/api\/w\/[^/]+\/(notes|kanban|bundle)$/.test(p)) {
+        const got = (req.headers['x-atlas-token'] || '') as string
+        if (!got || got !== cfg.wtoken) { send(401, { error: 'unauthorized: missing or invalid X-Atlas-Token' }); return }
+      } below
       const parts = p.replace(/^\/api\//,'').split('/').filter(Boolean)
 
       // /api/orchestrator/start[/<slug>] -> passa TODO(s) nao arquivados (de um mundo, se slug) para doing

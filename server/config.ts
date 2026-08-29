@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { randomBytes } from 'node:crypto'
 
 // Config do runner carregada no boot. Single source: atlas.config.json (raiz, gitignored).
 // Precedencia: env > ficheiro > defaults. Defaults = comportamento anterior (Windows + 5173),
@@ -11,6 +12,9 @@ export interface AtlasConfig {
   hermesHome: string
   atlasRepo: string
   vault: string
+  // ponytail: token anti-corrida (card iykn11lg) — writers externos (PUT notes/kanban/bundle) tem de apresentar este
+  // header. NUNCA persistido em disco (uma fuga de cfg no log já é debug) — random por boot ou ATLAS_WTOKEN.
+  wtoken: string
 }
 
 const DEFAULTS: AtlasConfig = {
@@ -20,6 +24,7 @@ const DEFAULTS: AtlasConfig = {
   hermesHome: 'C:\\Users\\bruno\\AppData\\Local\\hermes',
   atlasRepo: 'C:\\Users\\bruno\\Documents\\Second-Brain\\knowledge\\projects\\atlas\\code',
   vault: 'C:\\Users\\bruno\\Documents\\Second-Brain',
+  wtoken: '',  // resolved at runtime: env ATLAS_WTOKEN -> randomBytes(32).hex (ver loadConfig)
 }
 
 function envNum(key: string, dflt: number): number {
@@ -41,7 +46,11 @@ function loadConfig(): AtlasConfig {
     hermesHome: process.env.HERMES_LIVE_HOME || fromFile.hermesHome || DEFAULTS.hermesHome,
     atlasRepo: process.env.ATLAS_REPO || fromFile.atlasRepo || DEFAULTS.atlasRepo,
     vault: process.env.ATLAS_VAULT || fromFile.vault || DEFAULTS.vault,
+    // ponytail: wtoken — env fixa para setups persistentes; sem env, aleatório a cada boot (curta duração = janela curta de exposição).
+    // Card iykn11lg: impresso 1x no boot para o BMS colar como ?token=... no URL do client.
+    wtoken: process.env.ATLAS_WTOKEN || randomBytes(32).toString('hex'),
   }
 }
-
-export const cfg: AtlasConfig = loadConfig()
+const _cfg = loadConfig()
+console.log('[atlas] write token:', _cfg.wtoken)  // imprimido 1x para o utilizador copiar no client (card iykn11lg)
+export const cfg: AtlasConfig = _cfg
