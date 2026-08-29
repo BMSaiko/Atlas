@@ -232,6 +232,8 @@
 
 /* --- Due date / overdue --- */
 .kdue { display:inline-flex; align-items:center; gap:4px; font-size:.7rem; font-weight:600; letter-spacing:.02em; color:var(--text-dim); border:1px solid var(--line); border-radius:4px; padding:1px 6px; white-space:nowrap; }
+.kdue.near { color:var(--prio-med); border-color:var(--prio-med); background:color-mix(in srgb,var(--prio-med) 10%, transparent); }
+.kcard.due-near { border-color:var(--prio-med); }
 .kdue.over { color:var(--prio-urgent); border-color:var(--prio-urgent); background:color-mix(in srgb,var(--prio-urgent) 12%, transparent); }
 .kcard.overdue { border-color:var(--prio-urgent); box-shadow:0 0 0 1px var(--prio-urgent) inset; background:color-mix(in srgb,var(--prio-urgent) 5%, var(--bg-3)); }
 .kcard.overdue:hover { border-color:var(--prio-urgent); }

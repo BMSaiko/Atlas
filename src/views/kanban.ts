@@ -264,7 +264,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       const idx = board.columns.findIndex(x => x.id === c.colId)
       const prev = board.columns[idx-1]?.id, next = board.columns[idx+1]?.id
       const isSel = sel.has(c.id)
-      return `<article class="kcard${c.result ? ' has-output' : ''}${isSel ? ' sel' : ''}${isOverdue(c) ? ' overdue' : ''}" draggable="true" tabindex="0" data-id="${c.id}">
+      return `<article class="kcard${c.result ? ' has-output' : ''}${isSel ? ' sel' : ''}${dueState(c).cls === 'over' ? ' overdue' : ''}${dueState(c).cls === 'near' ? ' due-near' : ''}" draggable="true" tabindex="0" data-id="${c.id}">
         <div class="ktitle">${selMode ? `<input type="checkbox" class="kselbox" data-sel="${c.id}" ${isSel ? 'checked' : ''} aria-label="Selecionar ${esc(c.title)}">` : ''}<h5>${esc(c.title)}</h5><span class="kdate">${fmtDate(c.ts)}</span></div>
         ${c.description ? `<div class="kdesc">${renderMd(c.description)}</div>` : ''}
         ${c.colId === 'doing' && !c.result ? kdoing(c) : ''}
@@ -752,11 +752,21 @@ function fmtElapsed(ms: number): string {
   if (m > 0) return `h\u00e1 ${m}m ${String(sec).padStart(2, '0')}s`
   return `h\u00e1 ${sec}s`
 }
-function isOverdue(c: Card): boolean { return !!c.due && c.due < Date.now() && c.colId !== 'done' }
+// ponytail: estados do prazo por proximidade — ok (silencioso) -> near (>=48h, laranja) -> over (passado, vermelho urgente).
+// Quanto mais proximo o prazo, mais alarmante a cor (refinamento 29/08). done nunca alarme.
+function dueState(c: Card): { cls: string; icon: string; label: string } {
+  if (!c.due || c.colId === 'done') return { cls: '', icon: '', label: '' }
+  const dt = c.due - Date.now()
+  if (dt < 0) return { cls: 'over', icon: '⚠ ', label: ' · Atrasada' }
+  if (dt < 48 * 3600 * 1000) return { cls: 'near', icon: '⏳ ', label: '' }
+  return { cls: '', icon: '⏱ ', label: '' }
+}
+function isOverdue(c: Card): boolean { return dueState(c).cls === 'over' }
 function dueBadge(c: Card): string {
   if (!c.due) return ''
-  const over = isOverdue(c)
-  return `<span class="kdue${over ? ' over' : ''}" title="Prazo: ${fmtDate(c.due)}">${over ? '⚠ ' : '⏱ '}${fmtDue(c.due)}${over ? ' · Atrasada' : ''}</span>`
+  const s = dueState(c)
+  const body = `${s.icon}${fmtDue(c.due)}${s.label}`
+  return `<span class="kdue${s.cls ? ' ' + s.cls : ''}" title="Prazo: ${fmtDate(c.due)}">${body}</span>`
 }
 function fmtDue(ts: number): string {
   return new Date(ts).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })
