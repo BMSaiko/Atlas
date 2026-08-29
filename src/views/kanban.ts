@@ -29,7 +29,7 @@ const dpPollers: Record<string, { timer?: ReturnType<typeof setInterval> }> = {}
 // TAKE: identical pneum BUTTON (#kadd) e palette quickAdd. Fonte unica do "Novo cartão". A
 // criacao re-sync ver no 409 e retenta 1x (mesmo putBoard da vista) e depois recarrega o tab.
 // ponytail: PUT com retry no 409 (escritor concorrente avançou `ver`) — re-sync + re-aplica criacao local e retenta 1x.
-async function putKanbanRetry(slug: string, doc: BoardDoc): Promise<BoardDoc> {
+export async function putKanbanRetry(slug: string, doc: BoardDoc): Promise<BoardDoc> {
   try { const r = await api.kanban.put(slug, doc); if (r?.ver) doc.ver = r.ver; return doc }
   catch (e: any) {
     if (e?.status !== 409) throw e
@@ -93,6 +93,12 @@ export async function openNewCardModal(slug: string) {
         <option value="low">Baixa</option>
       </select></div>
       <div class="field"><label for="k-due">Prazo (obrigatório)</label><input id="k-due" name="due" type="date"></div>
+      <div class="field"><label for="k-recur">Recorrência</label><select id="k-recur" name="recur">
+        <option value="">Não recorrente</option>
+        <option value="daily">Diária</option>
+        <option value="weekly">Semanal</option>
+        <option value="monthly">Mensal</option>
+      </select></div>
       <div class="field"><label for="k-col">Coluna</label><select id="k-col" name="colId">${cols}</select></div>`,
     onSubmit: async () => {
       const form = m.root.querySelector('form') as HTMLFormElement
@@ -101,11 +107,13 @@ export async function openNewCardModal(slug: string) {
       const dueV = (form.querySelector('[name=due]') as HTMLInputElement).value
       let due: number | undefined
       if (dueV) { const [Y, M, D] = dueV.split('-').map(Number); due = new Date(Y, M - 1, D).getTime() }
+      const recurV = (form.querySelector('[name=recur]') as HTMLSelectElement).value as Card['recur']
       board!.cards.push({
         id: uid(), ts: Date.now(), archived: false,
         title, description: (form.querySelector('[name=description]') as HTMLTextAreaElement).value,
         priority: (form.querySelector('[name=priority]') as HTMLSelectElement).value as Prioridade,
         colId: (form.querySelector('[name=colId]') as HTMLSelectElement).value, due,
+        recur: recurV || undefined,
       })
       try { board = await putKanbanRetry(slug, board!) } catch (e: any) { toast((e && e.message) || 'Falha ao criar') ; return }
       toast('Criado'); navigate('/w/' + slug + '?tab=kanban')
@@ -312,7 +320,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       return `<article class="kcard${c.result ? ' has-output' : ''}${isSel ? ' sel' : ''}${dueState(c).cls === 'over' ? ' overdue' : ''}${dueState(c).cls === 'near' ? ' due-near' : ''}" draggable="true" tabindex="0" data-id="${c.id}">
         <div class="ktitle">${selMode ? `<input type="checkbox" class="kselbox" data-sel="${c.id}" ${isSel ? 'checked' : ''} aria-label="Selecionar ${esc(c.title)}">` : ''}<h5>${esc(c.title)}</h5><span class="kdate" title="Criado em ${fmtDate(c.ts)}">${fmtDate(c.ts)}</span></div>
         ${c.description ? `<div class="kdesc">${esc(previewText(c.description))}</div>` : ''}
-        <div class="kstates">${stateChip(c)}${c.dp ? `<span class="kbadge kbadge-dp">DP</span>` : ''}${c.result ? `<span class="kbadge kbadge-out">resultado</span>` : ''}</div>
+        <div class="kstates">${stateChip(c)}${c.dp ? `<span class="kbadge kbadge-dp">DP</span>` : ''}${c.result ? `<span class="kbadge kbadge-out">resultado</span>` : ''}${c.recur ? `<span class="kbadge kbadge-recur" title="Recorrente · ${esc(recurLabel(c.recur))}">↻ ${esc(recurLabel(c.recur))}</span>` : ''}</div>
         <div class="kfoot">
           ${dueBadge(c)}
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
@@ -637,6 +645,12 @@ function runCard(c: Card) {
           <option value="low" ${c?.priority==='low'?'selected':''}>Baixa</option>
         </select></div>
         <div class="field"><label for="k-due">Prazo (obrigatório)</label><input id="k-due" name="due" type="date" value="${c?.due ? toInputDate(c.due) : ''}"></div>
+        <div class="field"><label for="k-recur">Recorrência</label><select id="k-recur" name="recur">
+          <option value="">Não recorrente</option>
+          <option value="daily" ${c?.recur==='daily'?'selected':''}>Diária</option>
+          <option value="weekly" ${c?.recur==='weekly'?'selected':''}>Semanal</option>
+          <option value="monthly" ${c?.recur==='monthly'?'selected':''}>Mensal</option>
+        </select></div>
         <div class="field"><label for="k-col">Coluna</label><select id="k-col" name="colId">${cols}</select></div>`,
       onSubmit: () => {
         const form = document.querySelector('.modal form') as HTMLFormElement
@@ -645,13 +659,14 @@ function runCard(c: Card) {
         const dueV = (form.querySelector('[name=due]') as HTMLInputElement).value
         let due: number | undefined
         if (dueV) { const [Y, M, D] = dueV.split('-').map(Number); due = new Date(Y, M - 1, D).getTime() }
+        const recurV = (form.querySelector('[name=recur]') as HTMLSelectElement).value as Card['recur']
         const data = {
           title, description: (form.querySelector('[name=description]') as HTMLTextAreaElement).value,
           priority: (form.querySelector('[name=priority]') as HTMLSelectElement).value as Prioridade,
           colId: (form.querySelector('[name=colId]') as HTMLSelectElement).value,
-          due,
+          due, recur: recurV || undefined,
         }
-        if (c) { Object.assign(c, data); if (!c.due) delete c.due }
+        if (c) { Object.assign(c, data); if (!c.due) delete c.due; if (!c.recur) delete c.recur }
         else board.cards.push({ id: uid(), ts: Date.now(), archived: false, ...data, priority: data.priority ?? 'low' })
         save().then(render); toast(c ? 'Guardado' : 'Criado')
       },
@@ -671,6 +686,7 @@ function runCard(c: Card) {
           <span class="muted"> · ${esc(col)}</span>
           <span class="muted"> · criado ${fmtDate(c.ts)}</span>
           ${c.due ? `${dueBadge(c)}` : ''}
+          ${c.recur ? `<span class="kbadge kbadge-recur" title="Recorrente">↻ ${esc(recurLabel(c.recur))}</span>` : ''}
         </div>
         ${stateChip(c) ? `<div class="kmodal-status">${stateChip(c)}</div>` : ''}
         ${c.description
@@ -849,6 +865,7 @@ function dueState(c: Card): { cls: string; icon: string; label: string } {
   return { cls: '', icon: '⏱ ', label: '' }
 }
 function isOverdue(c: Card): boolean { return dueState(c).cls === 'over' }
+function recurLabel(r: NonNullable<Card['recur']>): string { return r === 'daily' ? 'diária' : r === 'weekly' ? 'semanal' : 'mensal' }
 function dueBadge(c: Card): string {
   if (!c.due) return ''
   const s = dueState(c)
