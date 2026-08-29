@@ -9,6 +9,17 @@ import { renderMd } from '../ui/text'
 // ponytail: handle unico do poll — renderKanban re-corre em cada navegacao e criava um
 // setInterval novo por chamada. Limpa o anterior antes de criar. O poll so faz refresh
 // ao vivo do board; as notificacoes de review sao globais (main.ts), não dependem do poll.
+// ponytail: lançador comum de um card no Hermes headless — reusado pelos botoes do grid/modal
+export function launchRun(slug: string, c: Card): Promise<boolean> {
+  return fetch(`/api/w/${slug}/run`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cardId: c.id }),
+  }).then(r => r.json()).then((d: any) => {
+    if (d && d.ok) return true
+    throw new Error((d && d.error) || 'Erro ao executar')
+  }).catch((e: any) => { toast((e && e.message) || 'Falha ao abrir Hermes'); return false })
+}
+
 let pollTimer: ReturnType<typeof setInterval> | undefined
 // ponitail: pollers de DP que sobrevivem ao fecho do modal p/ notificar conclusao
 const dpPollers: Record<string, { timer?: ReturnType<typeof setInterval> }> = {}
@@ -371,13 +382,10 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
 
 function runCard(c: Card) {
     toast('A abrir WezTerm com o Hermes...')
-    fetch(`/api/w/${slug}/run`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cardId: c.id }),
-    }).then(r => r.json()).then((d: any) => {
-      if (d && d.ok) { c.colId = 'doing'; c.startedAt = Date.now(); save().then(render); toast('A executar em segundo plano (headless)') }
-      else toast((d && d.error) || 'Erro ao executar')
-    }).catch(() => toast('Falha ao abrir Hermes'))
+    launchRun(slug, c).then(ok => {
+      if (!ok) return
+      c.colId = 'doing'; c.startedAt = Date.now(); save().then(render); toast('A executar em segundo plano (headless)')
+    })
   }
 
   function viewTerminal(c: Card) {
