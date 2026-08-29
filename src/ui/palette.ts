@@ -36,7 +36,7 @@ export function openPalette(slug: string | null) {
 
   // Ações base — disponíveis mesmo sem workdir ativo (dashboard)
   push('Ações', 'sphere', 'Dashboard', 'dashboard inicio', () => { close(); navigate('/') })
-  push('Ações', 'plus', 'Novo workdir', 'novo workdir criar', () => { close(); newWorkdir() })
+  push('Ações', 'plus', 'Novo mundo', 'novo mundo criar', () => { close(); newWorkdir() })
   if (slug) {
     push('Ações', 'note', 'Novo nota ou cartão', 'novo nota cartao criar', () => { close(); quickAdd(slug) })
     push('Ações', 'gear', 'Definições', 'definicoes settings config', () => { close(); navigate('/w/' + slug + '/settings') })
