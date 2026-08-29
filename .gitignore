@@ -3,3 +3,5 @@ dist/
 
 dev.log
 data
+
+atlas.config.json

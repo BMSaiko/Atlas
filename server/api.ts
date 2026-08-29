@@ -5,17 +5,18 @@ import { createWriteStream } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { join, dirname, delimiter, normalize, extname, relative, sep } from 'node:path'
 import { parseRoadmap } from './roadmap'
+import { cfg } from './config'
 
 const DATA = join(process.cwd(), 'data')
 const SLUG = /^[a-z0-9-]+$/
 const INDEX = 'index.json'
-const WEZTERM = process.env.WEZTERM || 'C:\\Program Files\\WezTerm\\wezterm-gui.exe'
-const WEZTERM_CLI = process.env.WEZTERM_CLI || 'C:\\Program Files\\WezTerm\\wezterm.exe'
-const VENV_PY = process.env.HERMES_PY || 'C:\\Users\\bruno\\Documents\\hermes-agent\\.venv\\Scripts\\python.exe'
-const HERMES_CWD = process.env.HERMES_CWD || 'C:\\Users\\bruno\\Documents\\hermes-agent'
-const HERMES_HOME = process.env.HERMES_LIVE_HOME || 'C:\\Users\\bruno\\AppData\\Local\\hermes'
-const GIT = process.env.GIT_BIN || 'C:\\Program Files\\Git\\bin\\git.exe'
-const VAULT = 'C:\\Users\\bruno\\Documents\\Second-Brain' // ponytail: datas locais (live-data) versionadas na vault -> auto-backup a cada escrita
+// paths/porta externos do runner vivem em server/config.ts (atlas.config.json + env sobreposicao).
+// WEZTERM/WEZTERM_CLI/HERMES_CWD removidos — codigo morto (modo headless substituiu a janela WezTerm);
+// re-adicionar como key de config se o modo interactivo WezTerm voltar.
+const VENV_PY = cfg.hermesPy
+const HERMES_HOME = cfg.hermesHome
+const GIT = cfg.git
+const VAULT = cfg.vault // ponytail: datas locais (live-data) versionadas na vault -> auto-backup a cada escrita
 let vaultDirty = false  // ha escrita pendente de commit
 let vaultTimer: ReturnType<typeof setTimeout> | null = null  // handle do debounce
 let vaultBusy = false  // guarda de overlap: add+commit em curso
@@ -37,7 +38,7 @@ function syncVault() {  // ponytail: debounce trailing 2s -> rajada de N escrita
   if (vaultTimer) clearTimeout(vaultTimer)
   vaultTimer = setTimeout(flushVault, 2000)
 }
-const ATLAS_REPO = process.env.ATLAS_REPO || 'C:\\Users\\bruno\\Documents\\Second-Brain\\knowledge\\projects\\atlas\\code'
+const ATLAS_REPO = cfg.atlasRepo
 // repoDir: repo (.git / source-tree) do mundo -> worktrees, merge, CI e push correm no codigo do mundo,
 // NAO no do atlas. ponytail: fallback ATLAS_REPO p/ mundos sem `repo` (atlas, heimdall) -> comportamento actual.
 async function repoDir(slug: string): Promise<string> {
@@ -276,7 +277,7 @@ async function launchHermes(slug: string, card: any) {
     'Tu es um agente autonomo. Executa o trabalho abaixo do card de kanban e atualiza o estado.',
     `Workdir: ${slug}`,
     `Kanban JSON (em disco): ${join(DATA, slug, 'kanban.json')}`,
-    `Kanban API (para updates): http://localhost:5173/api/w/${slug}/kanban`,
+    `Kanban API (para updates): http://localhost:${cfg.port}/api/w/${slug}/kanban`,
     `Repo de codigo (source-tree): ${wt} — working-tree isolada deste card. Edita SO nela (ja esta na branch ${branch}).`,
     '',
     `CARTAO: ${card.title}`,
@@ -378,7 +379,7 @@ async function launchBrainstorm(slug: string) {
   const prompt = [
     'Tu es um agente autonomo. Faz um brainstorm e um SWOT ao projeto e cria notas com ideias para implementar.',
     `Workdir: ${slug} («${meta.name}» — ${(meta.description || 'sem descricao').replace(/\n/g, ' ').slice(0, 120)})`,
-    `API notas (get/put): http://localhost:5173/api/w/${slug}/notes`,
+    `API notas (get/put): http://localhost:${cfg.port}/api/w/${slug}/notes`,
     `Source-tree do projeto a analisar: ${repo}`,
     '',
     'TAREFA:',
@@ -435,7 +436,7 @@ async function launchDp(slug: string, card: any) {
     'Tu es um agente autonomo. Escreve um DP (Design Plan / Plano de Desenvolvimento) para o card de kanban abaixo.',
     `Workdir: ${slug}`,
     `Kanban JSON (em disco): ${join(DATA, slug, 'kanban.json')}`,
-    `Kanban API (para gravar o DP): http://localhost:5173/api/w/${slug}/kanban`,
+    `Kanban API (para gravar o DP): http://localhost:${cfg.port}/api/w/${slug}/kanban`,
     `Source-tree do projeto a analisar: ${repo}`,
     '',
     `CARTAO ID: ${card.id}`,
