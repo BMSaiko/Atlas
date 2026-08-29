@@ -476,9 +476,11 @@ function runCard(c: Card) {
 
   function cardModal(c: Card | null) {
     const cols = board.columns.map(x => `<option value="${x.id}" ${c?.colId===x.id?'selected':''}>${esc(x.name)}</option>`).join('')
-    openModal({
+    // ponytail: seletor de template so em novo cartao; preenche titulo/descrição/prio/coluna (kind 'card')
+    const tplField = c ? '' : '<div class="field"><label for="k-template">Template</label><select name="template" id="k-template"><option value="">Novo a partir de template…</option></select></div>'
+    const m = openModal({
       title: c ? 'Editar cartão' : 'Novo cartão', submitText: c ? 'Guardar' : 'Criar',
-      body: () => `<div class="field"><label for="k-title">Título</label><input id="k-title" name="title" required value="${esc(c?.title || '')}"></div>
+      body: () => `${tplField}<div class="field"><label for="k-title">Título</label><input id="k-title" name="title" required value="${esc(c?.title || '')}"></div>
         <div class="field"><label for="k-desc">Descrição</label><textarea id="k-desc" name="description">${esc(c?.description || '')}</textarea></div>
         <div class="field"><label for="k-prio">Prioridade</label><select id="k-prio" name="priority">
           <option value="urgent" ${c?.priority==='urgent'?'selected':''}>Urgente</option>
@@ -506,6 +508,27 @@ function runCard(c: Card) {
         save().then(render); toast(c ? 'Guardado' : 'Criado')
       },
     })
+    if (!c) wireCardTemplate(m.root, slug)
+  }
+  function wireCardTemplate(root: HTMLElement, slug: string) {
+    const sel = root.querySelector('[name=template]') as HTMLSelectElement | null
+    if (!sel) return
+    api.templates.get(slug).then(tpls => {
+      (tpls || []).filter(t => t.kind === 'card').forEach(t => {
+        const o = document.createElement('option'); o.value = t.id; o.textContent = t.name; sel.add(o)
+      })
+      sel.addEventListener('change', () => {
+        const t = (tpls || []).find(x => x.id === sel.value); if (!t) return
+        const title = root.querySelector('[name=title]') as HTMLInputElement
+        const desc = root.querySelector('[name=description]') as HTMLTextAreaElement
+        const prio = root.querySelector('[name=priority]') as HTMLSelectElement
+        const col = root.querySelector('[name=colId]') as HTMLSelectElement
+        if (t.title !== undefined) title.value = t.title
+        if (t.body !== undefined) desc.value = t.body
+        if (t.priority && [...prio.options].some(o => o.value === t.priority)) prio.value = t.priority
+        if (t.colId && [...col.options].some(o => o.value === t.colId)) col.value = t.colId
+      })
+    }).catch(() => {})
   }
 
   function viewModal(c: Card) {

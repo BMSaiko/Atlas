@@ -250,9 +250,11 @@ export async function renderNotes(root: HTMLElement, slug: string) {
   }
 
   function noteModal(n: Nota | null) {
+    // ponytail: seletor de template so em nova nota; preenche titulo/texto/tags (kind 'note')
+    const tplField = n ? '' : `<div class="field"><label for="nt-template">Template</label><select name="template" id="nt-template"><option value="">Novo a partir de template…</option></select></div>`
     const m = openModal({
       title: n ? 'Editar nota' : 'Nova nota', submitText: n ? 'Guardar' : 'Criar',
-      body: () => `<div class="field"><label for="nt-title">Título</label><input id="nt-title" name="title" required value="${esc(n?.title || '')}"></div>
+      body: () => `${tplField}<div class="field"><label for="nt-title">Título</label><input id="nt-title" name="title" required value="${esc(n?.title || '')}"></div>
                    <div class="md-tabs">
                      <button type="button" class="md-tab on" data-tab="edit">Editar</button>
                      <button type="button" class="md-tab" data-tab="preview">Pré-visualização</button>
@@ -288,6 +290,25 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       if ((m.root.querySelector('.md-tab.on') as HTMLElement).dataset.tab === 'preview') preview.innerHTML = renderMd(ta.value)
     })
     bindTagAutocomplete(m.root.querySelector('[name=tags]') as HTMLInputElement, existingTags(notes))
+    if (!n) wireNoteTemplate(m.root, slug)
+  }
+  function wireNoteTemplate(root: HTMLElement, slug: string) {
+    const sel = root.querySelector('[name=template]') as HTMLSelectElement | null
+    if (!sel) return
+    api.templates.get(slug).then(tpls => {
+      (tpls || []).filter(t => t.kind === 'note').forEach(t => {
+        const o = document.createElement('option'); o.value = t.id; o.textContent = t.name; sel.add(o)
+      })
+      sel.addEventListener('change', () => {
+        const t = (tpls || []).find(x => x.id === sel.value); if (!t) return
+        const title = root.querySelector('[name=title]') as HTMLInputElement
+        const text = root.querySelector('[name=text]') as HTMLTextAreaElement
+        const tags = root.querySelector('[name=tags]') as HTMLInputElement
+        if (t.title !== undefined) title.value = t.title
+        if (t.body !== undefined) text.value = t.body
+        if (t.tags) tags.value = t.tags.join(', ')
+      })
+    }).catch(() => {})
   }
 
   // ponytail: bulk — barra + handlers (arquivar/restaurar consoante a vista)

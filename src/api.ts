@@ -6,6 +6,7 @@ export interface Board { columns: Coluna[]; cards: Card[] }
 // optimistic concurrency: payloads com etag `ver` (escapam ao last-write-wins do PUT)
 export type BoardDoc = { ver: number; columns: Coluna[]; cards: Card[] }
 export type NotesDoc = { ver: number; items: Nota[] }
+export interface Template { id: string; name: string; kind: 'note' | 'card'; title?: string; body?: string; priority?: Prioridade; colId?: string; tags?: string[] }
 export interface Workdir { slug: string; name: string; description?: string; createdAt: number; icon?: string; repo?: string }
 export interface WorkdirMeta { slug: string; name: string; description: string; createdAt: number; icon?: string; repo?: string }
 
@@ -29,6 +30,7 @@ export const api = {
   },
   importRoadmap: (slug: string, path: string) => j<{ ok: boolean; addedCards: number; addedNotes: number; skipped: number; total: number }>(`/api/w/${slug}/import-roadmap`, 'POST', { path }),
   exportNotes: (slug: string) => j<{ ok: boolean; count: number }>(`/api/w/${slug}/export`, 'POST'),
+  templates: { get: (slug: string) => j<Template[]>(`/api/w/${slug}/templates`) },
   kanban: {
     get: (slug: string) => j<{ ver: number; columns: Coluna[]; cards: Card[] }>(`/api/w/${slug}/kanban`),
     put: (slug: string, doc: { ver: number; columns: Coluna[]; cards: Card[] }) => j<{ ok: boolean; ver?: number }>(`/api/w/${slug}/kanban`, 'PUT', doc),
