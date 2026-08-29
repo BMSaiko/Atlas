@@ -636,6 +636,10 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         if (!card) { send(404, { error: 'card not found' }); return }
         if (card.archived) { send(409, { error: 'card archived' }); return }
         if (action === 'reject') {
+          // template scaffold no modal refinar — overrides opcionais aplicados antes da nota
+          if (typeof b.title === 'string' && b.title.trim()) card.title = b.title.trim()
+          if (typeof b.description === 'string') card.description = b.description
+          if (typeof b.priority === 'string' && ['urgent','high','medium','low'].includes(b.priority)) card.priority = b.priority
           const note = typeof b.note === 'string' ? b.note.trim() : ''
           if (note) {
             // ponytail: guarda o refinamento como expansa da descricao (prompt original + nota)
