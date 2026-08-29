@@ -43,7 +43,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
           <div class="tz-pop" id="tz-pop" hidden><label for="tz-select">Fuso horário</label><select id="tz-select" aria-label="Escolher fuso horário"></select></div>
         </div>
         <div class="side-focus" id="foco"></div>
-        <div class="side-foot"><button class="btn btn-primary btn-block" id="side-new">${icon('plus', 16)} Novo workdir</button></div>
+        <div class="side-foot"><button class="btn btn-primary btn-block" id="side-new">${icon('plus', 16)} Novo mundo</button></div>
       </aside>
       <button class="hamb" id="hamb" aria-label="Abrir menu workdirs">${icon('menu', 22)}</button>
       <main class="panel" id="panel"></main>
@@ -219,7 +219,7 @@ function renderEmpty(panel: HTMLElement, items: Array<any>, root: HTMLElement) {
       <div class="logo">ATLAS</div>
       <p class="tagline">O titã que sustenta os céus — cada projecto, o seu próprio mundo.</p>
       ${items.length ? `${lastWd ? `<button class="btn btn-ghost" id="reopen">${icon('sphere', 16)} Reabrir ${esc(lastWd.name)}</button>` : ''}` : `<p class="muted">Ainda não há workdirs. Cria o primeiro.</p>`}
-      <button class="btn btn-primary" id="panel-new" style="margin-top:14px">${icon('plus', 16)} ${items.length ? 'Novo workdir' : 'Criar o primeiro workdir'}</button>
+      <button class="btn btn-primary" id="panel-new" style="margin-top:14px">${icon('plus', 16)} ${items.length ? 'Novo mundo' : 'Criar o primeiro mundo'}</button>
     </div>`
   root.querySelector('#panel-new')!.addEventListener('click', () => newWorkdir())
   const reopen = panel.querySelector('#reopen')
@@ -228,7 +228,7 @@ function renderEmpty(panel: HTMLElement, items: Array<any>, root: HTMLElement) {
 
 export function newWorkdir() {
   openModal({
-    title: 'Novo workdir', submitText: 'Criar',
+    title: 'Novo mundo', submitText: 'Criar',
     body: () => `<div class="field"><label for="wd-name">Nome</label><input id="wd-name" name="name" required></div>
                  <div class="field"><label for="wd-desc">Descrição <span class="muted">(opcional)</span></label><input id="wd-desc" name="description"></div>
                  <div class="field"><label for="wd-repo">Repo do projeto <span class="muted">(opcional)</span></label><input id="wd-repo" name="repo" placeholder="C:\...\projeto"></div>`,
