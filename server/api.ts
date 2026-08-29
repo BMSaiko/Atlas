@@ -357,12 +357,22 @@ async function launchHermes(slug: string, card: any) {
   p.on('close', async (code) => {
     ws.end()
     await writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {})
+    const ff = join(DATA, slug, 'kanban.json')
     // ponytail: em falha deixa um marcador ERRO no card p/ a UI saber que terminou com erro (debug facil)
     if (code !== 0) {
-      const ff = join(DATA, slug, 'kanban.json')
       const board = await readJ(ff).catch(() => null)
       const c = board?.cards?.find((x: any) => x.id === card.id)
-      if (c && !c.result) { c.result = 'ERRO: processo terminou com código ' + code + ' — abre o terminal/card para ver o log.'; await writeJ(ff, board) }
+      if (c && !c.result) { c.result = 'ERRO: processo terminou com código ' + code + ' — abre o terminal/card para ver o log.'; await writeJ(ff, board).catch(() => {}) }
+    }
+    // ponytail: promove doing->review quando o run terminou OK e deixou result (worker's last report);
+    // idempotente — se o user ja mexeu no card (review/done) o guard salta. code!=0 ou sem result ficam em doing
+    // p/ o user ler o log e decidir refazer/refinar. writeJ e fire-and-forget (race com PUT do front: 409
+    // no PUT apanha a inconsistencia; em ultimo caso o pollTimer/watchReviewTransitions resolvem).
+    const board2 = await readJ(ff).catch(() => null)
+    const c2 = board2?.cards?.find((x: any) => x.id === card.id)
+    if (c2 && !c2.archived && c2.colId === 'doing' && code === 0 && c2.result) {
+      c2.colId = 'review'
+      await writeJ(ff, board2).catch(() => {})
     }
   })
   p.unref()
@@ -471,7 +481,19 @@ async function launchDp(slug: string, card: any) {
   p.stdout?.on('data', (d: Buffer) => ws.write(d))
   p.stderr?.on('data', (d: Buffer) => ws.write(d))
   p.on('error', () => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code: 1, ts: Date.now() }), 'utf8').catch(() => {}); void fail('spawn DP falhou') })
-  p.on('close', (code: number) => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {}) })
+  p.on('close', async (code: number) => {
+    ws.end()
+    await writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {})
+    // ponytail: DP termina com code=0 e grava card.dp -> promove doing->review para o DP aparecer na coluna de review.
+    // Mesmo padrao do launchHermes: idempotente, ignora se user ja moveu o card ou se nao ha dp.
+    const ff = join(DATA, slug, 'kanban.json')
+    const board = await readJ(ff).catch(() => null)
+    const c = board?.cards?.find((x: any) => x.id === card.id)
+    if (c && !c.archived && c.colId === 'doing' && code === 0 && c.dp) {
+      c.colId = 'review'
+      await writeJ(ff, board).catch(() => {})
+    }
+  })
   p.unref()
 }
 // launchGitOp: operacoes git de TOPO de repo (merge dev->main, resolver conflito) via hermes
