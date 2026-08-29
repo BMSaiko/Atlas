@@ -234,6 +234,11 @@ async function launchHermes(slug: string, card: any) {
   const repo = await repoDir(slug)
   const branch = `feature/${slug}-${card.id}`
   const wt = join(wtRoot(repo), slug, card.id)
+  // ponytail: base branch do repo do MUNDO (repos nao-atlas usam master/main, nao 'dev').
+  // Prefere dev quando existe (fluxo atlas), senao a branch ativa do repo (garagem->master).
+  const devOk = await runGit(['rev-parse', '--verify', 'dev'], repo)
+  let baseBranch = devOk.ok ? 'dev' : 'main'
+  if (!devOk.ok) { const hb = await runGit(['symbolic-ref', '--short', 'HEAD'], repo); baseBranch = hb.ok ? hb.out.trim() : 'main' }
   // ponytail: log de progresso por card (canal de 'ver o hermes a trabalhar' e de debug/erros) — o
   // ficheiro vive cedo o suficiente p/ ser referido no prompt (runs antigos isolados c/ flags 'w').
   const runsDir = join(wtRoot(repo), 'runs', slug)
@@ -263,7 +268,7 @@ async function launchHermes(slug: string, card: any) {
     catch { await new Promise(r => setTimeout(r, 500)) }  // lock da pane ainda nao solto -> retry
   }
   await runGit(['worktree', 'prune'], repo)  // limpa qualquer registo orfao residuo antes de recriar
-  const addOut = await runGit(['worktree', 'add', '-B', branch, wt, 'dev'], repo)
+  const addOut = await runGit(['worktree', 'add', '-B', branch, wt, baseBranch], repo)
   if (!addOut.ok) { await fail('git worktree add falhou: ' + addOut.out); return }
   const linked = await addJunction(join(wt, 'node_modules'), join(repo, 'node_modules'))
   if (!linked) { await fail('nao consegui ligar node_modules partilhado (mklink)'); return }
@@ -312,21 +317,21 @@ async function launchHermes(slug: string, card: any) {
   // Em falha: log fica gravado em disco p/ o BMS ver; worktree mantida p/ resolver.
   const wrapper = [
     'import subprocess,sys,os,shutil',
-    "wt=sys.argv[1]; branch=sys.argv[2]; base=sys.argv[3]",
+    "wt=sys.argv[1]; branch=sys.argv[2]; base=sys.argv[3]; bb=sys.argv[5]",
     'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[4]])',
     'if rc==0:',
     '\x20\x20\x20\x20try:',
     '\x20\x20\x20\x20\x20\x20\x20\x20os.chdir(base)',
     // ponytail: merge SEMPRE em dev — nunca na branch atual do base. Se o repo estiver em main o 'git merge' iria p/ main sem approve.
-    '\x20\x20\x20\x20\x20\x20\x20\x20co=subprocess.run([r"GITBIN","checkout","dev"],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20co=subprocess.run([r"GITBIN","checkout",bb],capture_output=True)',
     '\x20\x20\x20\x20\x20\x20\x20\x20if co.returncode!=0:',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20print("NAO consigo ir para dev - aborta merge p/ nao tocar em main. Worktree mantida.")',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20print("NAO consigo ir para o branch base - aborta merge p/ nao tocar em main. Worktree mantida.")',
     '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20sys.exit(0)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","fetch","origin","dev"],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20co2=subprocess.run([r"GITBIN","merge","origin/dev","--no-edit"],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","fetch","origin",bb],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20co2=subprocess.run([r"GITBIN","merge","origin/"+bb,"--no-edit"],capture_output=True)',
     '\x20\x20\x20\x20\x20\x20\x20\x20mg=subprocess.run([r"GITBIN","merge",branch,"--no-edit"],capture_output=True)',
     '\x20\x20\x20\x20\x20\x20\x20\x20if mg.returncode==0:',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","push","origin","dev"],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","push","origin",bb],capture_output=True)',
     '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20nj=os.path.join(wt,"node_modules")',
     '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20try: os.rmdir(nj)',
     '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20except OSError: shutil.rmtree(nj,ignore_errors=True)',
@@ -342,7 +347,7 @@ async function launchHermes(slug: string, card: any) {
   const ws = createWriteStream(logPath, { flags: 'w' })
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
   // ponytail: spawn com pipe e reencaminha p/ o log — evita a corrida do fd (WriteStream{fd:null} no stdio)
-  const p = spawn(VENV_PY, ['-c', wrapper, wt, branch, repo, prompt],
+  const p = spawn(VENV_PY, ['-c', wrapper, wt, branch, repo, prompt, baseBranch],
     { cwd: repo, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
   p.stdout?.on('data', d => ws.write(d))
   p.stderr?.on('data', d => ws.write(d))
