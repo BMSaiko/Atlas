@@ -61,6 +61,22 @@ function wireCardTemplate(root: HTMLElement, slug: string) {
   }).catch(() => {})
 }
 
+// ponytail: no modal de refinar, escolher template aplica SO a nota de revisao — nao mexe titulo/desc/prio
+function wireRefineTemplate(root: HTMLElement, slug: string) {
+  const sel = root.querySelector('[name=template]') as HTMLSelectElement | null
+  if (!sel) return
+  api.templates.get(slug).then(tpls => {
+    (tpls || []).filter(t => t.kind === 'card').forEach(t => {
+      const o = document.createElement('option'); o.value = t.id; o.textContent = t.name; sel.add(o)
+    })
+    sel.addEventListener('change', () => {
+      const t = (tpls || []).find(x => x.id === sel.value); if (!t) return
+      const note = root.querySelector('#r-note') as HTMLTextAreaElement
+      if (t.body !== undefined && note) note.value = t.body
+    })
+  }).catch(() => {})
+}
+
 export async function openNewCardModal(slug: string) {
   let board = await api.kanban.get(slug).catch(() => null)
   if (!board) { toast('Falha a carregar o quadro'); return }
@@ -563,7 +579,7 @@ function runCard(c: Card) {
         }).catch(e => toast('Erro: ' + e.message))
       },
     })
-    wireCardTemplate(m.root, slug)
+    wireRefineTemplate(m.root, slug)
   }
 
   function bindDnd(boardEl: HTMLElement) {
