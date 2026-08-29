@@ -38,7 +38,22 @@ export async function renderKanban(root: HTMLElement, slug: string) {
         delete c.reviewed
       }
     }
-    adopt(await api.kanban.put(slug, board)); refreshSideCount(); refreshTabCounts(slug)
+    try { await putBoard() } catch (e: any) { toast((e && e.message) || 'Falha ao guardar') }
+    refreshSideCount(); refreshTabCounts(slug)
+  }
+  // ponytail: PUT com retry — 409 (outro escritor avancou `ver`, ex. worker headless a gravar noutro
+  // card do MESMO board) fazia o item \"nao aparecer\". Re-sync ver + re-aplica criacoes locais e retenta 1x.
+  // Ceiling: edit concorrente do MESMO card — re-aplica por id (criacao); o edit perde-se na janela pequena
+  // (normal = worker a adicionar a OUTRO card, coberto integralmente).
+  const putBoard = async () => {
+    try { adopt(await api.kanban.put(slug, board)) }
+    catch (e: any) {
+      if (e?.status !== 409) throw e
+      const fresh = await api.kanban.get(slug)
+      for (const c of board.cards) if (!fresh.cards.some(f => f.id === c.id)) fresh.cards.push(c)
+      board = fresh
+      adopt(await api.kanban.put(slug, board))
+    }
   }
   // ponytail: sidebar count computed once at renderShell; keep in sync on every board mutation
   function refreshSideCount() {
