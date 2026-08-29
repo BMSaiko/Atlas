@@ -241,6 +241,7 @@
 .kbadge-dp { color:var(--sky); border-color:var(--sky); background:color-mix(in srgb,var(--sky) 10%, transparent); }
 .kbadge-out { color:var(--gold); border-color:var(--gold); background:color-mix(in srgb,var(--gold) 10%, transparent); }
 .kbadge-review { color:var(--gold); border-color:var(--gold); background:color-mix(in srgb,var(--gold) 10%, transparent); animation:kdblink 1.2s infinite; }
+.kbadge-recur { color:var(--accent); border-color:var(--accent); background:color-mix(in srgb,var(--accent) 12%, transparent); }
 .kcard.archived { opacity:.5; filter:grayscale(.6); }
 .prio { display:inline-flex; align-items:center; gap:6px; font-size:.72rem; font-weight:600; letter-spacing:.03em; text-transform:uppercase; }
 .prio .dot { width:8px; height:8px; border-radius:50%; }
