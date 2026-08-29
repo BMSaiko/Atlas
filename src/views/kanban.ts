@@ -187,6 +187,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       <div class="kanban" id="kboard">${board.columns.map(col => `
         <section class="kcol" data-col="${col.id}">
           <h4>${esc(col.name)} <span class="muted" style="font-size:.78rem">${count(col.id)}</span></h4>
+          ${selMode ? `<button type="button" class="btn-icon btn-ghost kcol-sel" data-col-sel="${col.id}" title="Selecionar coluna (visíveis)">${icon('check',14)}</button>` : ''}
           <select class="k-sort" data-col="${col.id}" aria-label="Ordenar ${esc(col.name)}" title="Ordenar coluna">
             <option value="pos"   ${keyOf(col.id)==='pos'  ?'selected':''}>Posição</option>
             <option value="prio"  ${keyOf(col.id)==='prio' ?'selected':''}>Prioridade</option>
@@ -283,6 +284,12 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     }).join('')
   }
 
+  // ponytail: seleciona todos os cards visiveis da coluna (mesmo filtro de cardsOf)
+  function selectCol(colId: string) {
+    board.cards.forEach(c => { if (c.colId === colId && !c.archived && matchesColFilter(c, colId)) sel.add(c.id) })
+    refreshBulk()
+  }
+
   // ponytail: composição condicional do .kops por coluna — só a ação de ciclo de vida relevante ao estado.
   // start/play só em todo; restart(reset)+term só em doing; move/edit/arch/del em todas.
   function kops(c: Card, prev?: string, next?: string): string {
@@ -352,6 +359,8 @@ export async function renderKanban(root: HTMLElement, slug: string) {
   function bind() {
     const boardEl = root.querySelector('#kboard') as HTMLElement
     boardEl.addEventListener('click', e => {
+      const csel = (e.target as HTMLElement).closest('[data-col-sel]') as HTMLElement | null
+      if (csel) { selectCol(csel.dataset.colSel!); return }
       const chk = (e.target as HTMLElement).closest('.kselbox') as HTMLElement | null
       const btn = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null
       const cardEl = (e.target as HTMLElement).closest('.kcard') as HTMLElement | null
