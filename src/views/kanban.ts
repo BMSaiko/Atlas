@@ -822,14 +822,14 @@ function dpHtml(dp: string): string {
   const nl = dp.indexOf('\n')
   const title = nl === -1 ? dp : dp.slice(0, nl)
   const body = nl === -1 ? '' : dp.slice(nl + 1)
-  return `<div class="kdp"><div class="kdp-title">${esc(title)}</div>${body ? `<div class="kdp-body">${esc(deindent(body))}</div>` : ''}</div>`
+  return `<div class="kdp"><div class="kdp-title">${esc(title)}</div>${body ? `<div class="kdp-body md-view">${renderMd(body)}</div>` : ''}</div>`
 }
 function resultHtml(r: string): string {
   // ponytail: primeira linha = destaque (ex. 'Task cumprida: ...'); corpo separado
   const nl = r.indexOf('\n')
   const title = nl === -1 ? r : r.slice(0, nl)
   const body = nl === -1 ? '' : r.slice(nl + 1)
-  return `<div class="kresult"><div class="kresult-title">${esc(title)}</div>${body ? `<div class="kresult-body">${esc(deindent(body))}</div>` : ''}</div>`
+  return `<div class="kresult"><div class="kresult-title">${esc(title)}</div>${body ? `<div class="kresult-body md-view">${renderMd(body)}</div>` : ''}</div>`
 }
 function deindent(s: string): string { return s.replace(/^\s+/gm, '').replace(/\n{2,}/g, '\n').trim() }
 function fmtElapsed(ms: number): string {
