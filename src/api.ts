@@ -1,6 +1,6 @@
-export type Prioridade = 'low' | 'medium' | 'high'
+export type Prioridade = 'urgent' | 'high' | 'medium' | 'low'
 export interface Nota { id: string; title: string; text: string; ts: number; archived?: boolean; tags?: string[] }
-export interface Card { id: string; colId: string; title: string; description: string; priority: Prioridade; ts: number; archived: boolean; result?: string; dp?: string; reviewed?: boolean; startedAt?: number }
+export interface Card { id: string; colId: string; title: string; description: string; priority: Prioridade; due?: number; ts: number; archived: boolean; result?: string; dp?: string; reviewed?: boolean; startedAt?: number }
 export interface Coluna { id: string; name: string }
 export interface Board { columns: Coluna[]; cards: Card[] }
 // optimistic concurrency: payloads com etag `ver` (escapam ao last-write-wins do PUT)
