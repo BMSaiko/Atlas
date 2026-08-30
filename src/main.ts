@@ -212,6 +212,9 @@ function watchOrphanCrashes() {
           if (!b) continue
           const c = b.cards.find((x: any) => x.id === o.cardId)
           if (!c || c.archived || c.colId !== 'doing') continue
+          // ponytail: grava motivo do crash no card (mantem historico). O user ve no viewModal.
+          c.result = 'CRASH: worker nao respondeu por >90s (log parado). Voltou a To Do. ' +
+            'cardAge=' + Math.round(o.cardAgeMs/1000) + 's, logSize=' + o.logSize + '.'
           c.colId = 'todo'
           delete c.startedAt
           const r = await api.kanban.put(slug, b)
