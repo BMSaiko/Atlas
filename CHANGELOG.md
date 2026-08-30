@@ -27,6 +27,10 @@ Todas as mudanças notáveis do Atlas. Formato baseado em [Keep a Changelog](htt
 - **Backup/Export/Import de workdir inteiro** — `GET/PUT /api/w/:slug/bundle` (serializa `meta+notes+kanban`); UI em **Definições → Backup**: exportar (Blob + anchor download `atlas-<slug>-<data>.json`) e importar (file picker, valida shape mínimo, confirm de overwrite, re-fetch via navigate). Guards: `SLUG` regex + `inside(DATA, file)` contra path-traversal; PUT não valida `ver` (restore completo é destrutivo).
 - **Dashboard: secção API keys (`/api/hermes/keys`)** — lê `auth.json` do Hermes, devolve `status` (active/exhausted/error/unknown) derivado do último erro, **censura `access_token`** (whitelist de campos + `sha256(token).slice(0,10)` como `secret_fingerprint`). Secção presente nas duas dashboards.
 - **Dashboard: secção Usage (`/api/hermes/usage`)** — read-only sobre `HERMES_HOME/logs/atlas/usage.jsonl` (1 linha/request, escrita pelo HEIMDALL). Colunas `Hoje` / `Tokens hoje` / `Custo hoje` reativas; `totals_by_key` agrega por `key_id`, ignora linhas malformadas/sem `key_id` (balde `__unknown__`). Ficheiro ausente/ilegível → 200 com `totals_by_key: {}`.
+- **Write-token anti-corrida (PUT)** — `PUT /api/w/:slug/{notes,kanban,bundle}` exige header `X-Atlas-Token = cfg.wtoken`; server imprime o token no boot (`[atlas] write token: <hex>`). Client recolhe via `?token=` no URL → `localStorage`. Helper CLI `npm run dev:token` (gera hex novo) e `.env` (`ATLAS_WTOKEN`) para setups persistentes. Fence: PUT **não-`127.0.0.1`/`localhost`/`::1` recusado** (loopback check + `x-forwarded-for` bypass); `1abde2a` corrige o bypass para aceitar loopback e adiciona endpoint `/logs` (`GET /api/atlas/logs`) para inspeção sem `WezTerm`. (iykn11lg — `f89b4c0` + `bcd18e0` + `1abde2a`)
+- **Dashboard defloat** — strip da "floaty decoration" do dashboard hub (anéis orbitais ficam só em vistas por mundo); mantém stat-grid, stepper, sessões ativas e `Ctrl+K`. (kejap87w — `2f16cd2`)
+- **Widget Meteorologia (Open-Meteo) no dashboard** — widget no dashboard hub com temperatura, condição textual (PT) e emoji (☀️/⛅/🌧/❄️); cache 10 min, geolocation via `Intl`/IP fallback, lat/lon configurável em Definições. (qoukodvd — `49b559f`)
+- **Refactor `dpCard/viewDp`** — botão "Gerar DP" reusável entre cards (substitui duplicação em `dpCard`/`viewDp`); idempotente, não regenera se `dp` já existe salvo se `force=1`. (bao35dg0 — `c9afb6c`)
 
 ### Changed
 - Cards com **2 tamanhos** (conteúdo vs output `.has-output`): limita o título do resultado (line-clamp 2 no card, completo no modal).
@@ -34,6 +38,7 @@ Todas as mudanças notáveis do Atlas. Formato baseado em [Keep a Changelog](htt
 - `run`: terminal WezTerm abre com o título do cartão (set-tab-title); auto-cleanup do worktree mais robusto (junction node_modules partilhado, retry remove+rm vs EBUSY, `worktree remove --force`, kill de panes lockers).
 - `merge dev → main` resolve o tip real de `main` (local‖remote) antes do fast-forward.
 - DP/resultado do card renderizam **Markdown legível** (`renderMd`, classe `.md-view`) no modal (`kdp-body`/`kresult-body`), substituindo o colapso CSS cru.
+- **Keybinds de navegação** — `Alt+ArrowLeft`/`Alt+ArrowRight` cicla tabs do workspace (settings, kanban, notes, dashboard); `Ctrl+Enter` / `Cmd+Enter` submete forms em modais (cards + notas). (gz2775bp + rcrc00p4 — `945338f` + `2118985`)
 
 ### Fixed
 - Notificações: poll com um único `setInterval` (sem duplicar em review), notif global funciona fora do kanban.
@@ -44,6 +49,7 @@ Todas as mudanças notáveis do Atlas. Formato baseado em [Keep a Changelog](htt
 - `launchHermes`: base branch do task-runner passou a ser a **branch default real do repo do mundo** (não hardcode `dev`) — repos sem `dev` (ex. só `master`) deixam de falhar no `worktree add`.
 - **Cards headless stuck em `doing`** — quando o worker termina (`code=0`) com `result` ou `dp`, `launchHermes`/`launchDp` no `p.on('close')` promove `colId='review'` (idempotente; salta se o user já moveu manualmente). Erros `code!=0` ficam em `doing` para o user ler o log.
 - **Notes sem `id` (sanitize+defesas)** — PUT de notes e `openNewNoteModal`/`renderNotes` garantem `id` (uid()) em items faltantes (brainstorm/import/manual); sem id os handlers `data-id` partiam. Emite `[atlas] note sem id — sanitize:` com count no server (`server/api.ts` + `src/views/notes.ts`).
+- **View modal não fecha ao clicar nas ações** — cliques nos botões do modal (DP, run, archive, priority) mantinham-no aberto por stopPropagation; corrigido — clique numa ação agora fecha o modal. (as9jxybp — `f1d3d58`)
 
 ## [0.1.0] — app-shell + workdirs + kanban
 

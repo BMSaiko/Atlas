@@ -33,6 +33,9 @@ Num Atlas, não trabalhas em pastas: atravessas **mundos**. Cada **mundo** é um
 - **Git headless por mundo** — cada mundo pode apontar para o seu repo (path) e correr merge `dev → main` ou resolver conflito, tudo em segundo plano.
 - **Live-data + CI** — dados versionados com auto-backup na vault e GitHub Actions (typecheck + build).
 - **Review como coluna default** + cards em 2 tamanhos, `Alt+↑/↓` entre mundos.
+- **Write-token anti-corrida** — `PUT` em `notes|kanban|bundle` exige header `X-Atlas-Token`; apenas loopback (`127.0.0.1`/`::1`) ou requests do `localhost`. Token impresso no boot do server, configurável via `.env` (`ATLAS_WTOKEN`) ou `npm run dev:token`.
+- **Dashboard defloat + Meteorologia** — dashboard hub em modo funcional (anéis só em vistas por mundo) + widget meteorologia (Open-Meteo) com emoji/cache 10 min.
+- **Keybinds** — `Alt+←/→` cicla tabs do workspace, `Ctrl/Cmd+Enter` submete forms em modais, `Esc`/clique-fora fecha overlays.
 
 ## Stack
 
@@ -110,10 +113,14 @@ Endpoints embutidos no Vite (prefixo `/api`):
 | GET/PUT | `/api/w/:slug/bundle` | backup/restore do workdir inteiro (`meta+notes+kanban`); PUT não valida `ver` (replace destrutivo) |
 | GET | `/api/hermes/keys` | lista API keys do Hermes (censurado: `secret_fingerprint`, **sem** `access_token`) |
 | GET | `/api/hermes/usage` | agrega `usage.jsonl` por `key_id` (`since=` ISO opcional; default = início do dia local) |
+| GET | `/api/atlas/logs` | tail/stream dos logs do atlas (filtro por level, últimos N) |
+| PUT | `/api/w/:slug/{notes,kanban,bundle}` | exige header `X-Atlas-Token`; recusado fora de loopback |
 
 ### Write token (anti-corrida)
 
 `PUT /api/w/:slug/{notes,kanban,bundle}` exige o header `X-Atlas-Token` igual a `cfg.wtoken`. O server imprime o token no boot (`[atlas] write token: <hex>`); o cliente recolhe-o via `?token=<hex>` no URL (fica em `localStorage` para reloads). Para setups persistentes, fixa `ATLAS_WTOKEN` no `.env` (`npm run dev:token` gera um hex novo). GETs nunca são gated.
+
+Apenas requests de **loopback** (`127.0.0.1`/`localhost`/`::1`) ou do header `Host: localhost` são aceites; em containers/WSL com IP interno não-loopback a verificação recorre ao `x-forwarded-for` apenas quando o request já vem de loopback. Inspeção sem `WezTerm`: `GET /api/atlas/logs`.
 
 > `card.result` (resumo do que o worker fez) é gravado pelo worker no `kanban.json` e renderizado no card. `card.dp` guarda o Design Plan gerado por `/dp`. As rotas novas devem registar-se **acima** do bloco genérico `/api/w/:slug/{notes|kanban|meta}`.
 
