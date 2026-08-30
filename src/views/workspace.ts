@@ -37,9 +37,9 @@ export async function renderWorkspace(panel: HTMLElement, slug: string, isSettin
 
   panel.innerHTML = `<div class="ws">${header}
       <nav class="ws-tabs" id="tabs">
-        <button class="ws-tab active" data-tab="dash" id="tab-dash">${icon('sphere', 16)} Dashboard</button>
-        <button class="ws-tab" data-tab="notes" id="tab-notes">${icon('note', 16)} Notas</button>
-        <button class="ws-tab" data-tab="kanban" id="tab-kanban">${icon('board', 16)} Kanban</button>
+        <button class="ws-tab active" data-tab="dash" id="tab-dash" title="Alt+← / Alt+→">${icon('sphere', 16)} Dashboard</button>
+        <button class="ws-tab" data-tab="notes" id="tab-notes" title="Alt+← / Alt+→">${icon('note', 16)} Notas</button>
+        <button class="ws-tab" data-tab="kanban" id="tab-kanban" title="Alt+← / Alt+→">${icon('board', 16)} Kanban</button>
       </nav>
       <div id="ws-content"></div>
     </div>`
@@ -66,6 +66,28 @@ export async function renderWorkspace(panel: HTMLElement, slug: string, isSettin
   }
   show()
   panel.querySelectorAll('.ws-tab').forEach(t => t.addEventListener('click', () => { tab = t.getAttribute('data-tab') as any; try { localStorage.setItem(tabKey, tab) } catch {}; show() }))
+
+  // ponytail: Alt+ArrowLeft/Right cicla as 3 tabs do workspace. Mesmo padrao de guardas do shell.ts
+  // (input/textarea/select focado + modal-backdrop aberto). AbortController desconecta tudo
+  // automaticamente em re-entries de renderWorkspace p/ outro slug.
+  const TAB_ORDER: Array<'dash' | 'notes' | 'kanban'> = ['dash', 'notes', 'kanban']
+  const ac = new AbortController()
+  ;(panel as any).__tabAbort = ac  // ponytail: referencia p/ re-entry cleanup (caso o router chame outra vez)
+  if ((panel as any).__tabPrevAbort) (panel as any).__tabPrevAbort.abort()
+  ;(panel as any).__tabPrevAbort = ac
+  window.addEventListener('keydown', (e) => {
+    if (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return
+    if (document.querySelector('.modal-backdrop')) return
+    if (!e.altKey) return
+    const delta = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0
+    if (!delta) return
+    const i = TAB_ORDER.indexOf(tab)
+    if (i < 0) return
+    e.preventDefault()
+    tab = TAB_ORDER[(i + delta + TAB_ORDER.length) % TAB_ORDER.length]
+    try { localStorage.setItem(tabKey, tab) } catch {}
+    show()
+  }, { signal: ac.signal })
 }
 
 function bindNav(root: HTMLElement) {
