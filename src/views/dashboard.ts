@@ -81,7 +81,8 @@ setInterval(() => {
 
 function sessions(rows: Row[]): string {
   const act = rows.flatMap(r => r.board.cards.filter(c => !c.archived && c.colId === 'doing').map(c => ({ wd: r.wd, c })))
-  if (!act.length) return `<div class="dash-none">${icon('pause', 16)} Sem sessões ativas — as tarefas em «Em Curso» são terminais a correr.</div>`
+  // ponytail: defloat kejap87w — copy flavorado→copy denso
+  if (!act.length) return `<div class="dash-none">${icon('pause', 16)} Nenhuma tarefa em curso.</div>`
   return `
     <span class="sess-count">${act.length} a decorrer</span>
     <ul class="sess-list">
@@ -273,9 +274,9 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
         <div class="dash-stars" aria-hidden="true"></div>
         <div class="orb-rings" aria-hidden="true"><span class="ring ring-a"></span><span class="ring ring-b"></span></div>
         <div class="dash-head-title">
-          <span class="dash-kicker">${icon('sphere', 13)} Atlas · o ombro do céu</span>
+          <span class="dash-kicker">${icon('sphere', 13)} Atlas</span>
           <h1>Visão geral</h1>
-          <p class="dash-sub">Cada projeto, o seu próprio mundo — todos sob o mesmo céu.</p>
+          <p class="dash-sub">${items.length} mundos · ${openCards(total)} tarefas em aberto</p>
         </div>
         <div class="dash-actions">
           <div class="glob-search-wrap">
@@ -387,7 +388,7 @@ export async function renderWorldDashboard(panel: HTMLElement, wd: Wd) {
     <div class="dash dash-world">
       <header class="dash-head">
         <div class="dash-head-title">
-          <span class="dash-kicker">${icon(wd.icon ? 'sphere' : 'sphere', 13)} ${esc(wd.name)} · o seu mundo</span>
+          <span class="dash-kicker">${icon(wd.icon ? 'sphere' : 'sphere', 13)} ${esc(wd.name)}</span>
           <h1>Dashboard</h1>
           ${wd.description ? `<p class="dash-sub">${esc(wd.description)}</p>` : ''}
         </div>
