@@ -189,3 +189,36 @@ function watchRecurrence() {
     }
   }, 30000)
 }
+
+
+// ponytail: watchdog de worker crash. Polla /orphans a cada 30s; quando detecta card .status=running
+// com log parado > 90s (heuristica do server), notifica no UI e reseta o card doing->todo. Dedup por
+// cardId para nao voltar a notificar.
+function watchOrphanCrashes() {
+  const notified = new Set<string>()  // cardIds ja' notificados
+  setInterval(async () => {
+    let slugs: string[]
+    try { slugs = (await api.workdirs()).map(w => w.slug) } catch { return }
+    for (const slug of slugs) {
+      const d = await api.run.orphans(slug).catch(() => null)
+      if (!d || !d.orphans || !d.orphans.length) continue
+      for (const o of d.orphans) {
+        if (notified.has(o.cardId)) continue
+        notified.add(o.cardId)
+        notify('Atlas - worker crashou', '"' + o.title + '" parou de responder - voltou a To Do')
+        // reset doing->todo
+        try {
+          const b = await api.kanban.get(slug)
+          if (!b) continue
+          const c = b.cards.find((x: any) => x.id === o.cardId)
+          if (!c || c.archived || c.colId !== 'doing') continue
+          c.colId = 'todo'
+          delete c.startedAt
+          const r = await api.kanban.put(slug, b)
+          if (r && r.ver) b.ver = r.ver
+        } catch { /* best-effort */ }
+      }
+    }
+  }, 30000)
+}
+watchOrphanCrashes()

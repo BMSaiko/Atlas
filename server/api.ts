@@ -1039,6 +1039,49 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         return
       }
 
+      // /api/w/:slug/orphans -> cards em 'doing' com .status.state=running e log parado > 90s (worker crash).
+      // ponytail: heuristica simples - 90s sem actividade no log OU mtime do .status em 'running' ha > 90s
+      // e log vazio. O front-end usa isto para notificar + resetar doing->todo. Idempotente: GET nao muta.
+      if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'orphans' && m === 'GET') {
+        const slug = parts[1]
+        if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
+        const STALE_MS = 90 * 1000
+        const now = Date.now()
+        const board = await readJ(join(DATA, slug, 'kanban.json')).catch(() => null)
+        if (!board) { send(200, { orphans: [] }); return }
+        const runsDir = join(wtRoot(await repoDir(slug)), 'runs', slug)
+        const orphans: any[] = []
+        for (const c of (board.cards || [])) {
+          if (c.archived || c.colId !== 'doing' || !c.startedAt) continue
+          const stPath = join(runsDir, c.id + '.status')
+          const st = await readJ(stPath).catch(() => null)
+          if (!st || st.state !== 'running') continue
+          const logPath = join(runsDir, c.id + '.log')
+          let logSize = 0, logMtime = 0
+          try { const s = statSync(logPath); logSize = s.size; logMtime = s.mtimeMs } catch { /* no log = nao arrancou */ }
+          const stMtime = (() => { try { return statSync(stPath).mtimeMs } catch { return 0 } })()
+          // 2 caminhos para 'crash': (a) wrapper morreu antes do hermes escrever no log, (b) hermes
+          // parou de escrever no log (travou, perdeu rede, OOM). Heuristica: status em running + log
+          // vazio OU logMtime > STALE_MS. startedAt > STALE_MS atras (card novo demais = ainda a
+          // arrancar - espera). 90s e' generoso; o user pode disparar de proposito.
+          const cardAge = now - c.startedAt
+          if (cardAge < STALE_MS) continue
+          const logStale = logMtime === 0 || (now - logMtime) > STALE_MS
+          if (!logStale) continue
+          orphans.push({
+            cardId: c.id,
+            title: c.title,
+            priority: c.priority,
+            startedAt: c.startedAt,
+            logSize,
+            logMtime: logMtime || null,
+            stMtime: stMtime || null,
+            cardAgeMs: cardAge,
+          })
+        }
+        send(200, { orphans }); return
+      }
+
       // /api/w/:slug/output/:cardId -> stream do log do run headless (offset-based, p/ debugging/erros)
       if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'output' && m === 'GET') {
         const slug = parts[1], cardId = parts[3]

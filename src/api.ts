@@ -91,6 +91,8 @@ export const api = {
   run: {
     // stream incremental do log do run headless (terminal a trabalhar / debugging)
     output: (slug: string, cardId: string, offset = 0) => j<{ ok: boolean; started: boolean; done: boolean; code: number | null; chunk: string; offset: number; size: number }>(`/api/w/${slug}/output/${cardId}?offset=${offset}`),
+    // ponytail: cards em 'doing' com worker crashado (wrapper morreu / hermes travou). 1 GET, server faz a heuristica.
+    orphans: (slug: string) => j<{ orphans: OrphanRun[] }>(`/api/w/${slug}/orphans`),
   },
   hermes: {
     keys: () => j<HermesKey[]>('/api/hermes/keys'),
@@ -134,3 +136,16 @@ export interface WorkdirBundle {
   ts: number
 }
 export const uid = () => Math.random().toString(36).slice(2, 10)
+
+export type OrphanRun = {
+  cardId: string
+  title: string
+  priority: string
+  startedAt: number
+  logSize: number
+  logMtime: number | null
+  stMtime: number | null
+  cardAgeMs: number
+}
+
+
