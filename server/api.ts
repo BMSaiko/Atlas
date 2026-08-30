@@ -198,7 +198,16 @@ async function cleanupRuns(slug?: string): Promise<void> {
     for (const f of files) {
       if (!/\.(log|status)$/i.test(f)) continue
       const fp = join(base, f)
-      try { if (now - statSync(fp).mtimeMs > RUN_KEEP_MS) await rm(fp, { force: true }).catch(() => {}) } catch { /* ja foi apagado */ }
+      try {
+        if (now - statSync(fp).mtimeMs > RUN_KEEP_MS) { await rm(fp, { force: true }).catch(() => {}); continue }
+        // ponytail: stuck .status (state=running sem o wrapper fechar) — apaga apos 6h. O log
+        // companheiro (se existir) preserva o output para inspecao. Patch wrapper (card
+        // fix/dp-promotion) ja' fecha a pane via kill-pane, mas runs antigos ficam orfaos.
+        if (/\.status$/i.test(f) && now - statSync(fp).mtimeMs > 6 * 60 * 60 * 1000) {
+          const st = await readJ(fp).catch(() => null)
+          if (st?.state === 'running') await rm(fp, { force: true }).catch(() => {})
+        }
+      } catch { /* ja foi apagado */ }
     }
   }
 }
@@ -420,6 +429,13 @@ async function launchHermes(slug: string, card: any) {
     '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20print("MERGE dev<-"+branch+" FALHOU (conflito?) - worktree mantido, verifica.")',
     '    except Exception as e:',
     '\x20\x20\x20\x20\x20\x20\x20\x20print("AUTO-CLEANUP FALHOU: %r - push/merge incompleto. Worktree e branch mantidas p/ inspecao." % (e,))',
+    // ponytail: kill-pane o wrapper para o wezterm-gui sair -> p.on('close) do Node corre ->
+    // promotion doing->review + .status=done. Sem isto a pane fica aberta e o card preso em doing.
+    'try:',
+    '\x20\x20\x20\x20import os',
+    '\x20\x20\x20\x20p=os.environ.get("WEZTERM_PANE")',
+    '\x20\x20\x20\x20if p and p!="-1": os.system("wezterm cli kill-pane --pane-id "+p+" 2>nul")',
+    'except: pass',
     'sys.exit(rc)',
   ].join('\n').replaceAll('GITBIN', GIT)
   const stPath = join(runsDir, card.id + '.status')
@@ -582,12 +598,13 @@ async function launchDp(slug: string, card: any) {
   p.on('close', async (code: number) => {
     ws.end()
     await writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {})
-    // ponytail: DP termina com code=0 e grava card.dp -> promove doing->review para o DP aparecer na coluna de review.
-    // Mesmo padrao do launchHermes: idempotente, ignora se user ja moveu o card ou se nao ha dp.
+    // ponytail: DP termina com code=0 e grava card.dp -> promove para review. O DP arranca com o card
+    // em todo (handler /dp nao move) ou em doing (ciclo de orquestracao ja' moveu); promover se nao
+    // esta' arquivado nem em done. Idempotente: se o user ja moveu para review/done, salta.
     const ff = join(DATA, slug, 'kanban.json')
     const board = await readJ(ff).catch(() => null)
     const c = board?.cards?.find((x: any) => x.id === card.id)
-    if (c && !c.archived && c.colId === 'doing' && code === 0 && c.dp) {
+    if (c && !c.archived && c.colId !== 'done' && code === 0 && c.dp) {
       c.colId = 'review'
       await writeJ(ff, board).catch(() => {})
     }
