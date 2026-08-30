@@ -1019,24 +1019,24 @@ function fmtClock(ms: number): string {
   const m = Math.floor(s / 60), sec = s % 60
   return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
 }
-function timerRemainingMs(c: Card): number {
+export function timerRemainingMs(c: Card): number {
   if (!c.timerMs) return 0
   if (!c.timerStartedAt) return c.timerMs  // parado: mostra a duracao total como paused label
   return Math.max(0, c.timerMs - (Date.now() - c.timerStartedAt))
 }
-function timerLabel(c: Card): string {
+export function timerLabel(c: Card): string {
   if (!c.timerMs) return ''
   if (!c.timerStartedAt) return `pausado ${fmtClock(c.timerMs)}`
   return fmtClock(timerRemainingMs(c))
 }
-function timerTooltip(c: Card): string {
+export function timerTooltip(c: Card): string {
   if (!c.timerMs) return ''
   if (!c.timerStartedAt) return 'Temporizador parado · carrega em Editar para retomar'
   const rem = timerRemainingMs(c)
   if (rem <= 0) return 'Temporizador concluído · carrega em Editar para reiniciar'
   return `Temporizador · falta ${fmtClock(rem)}`
 }
-function timerBadge(c: Card): string {
+export function timerBadge(c: Card): string {
   if (!c.timerMs || c.archived) return ''
   const remaining = timerRemainingMs(c)
   const cls = c.timerStartedAt && remaining <= c.timerMs * 0.2 ? ' warn'
