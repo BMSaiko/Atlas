@@ -405,8 +405,8 @@ async function launchHermes(slug: string, card: any) {
   // Em falha: log fica gravado em disco p/ o BMS ver; worktree mantida p/ resolver.
   const wrapper = [
     'import subprocess,sys,os,shutil',
-    "wt=sys.argv[1]; branch=sys.argv[2]; base=sys.argv[3]; bb=sys.argv[5]",
-    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[4]])',
+    "st=sys.argv[2]; wt=sys.argv[3]; branch=sys.argv[4]; repo=sys.argv[6]; prompt=sys.argv[7]; bb=sys.argv[8]",
+    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",prompt])',
     'if rc==0:',
     '\x20\x20\x20\x20try:',
     '\x20\x20\x20\x20\x20\x20\x20\x20os.chdir(base)',
@@ -451,7 +451,7 @@ async function launchHermes(slug: string, card: any) {
   // tocar no resto (auto-merge/cleanup identico ao commit de12033).
   const wrapperWithPane = [
     'import os,json,time,sys',
-    'st=sys.argv[1]',
+    'st=sys.argv[2]',
     'try:',
     '\x20\x20\x20\x20pane=int(os.environ.get("WEZTERM_PANE","-1"))',
     '\x20\x20\x20\x20open(st,"w",encoding="utf-8").write(json.dumps({"state":"running","pane":pane,"ts":time.time()}))',
