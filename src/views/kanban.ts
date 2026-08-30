@@ -582,10 +582,13 @@ function runCard(c: Card) {
   }
 
   function approveCard(c: Card) {
+    // ponytail: o handler do viewModal ja fez m.close() antes desta chamada. O confirmDialog
+    // abre o seu proprio modal — fechamos o backdrop remanescente so em sucesso (cancel => mantem aberto).
     confirmDialog({ title: 'Aprovar e concluir', message: 'Validar na branch dev, marcar como concluído e fazer merge dev → main?' })
       .then(ok => { if (!ok) return
         api.review.approve(slug, c.id).then(d => {
           c.colId = 'done'; c.reviewed = true
+          document.querySelector('.modal-backdrop')?.remove()
           save().then(render)
           toast(d.merge ? `Concluído (${d.merge})` : 'Concluído')
         }).catch(e => toast('Erro: ' + e.message))
@@ -735,24 +738,27 @@ function runCard(c: Card) {
       e.stopPropagation()
       navigator.clipboard.writeText(c.id).then(() => toast('ID copiado: ' + c.id)).catch(() => toast('Falha ao copiar'))
     })
-    // ponytail: ações contextuais do card no modal — reutilizam os mesmos handlers do grid
+    // ponytail: acoes do card no modal — cada branch fecha o viewModal (m.close) ao disparar;
+    // run/dp/term/reject/edit abrem outro modal por cima (limpo). move/arch mutam o cartao (fecha).
+    // approve fecha o confirm-dialog no sucesso (via approveCard). del so fecha em sucesso.
+    // Reutiliza os mesmos helpers (runCard/dpCard/...) que os botoes do grid usam.
     m.root.querySelector('[data-card-actions]')?.addEventListener('click', e => {
       const actBtn = (e.target as HTMLElement).closest('[data-card-act]') as HTMLElement | null
       if (!actBtn) return
       const a = actBtn.dataset.cardAct
-      if (a === 'run') runCard(c)
-      else if (a === 'dp') dpCard(c)
-      else if (a === 'term') viewTerminal(c)
-      else if (a === 'approve') approveCard(c)
-      else if (a === 'reject') rejectCard(c)
+      if (a === 'run') { m.close(); runCard(c) }
+      else if (a === 'dp') { m.close(); dpCard(c) }
+      else if (a === 'term') { m.close(); viewTerminal(c) }
+      else if (a === 'approve') { m.close(); approveCard(c) }
+      else if (a === 'reject') { m.close(); rejectCard(c) }
       else if (a === 'move') {
         const dir = parseInt(actBtn.dataset.dir || '0'); const i = board.columns.findIndex(x => x.id === c.colId)
         const target = board.columns[i + dir]; if (!target) return
-        c.colId = target.id; save().then(render)
+        m.close(); c.colId = target.id; save().then(render)
       }
-      else if (a === 'edit') cardModal(c)
-      else if (a === 'arch') { c.archived = true; save().then(render); toast('Arquivado') }
-      else if (a === 'del') { confirmDialog({ title: 'Eliminar cartão', message: 'Apagar este cartão?' }).then(ok => { if (!ok) return; board.cards = board.cards.filter(x => x.id !== c.id); save().then(render); toast('Eliminado') }) }
+      else if (a === 'edit') { m.close(); cardModal(c) }
+      else if (a === 'arch') { m.close(); c.archived = true; save().then(render); toast('Arquivado') }
+      else if (a === 'del') { m.close(); confirmDialog({ title: 'Eliminar cartão', message: 'Apagar este cartão?' }).then(ok => { if (!ok) return; board.cards = board.cards.filter(x => x.id !== c.id); save().then(render); toast('Eliminado') }) }
     })
     
   }
