@@ -9,6 +9,7 @@ import { renderWorldDashboard } from './dashboard'
 import { linkify } from '../ui/text'
 import { openModal } from '../ui/modal'
 import { toast } from '../ui/toast'
+import { confirmDialog } from '../ui/confirm'
 
 class NotFound extends Error {}
 const metaOrThrow = async (slug: string): Promise<WorkdirMeta> => {
@@ -26,7 +27,8 @@ export async function renderWorkspace(panel: HTMLElement, slug: string, isSettin
       <div class="spacer"></div>
       ${(slug === 'atlas' || wdm.repo) ? `
         <a class="btn btn-ghost" href="#" id="git-merge-main" data-git="merge-main" title="Merge dev → main (headless)">${icon('forward', 16)} Merge to main</a>
-        <a class="btn btn-ghost" href="#" id="git-resolve" data-git="resolve" title="Resolve merge conflito em dev (headless)">${icon('reset', 15)} Resolve conflito</a>` : ''}
+        <a class="btn btn-ghost" href="#" id="git-resolve" data-git="resolve" title="Resolve merge conflito em dev (headless)">${icon('reset', 15)} Resolve conflito</a>
+        <button type="button" class="btn btn-ghost" id="atlas-kill-all" data-kill-all title="Matar todos os terminais WezTerm abertos pelo ATLAS">${icon('kill', 16)} Matar terminais</button>` : ''}
       <a class="btn btn-ghost" href="/w/${slug}${isSettings ? '' : '/settings'}" data-nav="/w/${slug}${isSettings ? '' : '/settings'}">${icon(isSettings ? 'back' : 'gear', 18)} ${isSettings ? 'Voltar' : 'Definir'}</a>
     </div>`
 
@@ -43,7 +45,7 @@ export async function renderWorkspace(panel: HTMLElement, slug: string, isSettin
       </nav>
       <div id="ws-content"></div>
     </div>`
-  bindNav(panel); bindGitOps(panel, slug)
+  bindNav(panel); bindGitOps(panel, slug); bindKillAll(panel, slug)
   const tabKey = `atlas.tab.\${slug}`
   // ponytail: deep-link da busca global (?tab=notes|kanban&open=<id>) — prefere a tab pedida
   const qp = new URLSearchParams(location.search)
@@ -115,6 +117,23 @@ function bindGitOps(root: HTMLElement, slug: string) {
     e.preventDefault()
     gitOp(slug, a.getAttribute('data-git')!)
   }))
+}
+
+// bindKillAll: card terminal-control — botao master no header. Manda fechar todos os panes
+// WezTerm abertos por cards em doing deste workdir (POST /api/terms/kill-all). Confirm-dialog antes
+// de disparar (master kill e' destrutivo: nao da undo).
+function bindKillAll(root: HTMLElement, slug: string) {
+  const btn = root.querySelector<HTMLButtonElement>('[data-kill-all]')
+  if (!btn) return
+  btn.addEventListener('click', async () => {
+    const ok = await confirmDialog({ title: 'Matar terminais ATLAS', message: 'Fecha todas as janelas WezTerm abertas por cards em doing. Continuar?' })
+    if (!ok) return
+    try {
+      const r = await fetch('/api/terms/kill-all', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug }) }).then(r => r.json())
+      const killed = (r && typeof r.killed === 'number') ? r.killed : 0
+      toast(killed > 0 ? `${killed} terminais fechados` : 'Nenhum terminal aberto')
+    } catch (e: any) { toast('Erro: ' + (e?.message || e)) }
+  })
 }
 
 // viewGitTerm: replica o viewTerminal dos cards, mas para um id de operacao git (op). Mostra o log do

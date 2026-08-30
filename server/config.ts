@@ -12,6 +12,10 @@ export interface AtlasConfig {
   hermesHome: string
   atlasRepo: string
   vault: string
+  // ponytail: wezterm exe (path para wezterm-gui.exe). Usado p/ abrir pane visivel quando um card
+  // entra em doing. CLI (wezterm.exe) vive na mesma pasta e e' resolvido por path-rewrite no killPane().
+  // Card terminal-control: sem este binario o spawn cai em headless (mesmo comportamento de antes).
+  wezterm: string
   // ponytail: token anti-corrida (card iykn11lg) — writers externos (PUT notes/kanban/bundle) tem de apresentar este
   // header. NUNCA persistido em disco (uma fuga de cfg no log já é debug) — random por boot ou ATLAS_WTOKEN.
   wtoken: string
@@ -24,6 +28,7 @@ const DEFAULTS: AtlasConfig = {
   hermesHome: 'C:\\Users\\bruno\\AppData\\Local\\hermes',
   atlasRepo: 'C:\\Users\\bruno\\Documents\\Second-Brain\\knowledge\\projects\\atlas\\code',
   vault: 'C:\\Users\\bruno\\Documents\\Second-Brain',
+  wezterm: 'C:\\Program Files\\WezTerm\\wezterm-gui.exe',
   wtoken: '',  // resolved at runtime: env ATLAS_WTOKEN -> randomBytes(32).hex (ver loadConfig)
 }
 
@@ -46,6 +51,7 @@ function loadConfig(): AtlasConfig {
     hermesHome: process.env.HERMES_LIVE_HOME || fromFile.hermesHome || DEFAULTS.hermesHome,
     atlasRepo: process.env.ATLAS_REPO || fromFile.atlasRepo || DEFAULTS.atlasRepo,
     vault: process.env.ATLAS_VAULT || fromFile.vault || DEFAULTS.vault,
+    wezterm: process.env.WEZTERM_BIN || fromFile.wezterm || DEFAULTS.wezterm,
     // ponytail: wtoken — env fixa para setups persistentes; sem env, aleatório a cada boot (curta duração = janela curta de exposição).
     // Card iykn11lg: impresso 1x no boot para o BMS colar como ?token=... no URL do client.
     wtoken: process.env.ATLAS_WTOKEN || fromFile.wtoken || randomBytes(32).toString('hex'),

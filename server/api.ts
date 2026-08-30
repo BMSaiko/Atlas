@@ -232,6 +232,42 @@ async function cleanupWorktrees(): Promise<void> {
   }
 }
 
+// ponytail: kill-on-transition + master kill (card terminal-control). .status file = fonte de verdade:
+// cada card em doing grava {state, pane, ts} em data/.wt/runs/<slug>/<cardId>.status. pane vem da
+// env WEZTERM_PANE injetada pelo WezTerm na pane filha. Sem pane (= legacy headless ou spawn pre-feature)
+// os helpers sao no-op silenciosos, igual ao kill-pane do CLI em pane inexistente.
+function killPane(pane: number | undefined): void {
+  if (typeof pane !== 'number' || pane < 0) return
+  // CLI vive na mesma pasta do GUI (wezterm-gui.exe -> wezterm.exe). Path-rewrite evita cfg extra.
+  const cli = cfg.wezterm.replace(/wezterm-gui\.exe$/i, 'wezterm.exe')
+  try { spawn(cli, ['cli', 'kill-pane', '--pane-id', String(pane)], { detached: true, stdio: 'ignore', windowsHide: true }).unref() } catch { /* pane ja morta = OK */ }
+}
+
+async function killPaneForCard(slug: string, cardId: string): Promise<void> {
+  // fallback gracioso: sem wezterm-gui.exe, .status nao tem pane, ou dir inexistente = noop.
+  try {
+    const repo = await repoDir(slug)
+    const stPath = join(wtRoot(repo), 'runs', slug, cardId + '.status')
+    const st = await readJ(stPath).catch(() => null)
+    if (st && typeof st.pane === 'number') killPane(st.pane)
+  } catch { /* best-effort */ }
+}
+
+async function killAllPanesForSlug(slug: string): Promise<{ killed: number; checked: number }> {
+  let killed = 0, checked = 0
+  try {
+    const repo = await repoDir(slug)
+    const runsDir = join(wtRoot(repo), 'runs', slug)
+    if (!existsSync(runsDir)) return { killed, checked }
+    for (const f of readdirSync(runsDir).filter(x => x.endsWith('.status'))) {
+      checked++
+      const st = await readJ(join(runsDir, f)).catch(() => null)
+      if (st && st.state === 'running' && typeof st.pane === 'number') { killPane(st.pane); killed++ }
+    }
+  } catch { /* dir nao existe = 0 panes */ }
+  return { killed, checked }
+}
+
 async function launchHermes(slug: string, card: any) {
   const repo = await repoDir(slug)
   const branch = `feature/${slug}-${card.id}`
@@ -348,12 +384,32 @@ async function launchHermes(slug: string, card: any) {
   const stPath = join(runsDir, card.id + '.status')
   const ws = createWriteStream(logPath, { flags: 'w' })
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
-  // ponytail: spawn com pipe e reencaminha p/ o log — evita a corrida do fd (WriteStream{fd:null} no stdio)
-  const p = spawn(VENV_PY, ['-c', wrapper, wt, branch, repo, prompt, baseBranch],
-    { cwd: repo, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
+  // ponytail: card terminal-control — spawn via `wezterm start --` para abrir pane visivel
+  // (assim o user ve o hermes a trabalhar). A env WEZTERM_PANE e' injetada pelo WezTerm na pane
+  // filha; o wrapper python grava-a no .status (stPath = argv[1]) antes de chamar o hermes, para
+  // o kill-on-transition saber qual pane fechar. Fallback headless: se cfg.wezterm nao existir
+  // (sem WezTerm instalado) spawna o python direto, p.on('error') cai no fail() antigo.
+  // argv do wrapper: [stPath, wt, branch, repo, prompt, baseBranch] (igual ao wrapper antigo +
+  // stPath como 1o argv). Wrapper prepende 2 linhas (captura pane + re-escreve .status) sem
+  // tocar no resto (auto-merge/cleanup identico ao commit de12033).
+  const wrapperWithPane = [
+    'import os,json,time,sys',
+    'st=sys.argv[1]',
+    'try:',
+    '\x20\x20\x20\x20pane=int(os.environ.get("WEZTERM_PANE","-1"))',
+    '\x20\x20\x20\x20open(st,"w",encoding="utf-8").write(json.dumps({"state":"running","pane":pane,"ts":time.time()}))',
+    'except: pass',
+    wrapper,
+  ].join('\n')
+  const headless = !cfg.wezterm || !existsSync(cfg.wezterm)
+  const exe: string = headless ? VENV_PY : cfg.wezterm
+  const args: string[] = headless
+    ? ['-c', wrapperWithPane, stPath, wt, branch, repo, prompt, baseBranch]
+    : ['start', '--', VENV_PY, '-c', wrapperWithPane, stPath, wt, branch, repo, prompt, baseBranch]
+  const p = spawn(exe, args, { cwd: repo, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
   p.stdout?.on('data', d => ws.write(d))
   p.stderr?.on('data', d => ws.write(d))
-  p.on('error', e => { ws.end(); void fail('spawn headless falhou: ' + e.message) })
+  p.on('error', e => { ws.end(); void fail((headless ? 'spawn headless' : 'spawn wezterm') + ' falhou: ' + e.message) })
   p.on('close', async (code) => {
     ws.end()
     await writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {})
@@ -371,6 +427,7 @@ async function launchHermes(slug: string, card: any) {
     const board2 = await readJ(ff).catch(() => null)
     const c2 = board2?.cards?.find((x: any) => x.id === card.id)
     if (c2 && !c2.archived && c2.colId === 'doing' && code === 0 && c2.result) {
+      void killPaneForCard(slug, card.id)  // card terminal-control: fecha pane do run antes de promover
       c2.colId = 'review'
       await writeJ(ff, board2).catch(() => {})
     }
@@ -585,6 +642,17 @@ export default function atlasApi(): Plugin {
         send(200, { token: cfg.wtoken }); return
       }
 
+      // ponytail: card terminal-control — /api/terms/kill-all -> mata todos os panes WezTerm
+      // abertos por cards em doing do slug dado no body. Loopback-only (mesma proteccao que wtoken/
+      // PUTs). Master button no workspace chama isto com confirm-dialog antes.
+      if (parts[0] === 'terms' && parts[1] === 'kill-all' && m === 'POST') {
+        const b2 = (await body(req)) || {}
+        const slug = typeof b2.slug === 'string' ? b2.slug : ''
+        if (!SLUG.test(slug)) { send(400, { error: 'slug required' }); return }
+        const r = await killAllPanesForSlug(slug)
+        send(200, { ok: true, killed: r.killed, checked: r.checked }); return
+      }
+
       // /api/orchestrator/start[/<slug>] -> passa TODO(s) nao arquivados (de um mundo, se slug) para doing
       // ponytail: so move colIds (nao dispara runs headless nem toca review/done/archived)
       if (parts[0] === 'orchestrator' && parts[1] === 'start' && (parts.length === 2 || parts.length === 3) && m === 'POST') {
@@ -716,6 +784,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         if (!gate.ok) { send(500, { error: 'CI gate falhou (' + gate.step + '): ' + gate.out }); return }
         const mgr = await mergeDevToMain(repo)
         if (!mgr.ok) { send(500, { error: 'merge dev->main falhou: ' + mgr.out }); return }
+        void killPaneForCard(slug, card.id)  // card terminal-control: fecha pane antes de done
         card.colId = 'done'
         card.reviewed = true
         await writeJ(file, board)
@@ -1033,6 +1102,20 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
             const inVer = (b && typeof b === 'object') ? (Number(b.ver) || 0) : 0
             if (storedVer !== 0 && inVer !== storedVer) {
               send(409, { error: 'conflito de versao — re-faz GET e re-aplica as tuas mudancas', ver: storedVer }); return
+            }
+            // ponytail: card terminal-control — kill-on-transition. Detecta cards que estavam
+            // em 'doing' no estado anterior e agora estao noutra coluna (ou arquivados) e mata a
+            // pane WezTerm respetiva. Fire-and-forget: o PUT nao espera pelo kill-pane (que e'
+            // instantaneo), e' idempotente se a pane ja tiver morrido.
+            if (kind === 'kanban') {
+              const beforeMap = new Map<string, any>((Array.isArray(cur?.cards) ? cur.cards : []).map((c: any) => [c.id, c]))
+              for (const a of (Array.isArray(b?.cards) ? b.cards : [])) {
+                const b4 = beforeMap.get(a?.id)
+                if (!b4 || b4.colId !== 'doing') continue
+                if (a.archived || (a.colId && a.colId !== 'doing')) {
+                  void killPaneForCard(slug, a.id)
+                }
+              }
             }
             // ponytail: fence anti-wipe (card iykn11lg+) - detect drop drastico no numero de items/cards
             // e exige header X-Atlas-Confirm-Wipe para confirmar (defesa em profundidade: protege contra

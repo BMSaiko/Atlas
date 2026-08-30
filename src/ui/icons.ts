@@ -34,7 +34,8 @@ const I = {
   cloud: '<path d="M7 17h10a4 4 0 0 0 .8-7.9 6 6 0 0 0-11.6 1A4.5 4.5 0 0 0 7 17z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
   fog: '<path d="M4 9h12M3 13h14M5 17h12M6 21h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M9 5h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".5"/>',
   rain: '<path d="M7 13h10a4 4 0 0 0 .8-7.9 6 6 0 0 0-11.6 1A4.5 4.5 0 0 0 7 13zM9 17l-1 3M13 17l-1 3M17 17l-1 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
-  storm: '<path d="M7 13h10a4 4 0 0 0 .8-7.9 6 6 0 0 0-11.6 1A4.5 4.5 0 0 0 7 13zM13 14l-3 5h4l-2 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'
+  storm: '<path d="M7 13h10a4 4 0 0 0 .8-7.9 6 6 0 0 0-11.6 1A4.5 4.5 0 0 0 7 13zM13 14l-3 5h4l-2 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  kill: '<path d="M12 4v8M5.5 7.5a7 7 0 1 0 13 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
 
 }
 export function icon(name: keyof typeof I, size = 20): string {
