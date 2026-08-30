@@ -4,15 +4,33 @@ export interface Card { id: string; colId: string; title: string; description: s
 export interface Coluna { id: string; name: string }
 export interface Board { columns: Coluna[]; cards: Card[] }
 // ponytail: write-token fence (card iykn11lg) — header global em TODOS os PUTs (j<T> é o unico helper
-// que toca fetch no cliente). Token vem do URL ?token=... ou localStorage (sobrevive a reloads); sem
-// token, o server devolve 401 e o utilizador ve o motivo no toast. Instalacao sem token cai em 401 — esperado.
-const ATLAS_TOKEN: string = (() => {
-  try {
-    const q = new URL(location.href).searchParams.get('token')
-    if (q) { localStorage.setItem('atlas.wtoken', q); return q }
-    return localStorage.getItem('atlas.wtoken') || ''
-  } catch { return '' }
-})()
+// que toca fetch no cliente). Resolucao (ordem): URL ?token=... -> localStorage ->
+// server /api/wtoken em background (loopback-only, mesma fence que o PUT). Sem o endpoint /api/wtoken,
+// abrir localhost:5173 sem ?token=... caia em 401 permanente; agora o client puxa o token uma vez e guarda.
+// Top-level await NAO usado (target esbuild chrome87 nao suporta) — j<T> awaits _wtokenReady
+// antes do PUT se ainda nao tiver token em maos.
+let _atlasToken: string = ''
+let _wtokenReady: Promise<void> | null = null
+try {
+  const q = new URL(location.href).searchParams.get('token')
+  if (q) { localStorage.setItem('atlas.wtoken', q); _atlasToken = q }
+  else _atlasToken = localStorage.getItem('atlas.wtoken') || ''
+} catch { /* SSR / localStorage indisponivel */ }
+// ponytail: dispara o fetch /api/wtoken em background IMEDIATAMENTE (se nao temos token) para o caso
+// de o utilizador abrir a app sem ?token=... e sem localStorage. j<T> awaita este promise antes de PUT.
+if (!_atlasToken) {
+  _wtokenReady = (async () => {
+    try {
+      const r = await fetch('/api/wtoken', { cache: 'no-store' })
+      if (!r.ok) return
+      const d = await r.json().catch(() => null)
+      if (d && typeof d.token === 'string' && d.token) {
+        localStorage.setItem('atlas.wtoken', d.token)
+        _atlasToken = d.token
+      }
+    } catch { /* dev remoto sem loopback -> 403, fica sem token, PUTs vao falhar */ }
+  })()
+}
 
 // optimistic concurrency: payloads com etag `ver` (escapam ao last-write-wins do PUT)
 export type BoardDoc = { ver: number; columns: Coluna[]; cards: Card[] }
@@ -23,8 +41,13 @@ export interface LogEntry { id: string; ts: number; kind: 'review' | 'brainstorm
 export interface WorkdirMeta { slug: string; name: string; description: string; createdAt: number; icon?: string; repo?: string }
 
 async function j<T>(url: string, method = 'GET', body?: unknown): Promise<T> {
+  // ponytail: se o token ainda nao foi puxado do server, aguarda (max 1.5s). Evita 401 no 1o PUT
+  // quando o utilizador abriu a app sem ?token=... e sem localStorage.
+  if (_wtokenReady && !_atlasToken) {
+    await Promise.race([_wtokenReady, new Promise<void>(r => setTimeout(r, 1500))])
+  }
   const headers: Record<string, string> = body !== undefined ? { 'Content-Type': 'application/json' } : {}
-  if (ATLAS_TOKEN) headers['X-Atlas-Token'] = ATLAS_TOKEN  // card iykn11lg: fence anti-corrida
+  if (_atlasToken) headers['X-Atlas-Token'] = _atlasToken  // card iykn11lg: fence anti-corrida
   const r = await fetch(url, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined })
   const data = await r.json().catch(() => null)
   if (!r.ok) { const err = new Error((data && data.error) || r.statusText); (err as any).status = r.status; throw err }

@@ -1,5 +1,5 @@
 import type { Plugin, Connect } from 'vite'
-import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { readFile, writeFile, rm } from 'node:fs/promises'
 import { createWriteStream } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -574,6 +574,17 @@ export default function atlasApi(): Plugin {
       }
       const parts = p.replace(/^\/api\//,'').split('/').filter(Boolean)
 
+      // ponytail: devolve cfg.wtoken ao client loopback sem auth. UI chama no boot e guarda em localStorage.
+      // Sem este endpoint, abrir localhost:5173 sem ?token=... cai em 401 permanente ate o utilizador adivinhar
+      // o token impresso no console. Loopback-only = mesma proteccao que o PUT (fence).
+      if (parts[0] === 'wtoken' && parts.length === 1 && m === 'GET') {
+        const remote = (req.socket as any)?.remoteAddress || ''
+        const loopback = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1'
+        if (!loopback) { send(403, { error: 'forbidden' }); return }
+        res.setHeader('Cache-Control', 'no-store')
+        send(200, { token: cfg.wtoken }); return
+      }
+
       // /api/orchestrator/start[/<slug>] -> passa TODO(s) nao arquivados (de um mundo, se slug) para doing
       // ponytail: so move colIds (nao dispara runs headless nem toca review/done/archived)
       if (parts[0] === 'orchestrator' && parts[1] === 'start' && (parts.length === 2 || parts.length === 3) && m === 'POST') {
@@ -1023,6 +1034,48 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
             if (storedVer !== 0 && inVer !== storedVer) {
               send(409, { error: 'conflito de versao — re-faz GET e re-aplica as tuas mudancas', ver: storedVer }); return
             }
+            // ponytail: fence anti-wipe (card iykn11lg+) - detect drop drastico no numero de items/cards
+            // e exige header X-Atlas-Confirm-Wipe para confirmar (defesa em profundidade: protege contra
+            // PUTs de testes/scripts que mandam items/cards vazios e destroem o trabalho). Threshold:
+            // - perdoa ate 5 items de perda (uso normal: arquivar 1-2 notas + delete 1 = OK)
+            // - perdoa ate 50% de perda (uso normal: arquivar metade do backlog e OK)
+            // - EXIGE confirmacao se perder mais de max(5, before*0.5) items. Auto-backup do estado
+            //   anterior SEMPRE (rollback manual se o wipe foi acidental).
+            const arrKey = kind === 'notes' ? 'items' : 'cards'
+            const beforeCount = Array.isArray(cur?.[arrKey]) ? cur[arrKey].length : 0
+            const afterCount = (b && Array.isArray(b[arrKey])) ? b[arrKey].length : 0
+            const loss = beforeCount - afterCount
+            const threshold = Math.max(5, Math.floor(beforeCount * 0.5))
+            if (loss > threshold) {
+              const confirm = (req.headers['x-atlas-confirm-wipe'] || '') as string
+              if (confirm !== 'yes') {
+                // backup automatico para o utilizador poder fazer rollback sem perder tudo
+                const backupDir = join(DATA, slug, '.backup')
+                try {
+                  mkdirSync(backupDir, { recursive: true })
+                  const ts = new Date().toISOString().replace(/[:.]/g, '-')
+                  await writeFile(join(backupDir, kind + '-' + ts + '.json'), JSON.stringify(cur, null, 2), 'utf8')
+                } catch { /* best-effort */ }
+                send(409, {
+                  error: 'wipe detetado: ' + loss + ' ' + arrKey + ' perdidos (de ' + beforeCount + ' para ' + afterCount + ', threshold ' + threshold + '). Backup feito em .backup/. Confirma com header X-Atlas-Confirm-Wipe: yes para prosseguir.',
+                  before: beforeCount, after: afterCount, loss, threshold, backupDir: '.backup'
+                }); return
+              }
+            }
+            // backup pre-PUT (sempre, mesmo sem wipe) - guarda as ultimas 10 versoes para rollback
+            // manual. Custo: 1 write extra por PUT. Custo aceitavel para imensidao do beneficio.
+            try {
+              const backupDir = join(DATA, slug, '.backup')
+              mkdirSync(backupDir, { recursive: true })
+              const ts = new Date().toISOString().replace(/[:.]/g, '-')
+              await writeFile(join(backupDir, kind + '-' + ts + '.json'), JSON.stringify(cur, null, 2), 'utf8')
+              // prune: manter so as ultimas 10 versoes (ordenadas alfabeticamente por ts ISO).
+              // readdirSync/unlinkSync ja vem do import 'node:fs' no topo.
+              try {
+                const files = readdirSync(backupDir).filter(f => f.startsWith(kind + '-') && f.endsWith('.json')).sort()
+                while (files.length > 10) { try { unlinkSync(join(backupDir, files.shift()!)) } catch {} }
+              } catch { /* best-effort */ }
+            } catch { /* best-effort */ }
           }
           // ponytail: defesa — brainstorm/import/PUT manual pode trazer items sem `id`; sem id os
           // handlers de click/data-id no cliente não resolvem nada. Sanitize em vez de 400.
