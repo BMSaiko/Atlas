@@ -19,6 +19,7 @@ export type BoardDoc = { ver: number; columns: Coluna[]; cards: Card[] }
 export type NotesDoc = { ver: number; items: Nota[] }
 export interface Template { id: string; name: string; kind: 'note' | 'card'; title?: string; body?: string; priority?: Prioridade; colId?: string; tags?: string[] }
 export interface Workdir { slug: string; name: string; description?: string; createdAt: number; icon?: string; repo?: string }
+export interface LogEntry { id: string; ts: number; kind: 'review' | 'brainstorm' | 'due'; slug: string; title: string; body: string; ref: { cardId?: string; cardTitle?: string } | null; level: 'info' | 'ok' | 'warn' | 'err' }
 export interface WorkdirMeta { slug: string; name: string; description: string; createdAt: number; icon?: string; repo?: string }
 
 async function j<T>(url: string, method = 'GET', body?: unknown): Promise<T> {
@@ -51,6 +52,10 @@ export const api = {
   kanban: {
     get: (slug: string) => j<{ ver: number; columns: Coluna[]; cards: Card[] }>(`/api/w/${slug}/kanban`),
     put: (slug: string, doc: { ver: number; columns: Coluna[]; cards: Card[] }) => j<{ ok: boolean; ver?: number }>(`/api/w/${slug}/kanban`, 'PUT', doc),
+  },
+  logs: {
+    get: (slug: string) => j<{ ver: number; items: LogEntry[] }>(`/api/w/${slug}/logs`),
+    put: (slug: string, doc: { items: LogEntry[] }) => j<{ ok: boolean; cleared?: boolean; count?: number }>(`/api/w/${slug}/logs`, 'PUT', doc),
   },
   orchestrator: {
     start: (slug?: string) => j<{ ok: boolean; moved: number }>(slug ? `/api/orchestrator/start/${encodeURIComponent(slug)}` : '/api/orchestrator/start', 'POST'),

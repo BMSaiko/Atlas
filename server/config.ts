@@ -48,9 +48,9 @@ function loadConfig(): AtlasConfig {
     vault: process.env.ATLAS_VAULT || fromFile.vault || DEFAULTS.vault,
     // ponytail: wtoken — env fixa para setups persistentes; sem env, aleatório a cada boot (curta duração = janela curta de exposição).
     // Card iykn11lg: impresso 1x no boot para o BMS colar como ?token=... no URL do client.
-    wtoken: process.env.ATLAS_WTOKEN || randomBytes(32).toString('hex'),
+    wtoken: process.env.ATLAS_WTOKEN || fromFile.wtoken || randomBytes(32).toString('hex'),
   }
 }
 const _cfg = loadConfig()
-console.log('[atlas] write token:', _cfg.wtoken)  // imprimido 1x para o utilizador copiar no client (card iykn11lg)
+console.log('[atlas] write token:', _cfg.wtoken.slice(0,8) + '...')  // imprimido 1x (8 chars) p/ o utilizador copiar no client; resto via npm run dev:token (card iykn11lg)
 export const cfg: AtlasConfig = _cfg

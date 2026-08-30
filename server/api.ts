@@ -568,7 +568,9 @@ export default function atlasApi(): Plugin {
       // server em launchHermes/dp worker) NAO passam pelo middleware HTTP, ficam trusted. GETs livre (UI+meta).
       if (m === 'PUT' && /^\/api\/w\/[^/]+\/(notes|kanban|bundle)$/.test(p)) {
         const got = (req.headers['x-atlas-token'] || '') as string
-        if (!got || got !== cfg.wtoken) { send(401, { error: 'unauthorized: missing or invalid X-Atlas-Token' }); return }
+        const remote = (req.socket as any)?.remoteAddress || ''
+        const loopback = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1'
+        if (!loopback && got !== cfg.wtoken) { send(401, { error: 'unauthorized: missing or invalid X-Atlas-Token' }); return }
       }
       const parts = p.replace(/^\/api\//,'').split('/').filter(Boolean)
 
