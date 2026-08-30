@@ -273,7 +273,11 @@ async function killAllPanesForSlug(slug: string): Promise<{ killed: number; chec
     for (const f of readdirSync(runsDir).filter(x => x.endsWith('.status'))) {
       checked++
       const st = await readJ(join(runsDir, f)).catch(() => null)
-      if (st && st.state === 'running' && typeof st.pane === 'number') { killPane(st.pane); killed++ }
+      if (st && st.state === 'running' && typeof st.pane === 'number') {
+        killPane(st.pane)
+        void killPaneForCard(slug, f.replace(/\.status$/, ''))  // ponytail: reset doing->todo (sibling de killAllPanesAtlas)
+        killed++
+      }
     }
   } catch { /* dir nao existe = 0 panes */ }
   return { killed, checked }

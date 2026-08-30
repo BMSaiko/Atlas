@@ -5,6 +5,7 @@ import { launchRun } from '../views/kanban'
 import { quickAdd, newWorkdir } from '../views/shell'
 import { confirmDialog } from './confirm'
 import { toast } from './toast'
+import { openModal } from './modal'
 
 // ponytail: palette keyboard-first (Ctrl+K). Overlay proprio (nao reusa openModal — obriga <form>
 // + submit). Reutiliza: navigate (deep-link de workspace.ts p/ reabrir nota/cartao), quickAdd,
@@ -42,6 +43,21 @@ export function openPalette(slug: string | null) {
   if (slug) {
     push('Ações', 'note', 'Novo nota ou cartão', 'novo nota cartao criar', () => { close(); quickAdd(slug) })
     push('Ações', 'gear', 'Definições', 'definicoes settings config', () => { close(); navigate('/w/' + slug + '/settings') })
+    // ponytail: actions movidas do header do workspace (canto-sup-dir) -> Ctrl+K. Sensíveis ao slug.
+    // Merge to main + Resolve conflito: POST /api/w/:slug/git/<op> + abre viewGitTerm (stream log headless).
+    // Matar terminais deste mundo: POST /api/terms/kill-all (per-workdir). Diferente do kill-all-atlas
+    // (cross-workdir) que ja existe mais abaixo.
+    push('Git', 'forward', 'Merge to main', 'merge dev main headless', () => { close(); paletteGitOp(slug, 'merge-main') })
+    push('Git', 'reset', 'Resolve conflito', 'resolve conflito merge dev', () => { close(); paletteGitOp(slug, 'resolve') })
+    push('Terminais', 'kill', 'Matar terminais deste mundo', 'matar terminais mundo kill per-workdir',
+      async () => { close()
+        const ok = await confirmDialog({ title: 'Matar terminais de ' + slug, message: 'Fecha as janelas WezTerm abertas por cards em doing deste mundo. Continuar?' })
+        if (!ok) return
+        try {
+          const r = await fetch('/api/terms/kill-all', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug }) }).then(r => r.json())
+          const k = (r && typeof r.killed === 'number') ? r.killed : 0
+          toast(k > 0 ? (k + ' terminais fechados') : 'Nenhum terminal aberto')
+        } catch (e: any) { toast('Erro: ' + (e?.message || e)) } })
     // ponytail: card terminal-control-v2 — abre wezterm no workdir ativo (palette Ctrl+K).
     push('Terminais', 'term', 'Abrir terminal WezTerm', 'abrir terminal wezterm cmd shell',
       () => { close()
@@ -127,3 +143,50 @@ async function runPaletteCard(slug: string, board: { ver: number; cards: Card[] 
 }
 
 function esc(s: unknown) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
+
+// paletteGitOp: handler partilhado para items "Merge to main" / "Resolve conflito" da palette.
+// POST arranca headless; abre modal com stream offset-based do log (viewGitTerm). op 'resolve'
+// mapeia para log id 'resolve-conflict' (route != log). Duplicado de workspace.ts (gitOp/viewGitTerm)
+// porque mover para módulo neutro é mais código que esta cópia — YAGNI.
+function paletteGitOp(slug: string, op: string) {
+  const opId = op === 'resolve' ? 'resolve-conflict' : op
+  const label = op === 'resolve' ? 'Resolve merge conflito' : 'Merge dev → main'
+  fetch(`/api/w/${slug}/git/${op}`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+    .then(r => r.json()).then((d: any) => {
+      if (d && d.ok) { toast('A ' + label + ' em segundo plano (headless)'); viewGitTerm(slug, opId, label) }
+      else toast((d && d.error) || 'Erro ao iniciar ' + label)
+    }).catch(() => toast('Falha ao iniciar ' + label))
+}
+
+function viewGitTerm(slug: string, opId: string, label: string) {
+  let offset = 0
+  let pre = document.createElement('pre')
+  pre.className = 'term-view'
+  pre.textContent = ''
+  let timer: ReturnType<typeof setInterval> | undefined
+  const body = () => `<div class="term-wrap">${pre.outerHTML}<div class="term-status" id="${opId}-gstatus">ainda não lançada</div></div>`
+  const m = openModal({ title: label + ' · ' + slug, submitText: 'Fechar', cancelText: 'Fechar', body, onSubmit: () => { if (timer) clearInterval(timer) } })
+  pre = m.root.querySelector('.term-view') as HTMLPreElement
+  const statusEl = m.root.querySelector('.term-status') as HTMLElement
+  const tick = async () => {
+    try {
+      const d = await api.run.output(slug, opId, offset)
+      if (d) {
+        if (d.chunk) { pre.textContent += d.chunk; pre.scrollTop = pre.scrollHeight }
+        offset = d.offset
+        if (d.done) {
+          if (timer) clearInterval(timer)
+          statusEl.textContent = d.code === 0 ? 'concluído ✓' : ('terminou com erro (código ' + d.code + ') — vê o log acima')
+          statusEl.classList.toggle('err', !!(d.code !== 0))
+          return
+        }
+        if (d.started === false && !pre.textContent) { statusEl.textContent = 'ainda não lançada'; return }
+        statusEl.textContent = '● a trabalhar (update 1s)'
+      }
+    } catch { /* aguenta — server pode reiniciar */ }
+  }
+  timer = setInterval(tick, 1000)
+  tick()
+  const obs = new MutationObserver(() => { if (!m.root.isConnected) { if (timer) clearInterval(timer); obs.disconnect() } })
+  obs.observe(document.body, { childList: true })
+}
