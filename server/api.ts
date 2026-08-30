@@ -717,7 +717,11 @@ export default function atlasApi(): Plugin {
           }
         } catch { /* fallback repo */ }
         try {
-          spawn(cfg.wezterm, ['start', '--', 'cmd.exe'], { cwd, detached: true, stdio: 'ignore', windowsHide: true }).unref()
+          // ponytail: --always-new-process forca uma NOVA janela em vez de adicionar tab ao mux
+          // existente (que pode estar minimizado/off-screen e dai o user "ver" o toast mas nao
+          // a janela). --cwd e' nativo do wezterm, evita dependencia do cwd do spawn.
+          spawn(cfg.wezterm, ['start', '--always-new-process', '--cwd', cwd, '--', 'cmd.exe'],
+            { detached: true, stdio: 'ignore' }).unref()
           send(200, { ok: true, cwd }); return
         } catch (e: any) {
           send(500, { error: 'wezterm start falhou: ' + e.message }); return
