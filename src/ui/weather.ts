@@ -46,3 +46,49 @@ export function weatherAgeLabel(iso: string): string {
     return new Intl.DateTimeFormat('pt-PT', { hour: '2-digit', minute: '2-digit' }).format(d)
   } catch { return '—' }
 }
+
+export interface WeatherDay {
+  iso: string          // "YYYY-MM-DD" no fuso do Porto
+  code: number
+  minC: number
+  maxC: number
+  label: string
+  icon: Weather['icon']
+}
+
+// ponytail: mesma TTL + cache key do Weather; um fetch paralelo a mais, zero duplicacao de icon/label
+export interface Forecast { days: WeatherDay[]; fetchedAt: number }
+const fcCache = new Map<string, Forecast>()
+const FC_TTL = 15 * 60 * 1000
+
+const FC_URL = (lat: number, lon: number) =>
+  `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+  `&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7`
+
+export async function fetchForecast(lat = 41.15, lon = -8.61): Promise<Forecast> {
+  const k = `${lat.toFixed(3)},${lon.toFixed(3)}`
+  const hit = fcCache.get(k)
+  if (hit && Date.now() - hit.fetchedAt < FC_TTL) return hit
+  const r = await fetch(FC_URL(lat, lon))
+  if (!r.ok) throw new Error(`open-meteo forecast ${r.status}`)
+  const j = await r.json()
+  const t: string[] = j.daily.time
+  const code: number[] = j.daily.weather_code
+  const tmin: number[] = j.daily.temperature_2m_min
+  const tmax: number[] = j.daily.temperature_2m_max
+  const days: WeatherDay[] = t.map((iso, i) => {
+    const d = describe(code[i])
+    return { iso, code: code[i], minC: tmin[i], maxC: tmax[i], label: d.label, icon: d.icon }
+  })
+  const f: Forecast = { days, fetchedAt: Date.now() }
+  fcCache.set(k, f)
+  return f
+}
+
+// ponytail: devolve "Sex" ou "Sex · 30 ago" — curto para a semana, mais detalhe quando >7d (futuro)
+export function weekdayLabel(iso: string): string {
+  try {
+    const d = new Date(iso + 'T12:00:00')
+    return new Intl.DateTimeFormat('pt-PT', { weekday: 'short', day: '2-digit', month: 'short' }).format(d)
+  } catch { return '—' }
+}

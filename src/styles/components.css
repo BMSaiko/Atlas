@@ -407,6 +407,28 @@ a.link:hover { color:var(--gold-soft); }
 .stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:var(--s4); }
 .stat { display:flex; gap:var(--s3); align-items:flex-start; background:var(--bg-2); border:1px solid var(--line); border-radius:var(--r2); padding:var(--s4); transition:border-color .2s; }
 .stat:hover { border-color:var(--gold); /* ponytail: defloat kejap87w — removido transform:translateY(-2px) (hover parecia UI de jogo) */ }
+
+/* ponytail: widget Meteorologia clicavel — sinalizar affordance sem "transform:translateY" (card kejap87w) */
+.stat[role=button] { cursor:pointer; }
+.stat[role=button]:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+.stat[role=button]:active { border-color:var(--gold); }
+
+/* ponytail: modal "previsão 7 dias" — tabela compacta, sem libs, tokens dourados */
+.weather-week { width:100%; border-collapse:collapse; font-family:var(--font-ui); }
+.weather-week th, .weather-week td { text-align:left; padding:var(--s2) var(--s3); border-bottom:1px solid var(--line); }
+.weather-week th { font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; color:var(--text-dim); font-weight:600; }
+.weather-week td { color:var(--text); font-size:.92rem; vertical-align:middle; }
+.weather-week .w-wd { font-weight:600; min-width:90px; }
+.weather-week .w-ico { color:var(--gold); width:30px; text-align:center; }
+.weather-week .w-temp { font-variant-numeric:tabular-nums; white-space:nowrap; }
+.weather-week .w-max { color:var(--text); font-weight:600; }
+.weather-week .w-min { color:var(--text-dim); margin-left:var(--s2); }
+.weather-week .w-lbl { color:var(--text-dim); }
+.weather-week tr.is-today td { box-shadow:inset 3px 0 0 var(--gold); background:color-mix(in srgb, var(--gold) 8%, transparent); font-weight:600; }
+.weather-week tr.is-today .w-lbl { color:var(--text); }
+.weather-today-tag, .w-today-tag { display:inline-block; margin-left:var(--s2); padding:1px 7px; border-radius:999px; background:var(--gold); color:var(--bg-0); font-size:.65rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+.weather-loading { color:var(--text-dim); display:flex; gap:var(--s2); align-items:center; padding:var(--s3) 0; }
+.weather-week-wrap { display:block; }
 .stat-ico { display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:var(--r1); flex-shrink:0;
   background:color-mix(in srgb, var(--gold) 12%, transparent); color:var(--gold); border:1px solid var(--line); }
 .stat-val { font-family:var(--font-ui); font-size:2rem; font-weight:600; line-height:1; font-variant-numeric:tabular-nums; /* ponytail: defloat kejap87w — Fraunces→UI grotesk tabular para parsear números mais rápido */ }

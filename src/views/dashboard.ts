@@ -3,7 +3,8 @@ import { icon } from '../ui/icons'
 import { navigate } from '../router'
 import { toast } from '../ui/toast'
 import { today, week } from '../ui/stats'
-import { fetchWeather, weatherAgeLabel } from '../ui/weather'
+import { fetchWeather, weatherAgeLabel, fetchForecast, weekdayLabel } from '../ui/weather'
+import { openModal } from '../ui/modal'
 
 interface Wd { slug: string; name: string; description?: string; icon?: string }
 interface Row { wd: Wd; notes: Nota[]; board: { columns: { id: string; name: string }[]; cards: Card[] } }
@@ -128,9 +129,10 @@ function projCard(wd: Wd, t: Tally): string {
     </a>`
 }
 
-function stat(label: string, val: string, sub: string, ico: Parameters<typeof icon>[0], hue?: string) {
+function stat(label: string, val: string, sub: string, ico: Parameters<typeof icon>[0], hue?: string, role?: 'button', ariaLabel?: string) {
+  const a = role === 'button' ? ` role="button" tabindex="0" data-weather-card aria-label="${ariaLabel || label}"` : ''
   return `
-    <div class="stat" style="--accent:${hue || 'var(--gold)'}">
+    <div class="stat"${a} style="--accent:${hue || 'var(--gold)'}">
       <div class="stat-ico" style="color:${hue || 'var(--gold)'};border-color:color-mix(in srgb,${hue || 'var(--gold)'} 45%,transparent);background:color-mix(in srgb,${hue || 'var(--gold)'} 13%,transparent)">${icon(ico, 18)}</div>
       <div class="stat-body"><div class="stat-val" style="color:${hue || 'var(--gold)'}">${val}</div><div class="stat-lbl">${label}</div><div class="stat-sub">${sub}</div></div>
     </div>
@@ -242,8 +244,8 @@ function weatherSection(w: Awaited<ReturnType<typeof fetchWeather>> | null, err:
     <section class="dash-sec">
       <h2>${icon('cloud', 16)} Meteorologia</h2>
       <div class="stat-grid">
-        ${stat('Temperatura', t, 'Porto · agora', w.icon, 'var(--gold)')}
-        ${stat('Condicao', w.label, `Atualizado as ${weatherAgeLabel(w.time)}`, 'aura', 'var(--pipe-doing)')}
+        ${stat('Temperatura', t, 'Porto · agora', w.icon, 'var(--gold)', 'button', 'Ver previsão da semana')}
+        ${stat('Condicao', w.label, `Atualizado as ${weatherAgeLabel(w.time)}`, 'aura', 'var(--pipe-doing)', 'button', 'Ver previsão da semana')}
       </div>
       ${attribution}
     </section>`
@@ -349,6 +351,8 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
         ${sessions(rows)}
       </section>
     </div>`
+
+  bindWeatherCards(panel)
 
   panel.querySelectorAll('[data-nav]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); navigate(a.getAttribute('data-nav')!) }))
 
@@ -461,6 +465,8 @@ export async function renderWorldDashboard(panel: HTMLElement, wd: Wd) {
   `
 
   // ponytail: orquestrador do mundo = gatilho; move TODO->doing deste mundo e lança os agentes, re-render a seguir
+  bindWeatherCards(panel)
+
   const orch = panel.querySelector<HTMLButtonElement>('#orch-wd-btn')
   orch?.addEventListener('click', () => {
     const b = orch
@@ -476,3 +482,59 @@ export async function renderWorldDashboard(panel: HTMLElement, wd: Wd) {
 }
 
 function esc(s: unknown) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
+
+
+// ponytail: o widget Meteorologia é clicável -> modal "previsão 7 dias".
+// Atalho único via event delegation num [data-weather-card]; keydown (Enter/Space) + click.
+// Um só fetch por 15 min (mesma cache da Weather); se falhar, modal mostra aviso.
+function bindWeatherCards(panel: HTMLElement) {
+  if ((panel as any).__weatherBound) return
+  (panel as any).__weatherBound = true
+  const open = (target: HTMLElement) => {
+    openModal({
+      title: 'Previsão · Porto · 7 dias',
+      submitText: 'Fechar',
+      cancelText: 'Fechar',
+      onSubmit: () => {},
+      onCancel: () => {},
+      body: () => {
+        // Optimistic skeleton; fetchForecast repaints via innerHTML on the <output>.
+        return `<output class="weather-week-wrap" aria-live="polite">` +
+          `<div class="weather-loading">${icon('cloud', 14)} A carregar previsão…</div>` +
+          `</output>` +
+          `<div class="weather-attr" style="margin-top:var(--s4)"><a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather by Open-Meteo.com (CC BY 4.0)</a></div>`
+      },
+    })
+    const root = document.querySelector('.modal-backdrop .modal-body')
+    const out = root?.querySelector('output.weather-week-wrap') as HTMLElement | null
+    if (!out) return
+    const todayIso = new Date().toISOString().slice(0, 10)
+    fetchForecast()
+      .then(f => {
+        const rows = f.days.map(d => {
+          const isToday = d.iso === todayIso
+          const weekday = weekdayLabel(d.iso).split(',')[0]  // "sex" curto
+          return `<tr class="${isToday ? 'is-today' : ''}">` +
+            `<td class="w-wd">${esc(weekday)}${isToday ? ' <span class="w-today-tag">hoje</span>' : ''}</td>` +
+            `<td class="w-ico" aria-hidden="true">${icon(d.icon, 18)}</td>` +
+            `<td class="w-temp"><span class="w-max">${Math.round(d.maxC)}°</span><span class="w-min">${Math.round(d.minC)}°</span></td>` +
+            `<td class="w-lbl">${esc(d.label)}</td>` +
+            `</tr>`
+        }).join('')
+        out.innerHTML = `<table class="weather-week"><thead><tr><th>Dia</th><th></th><th>Min/Max</th><th>Condição</th></tr></thead><tbody>${rows}</tbody></table>`
+      })
+      .catch(err => {
+        out.innerHTML = `<div class="dash-none">${icon('cloud', 14)} Previsão indisponível — ${esc(err.message || String(err))}</div>`
+      })
+  }
+  panel.addEventListener('click', e => {
+    const t = (e.target as HTMLElement).closest<HTMLElement>('[data-weather-card]')
+    if (t && panel.contains(t)) open(t)
+  })
+  panel.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    const t = (e.target as HTMLElement).closest<HTMLElement>('[data-weather-card]')
+    if (t && panel.contains(t)) { e.preventDefault(); open(t) }
+  })
+}
+
