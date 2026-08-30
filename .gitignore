@@ -5,3 +5,6 @@ dev.log
 data
 
 atlas.config.json
+
+# HEIMDALL drafts (cross-session work-in-progress for cards)
+.hermes/
