@@ -405,11 +405,12 @@ async function launchHermes(slug: string, card: any) {
   // Em falha: log fica gravado em disco p/ o BMS ver; worktree mantida p/ resolver.
   const wrapper = [
     'import subprocess,sys,os,shutil',
-    "st=sys.argv[2]; wt=sys.argv[3]; branch=sys.argv[4]; repo=sys.argv[6]; prompt=sys.argv[7]; bb=sys.argv[8]",
+    // ponytail: python -c faz sys.argv[0]='-c' (nao python path), argv[1]=stPath..argv[6]=baseBranch. Spawn: ['-c', wrapperWithPane, stPath, wt, branch, repo, prompt, baseBranch]
+    "st=sys.argv[1]; wt=sys.argv[2]; branch=sys.argv[3]; repo=sys.argv[4]; prompt=sys.argv[5]; bb=sys.argv[6]",
     'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",prompt])',
     'if rc==0:',
     '\x20\x20\x20\x20try:',
-    '\x20\x20\x20\x20\x20\x20\x20\x20os.chdir(base)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20os.chdir(repo)',
     // ponytail: merge SEMPRE em dev — nunca na branch atual do base. Se o repo estiver em main o 'git merge' iria p/ main sem approve.
     '\x20\x20\x20\x20\x20\x20\x20\x20co=subprocess.run([r"GITBIN","checkout",bb],capture_output=True)',
     '\x20\x20\x20\x20\x20\x20\x20\x20if co.returncode!=0:',
@@ -451,7 +452,7 @@ async function launchHermes(slug: string, card: any) {
   // tocar no resto (auto-merge/cleanup identico ao commit de12033).
   const wrapperWithPane = [
     'import os,json,time,sys',
-    'st=sys.argv[2]',
+    'st=sys.argv[1]',
     'try:',
     '\x20\x20\x20\x20pane=int(os.environ.get("WEZTERM_PANE","-1"))',
     '\x20\x20\x20\x20open(st,"w",encoding="utf-8").write(json.dumps({"state":"running","pane":pane,"ts":time.time()}))',
