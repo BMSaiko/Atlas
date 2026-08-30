@@ -46,7 +46,8 @@ export function openPalette(slug: string | null) {
     push('Terminais', 'term', 'Abrir terminal WezTerm', 'abrir terminal wezterm cmd shell',
       () => { close()
         fetch('/api/terms/open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug }) })
-          .then(r => r.json()).then((d: any) => toast(d.ok ? 'Terminal aberto' : ('Erro: ' + (d.error || 'desconhecido'))))
+          .then(r => r.ok ? r.json() : Promise.reject(new Error(r.status === 404 ? 'servidor stale — faz restart do vite' : ('HTTP ' + r.status))))
+          .then((d: any) => toast(d.ok ? 'Terminal aberto' : ('Erro: ' + (d.error || 'desconhecido'))))
           .catch(e => toast('Erro: ' + e.message)) })
     // ponytail: card terminal-control-v2 — master kill cross-workdir. Confirm-dialog antes.
     push('Terminais', 'kill', 'Matar todos os terminais do ATLAS', 'matar terminais atlas kill all cross',

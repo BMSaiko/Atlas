@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-08-30 — terminal-control-v2
+
+- `killPaneForCard`: ao matar pane, se card ainda em `doing`, reset para `todo` (worker não promoveu ou master kill) — patch `b44c56c`
+- `killAllPanesAtlas()`: cross-workdir; itera `index.json`, mata panes running em todos os mundos e reseta os cards
+- `POST /api/terms/kill-all-atlas`: endpoint cross-workdir (loopback-only)
+- `POST /api/terms/open {slug}`: abre pane WezTerm visível no workdir ativo (cwd = wt running se houver, repo root senão)
+- Palette (Ctrl+K): 2 entradas novas no grupo "Terminais" — `Abrir terminal WezTerm` e `Matar todos os terminais do ATLAS` (confirm-dialog)
+
 Todas as mudanças notáveis do Atlas. Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-PT/1.1.0/), versionamento em `0.x`.
 
 ## [Unreleased]
