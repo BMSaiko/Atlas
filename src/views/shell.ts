@@ -9,6 +9,7 @@ import { parseTags, bindTagAutocomplete, openNewNoteModal } from './notes'
 import { openNewCardModal } from './kanban'
 import { renderDashboard } from './dashboard'
 import { startClockWidget } from '../ui/clock'
+import { fetchWeather } from '../ui/weather'
 import { getTheme, setManual, setSeason, setAuto, setSeasonMode, autoShift, autoSeason, Shift, Season, SEASON_NAMES } from '../ui/theme'
 import { TZ_LIST, getTz, setTz } from '../ui/timezones'
 import { mountFocus } from '../ui/pomodoro'
@@ -39,7 +40,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
         <nav class="side-nav" aria-label="Workdirs"></nav>
         <div class="side-clock" id="clock">
           <div class="clock-time" data-clock="time">--:--:--</div>
-          <div class="clock-sub"><span class="clock-date" data-clock="date"></span> · <span class="clock-tz" data-clock="tz" id="clock-tz" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-label="Fuso horário">PT</span></div>
+          <div class="clock-sub"><span class="clock-date" data-clock="date"></span> · <span class="clock-tz" data-clock="tz" id="clock-tz" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-label="Fuso horário">PT</span> · <span class="clock-wx" data-clock="wx" title="Meteorologia — Open-Meteo"><span class="wx-icon" data-clock="wx-icon"></span><span class="wx-temp" data-clock="wx-temp">--°</span></span></div>
           <div class="tz-pop" id="tz-pop" hidden><label for="tz-select">Fuso horário</label><select id="tz-select" aria-label="Escolher fuso horário"></select></div>
         </div>
         <div class="side-focus" id="foco"></div>
@@ -97,6 +98,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
   watchSeason()
   startClockWidget(shell)
   bindClockTz(shell)
+  bindClockWeather(shell)
   mountFocus(root.querySelector('#foco') as HTMLElement)
 }
 
@@ -257,6 +259,23 @@ function bindClockTz(shell: HTMLElement) {
   // Fora do relógio fecha o seletor. Listeners presos ao shell (re-criado a cada render) — sem acumulação.
   shell.addEventListener('click', e => { if (!pop.hidden && e.target !== btn && !pop.contains(e.target as Node)) close() })
   shell.addEventListener('keydown', e => { if (!pop.hidden && e.key === 'Escape') close() })
+}
+
+// ponytail: 1 fetch + render; falha silenciosa (mantem '--°'); re-tenta em 15min (TTL do cache em weather.ts).
+// Loc hard-coded em Porto — trocar de fuso horario nao afecta a localizacao da meteo.
+async function bindClockWeather(shell: HTMLElement) {
+  const iconEl = shell.querySelector<HTMLElement>('[data-clock="wx-icon"]')
+  const tempEl = shell.querySelector<HTMLElement>('[data-clock="wx-temp"]')
+  if (!iconEl || !tempEl) return
+  const tick = async () => {
+    try {
+      const w = await fetchWeather()
+      iconEl.innerHTML = icon(w.icon, 14)
+      tempEl.textContent = `${Math.round(w.tempC)}°`
+    } catch { /* offline: fica '--°' */ }
+  }
+  await tick()
+  setInterval(tick, 15 * 60 * 1000)
 }
 
 function esc(s: unknown) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }

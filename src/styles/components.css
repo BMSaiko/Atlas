@@ -124,6 +124,10 @@
 .clock-tz { color: var(--gold); font-weight:600; cursor:pointer; border-bottom:1px dotted currentColor; transition:color .2s, border-color .2s; }
 .clock-tz:hover { color: var(--gold-soft); border-color: var(--gold-soft); }
 .clock-tz:focus-visible { outline:2px solid var(--focus); outline-offset:2px; border-radius:3px; }
+.clock-wx { display:inline-flex; align-items:center; gap:3px; color: var(--text-dim); font-weight:500; }
+.clock-wx .wx-icon { display:inline-flex; }
+.clock-wx .wx-temp { font-variant-numeric: tabular-nums; color: var(--text); }
+.clock-wx[title]:hover { color: var(--text); cursor:help; }
 .tz-pop { position:absolute; left:50%; bottom:calc(100% + 8px); transform:translateX(-50%); width:200px;
   background:var(--bg-3); border:1px solid var(--line); border-radius:var(--r2); padding:var(--s3);
   box-shadow:0 8px 30px rgba(0,0,0,.5); z-index:50; text-align:left; }
