@@ -3,6 +3,8 @@ import { icon } from './icons'
 import { navigate } from '../router'
 import { launchRun } from '../views/kanban'
 import { quickAdd, newWorkdir } from '../views/shell'
+import { confirmDialog } from './confirm'
+import { toast } from './toast'
 
 // ponytail: palette keyboard-first (Ctrl+K). Overlay proprio (nao reusa openModal — obriga <form>
 // + submit). Reutiliza: navigate (deep-link de workspace.ts p/ reabrir nota/cartao), quickAdd,
@@ -40,6 +42,23 @@ export function openPalette(slug: string | null) {
   if (slug) {
     push('Ações', 'note', 'Novo nota ou cartão', 'novo nota cartao criar', () => { close(); quickAdd(slug) })
     push('Ações', 'gear', 'Definições', 'definicoes settings config', () => { close(); navigate('/w/' + slug + '/settings') })
+    // ponytail: card terminal-control-v2 — abre wezterm no workdir ativo (palette Ctrl+K).
+    push('Terminais', 'term', 'Abrir terminal WezTerm', 'abrir terminal wezterm cmd shell',
+      () => { close()
+        fetch('/api/terms/open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug }) })
+          .then(r => r.json()).then((d: any) => toast(d.ok ? 'Terminal aberto' : ('Erro: ' + (d.error || 'desconhecido'))))
+          .catch(e => toast('Erro: ' + e.message)) })
+    // ponytail: card terminal-control-v2 — master kill cross-workdir. Confirm-dialog antes.
+    push('Terminais', 'kill', 'Matar todos os terminais do ATLAS', 'matar terminais atlas kill all cross',
+      async () => { close()
+        const ok = await confirmDialog({ title: 'Matar todos os terminais ATLAS', message: 'Fecha todos os WezTerm abertos por qualquer workdir. Cards em doing passam a todo. Continuar?' })
+        if (!ok) return
+        try {
+          const r = await fetch('/api/terms/kill-all-atlas', { method: 'POST' }).then(r => r.json())
+          const k = (r && typeof r.killed === 'number') ? r.killed : 0
+          const w = (r && typeof r.worlds === 'number') ? r.worlds : 0
+          toast(k > 0 ? `${k} terminais fechados em ${w} mundo${w !== 1 ? 's' : ''}` : 'Nenhum terminal aberto')
+        } catch (e: any) { toast('Erro: ' + (e?.message || e)) } })
   }
 
   const visible = () => {

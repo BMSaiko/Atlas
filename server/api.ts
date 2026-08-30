@@ -244,12 +244,23 @@ function killPane(pane: number | undefined): void {
 }
 
 async function killPaneForCard(slug: string, cardId: string): Promise<void> {
+  // ponytail: card terminal-control-v2 — kill sempre reseta doing->todo se o worker nao promoveu
+  // (master kill / pane morta a mao). O transition-detector do PUT kanban ja' e' idempotente
+  // (mata pane duas vezes = noop), por isso o PUT fire-and-forget aqui e' seguro.
   // fallback gracioso: sem wezterm-gui.exe, .status nao tem pane, ou dir inexistente = noop.
   try {
     const repo = await repoDir(slug)
     const stPath = join(wtRoot(repo), 'runs', slug, cardId + '.status')
     const st = await readJ(stPath).catch(() => null)
     if (st && typeof st.pane === 'number') killPane(st.pane)
+    const file = join(DATA, slug, 'kanban.json')
+    const board = await readJ(file).catch(() => null)
+    const c = board?.cards?.find((x: any) => x.id === cardId)
+    if (c && !c.archived && c.colId === 'doing') {
+      c.colId = 'todo'
+      delete c.startedAt
+      await writeJ(file, board).catch(() => {})
+    }
   } catch { /* best-effort */ }
 }
 
@@ -266,6 +277,32 @@ async function killAllPanesForSlug(slug: string): Promise<{ killed: number; chec
     }
   } catch { /* dir nao existe = 0 panes */ }
   return { killed, checked }
+}
+
+// ponytail: card terminal-control-v2 — cross-workdir. Itera index.json (lista de mundos) e
+// para cada slug mata panes running do seu runs/. Reusa killPaneForCard (que faz reset doing->todo).
+async function killAllPanesAtlas(): Promise<{ killed: number; checked: number; worlds: number }> {
+  let killed = 0, checked = 0, worlds = 0
+  const idx = await readJ(join(DATA, INDEX)).catch(() => null)
+  if (!Array.isArray(idx)) return { killed, checked, worlds }
+  for (const w of idx) {
+    if (!w || !w.slug) continue
+    const repo = await repoDir(w.slug).catch(() => null)
+    if (!repo) continue
+    worlds++
+    const runsDir = join(wtRoot(repo), 'runs', w.slug)
+    if (!existsSync(runsDir)) continue
+    for (const f of readdirSync(runsDir).filter(x => x.endsWith('.status'))) {
+      checked++
+      const st = await readJ(join(runsDir, f)).catch(() => null)
+      if (st && st.state === 'running' && typeof st.pane === 'number') {
+        killPane(st.pane)
+        void killPaneForCard(w.slug, f.replace(/\.status$/, ''))
+        killed++
+      }
+    }
+  }
+  return { killed, checked, worlds }
 }
 
 async function launchHermes(slug: string, card: any) {
@@ -651,6 +688,40 @@ export default function atlasApi(): Plugin {
         if (!SLUG.test(slug)) { send(400, { error: 'slug required' }); return }
         const r = await killAllPanesForSlug(slug)
         send(200, { ok: true, killed: r.killed, checked: r.checked }); return
+      }
+      // ponytail: card terminal-control-v2 — cross-workdir. Mata panes de todos os mundos.
+      if (parts[0] === 'terms' && parts[1] === 'kill-all-atlas' && m === 'POST') {
+        const r = await killAllPanesAtlas()
+        send(200, { ok: true, killed: r.killed, checked: r.checked, worlds: r.worlds }); return
+      }
+      // ponytail: card terminal-control-v2 — abre um wezterm-gui.exe start -- cmd.exe no workdir
+      // ativo (palette Ctrl+K). Sem hermes, sem prompt; so' a pane visivel. cwd preferido: worktree do
+      // primeiro card running (se houver), senao repo root do mundo, senao ATLAS_REPO.
+      if (parts[0] === 'terms' && parts[1] === 'open' && m === 'POST') {
+        const b2 = (await body(req)) || {}
+        const slug = typeof b2.slug === 'string' ? b2.slug : ''
+        if (!SLUG.test(slug)) { send(400, { error: 'slug required' }); return }
+        if (!cfg.wezterm || !existsSync(cfg.wezterm)) { send(503, { error: 'wezterm nao instalado' }); return }
+        const repo = await repoDir(slug)
+        let cwd = repo
+        try {
+          const runsDir = join(wtRoot(repo), 'runs', slug)
+          if (existsSync(runsDir)) {
+            for (const f of readdirSync(runsDir).filter(x => x.endsWith('.status'))) {
+              const st = await readJ(join(runsDir, f)).catch(() => null)
+              if (st?.state === 'running') {
+                const wt = join(wtRoot(repo), slug, f.replace(/\.status$/, ''))
+                if (existsSync(wt)) { cwd = wt; break }
+              }
+            }
+          }
+        } catch { /* fallback repo */ }
+        try {
+          spawn(cfg.wezterm, ['start', '--', 'cmd.exe'], { cwd, detached: true, stdio: 'ignore', windowsHide: true }).unref()
+          send(200, { ok: true, cwd }); return
+        } catch (e: any) {
+          send(500, { error: 'wezterm start falhou: ' + e.message }); return
+        }
       }
 
       // /api/orchestrator/start[/<slug>] -> passa TODO(s) nao arquivados (de um mundo, se slug) para doing
