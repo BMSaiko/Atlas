@@ -1046,7 +1046,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
       if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'orphans' && m === 'GET') {
         const slug = parts[1]
         if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
-        const STALE_MS = 90 * 1000
+        const STALE_MS = 5 * 60 * 1000  // ponytail: 5min (era 90s) — workers lentos OK, o que para e nao escreve log no .log e crash real
         const now = Date.now()
         const board = await readJ(join(DATA, slug, 'kanban.json')).catch(() => null)
         if (!board) { send(200, { orphans: [] }); return }
