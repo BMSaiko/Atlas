@@ -23,7 +23,7 @@ export function launchRun(slug: string, c: Card): Promise<boolean> {
 
 let pollTimer: ReturnType<typeof setInterval> | undefined
 // ponitail: pollers de DP que sobrevivem ao fecho do modal p/ notificar conclusao
-const dpPollers: Record<string, { timer?: ReturnType<typeof setInterval> }> = {}
+const dpPollers: Record<string, { timer?: ReturnType<typeof setInterval>; pre?: HTMLPreElement; statusEl?: HTMLElement }> = {}
 
 // ponytail: modal complete de criar cartão — standalone (leva o seu board + retry 409), usado
 // TAKE: identical pneum BUTTON (#kadd) e palette quickAdd. Fonte unica do "Novo cartão". A
@@ -474,7 +474,11 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
   }
 
   function dpCard(c: Card) {
-    // ponytail: botao DP por card — corre hermes headless que escreve o design plan e grava-o no card (card.dp)
+    // ponytail: botao DP por card — router de 3 ramos: re-aderir se poller ja corre, ver dp gravado se existir,
+    // ou disparar headless. NUNCA regenera por engano.
+    const key = `${slug}:dp-${c.id}`
+    if (dpPollers[key]) { viewDp(c); return }
+    if (c.dp) { setDpRunning(c.id, false); viewDp(c); return }
     fetch(`/api/w/${slug}/dp`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cardId: c.id }),
@@ -486,8 +490,30 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
 
     function viewDp(c: Card) {
     const key = `${slug}:dp-${c.id}`
-    // ponitail: registo por card p/ nao duplicar pollers; re-abrir o viz dos dados limpa o anterior
-    if (dpPollers[key]) { clearInterval(dpPollers[key].timer); delete dpPollers[key] }
+    // ponytail: 3 ramos — re-aderir (poller vivo), ver dp gravado (estatico), ou primeira vez (cria poller+modal).
+    // re-aderir: usa o mesmo pre/statusEl do poller vivo (o tick continua a escrever no mesmo DOM node).
+    const p = dpPollers[key]
+    if (p && p.pre && p.statusEl) {
+      // ponytail: re-abrir depois de fechar — pre ficou detached mas com todo o output acumulado; outerHTML captura-o.
+      const preHtml = p.pre.outerHTML, statusTxt = p.statusEl.textContent || ''
+      openModal({
+        title: 'DP · ' + c.title, submitText: 'Fechar', cancelText: 'Fechar',
+        body: () => `<div class="term-wrap">${preHtml}<div class="term-status" id="${esc(c.id)}-dpstatus">${esc(statusTxt)}</div></div>`,
+        onSubmit: () => {},
+      })
+      return
+    }
+    // ponytail: c.dp ja gravado, sem poller vivo — mostra direto via dpHtml (sem spinner "A ligar..." enganador)
+    if (!dpPollers[key] && c.dp) {
+      const dpBody = dpHtml(c.dp)
+      openModal({
+        title: 'DP · ' + c.title, submitText: 'Fechar', cancelText: 'Fechar',
+        body: () => `<div class="kmodal-sec"><h6 class="kmodal-sec-t">${icon('doc',14)} Design Plan · DP</h6><div class="kmodal-sec-body">${dpBody}</div></div>`,
+        onSubmit: () => {},
+      })
+      return
+    }
+    // ponytail: primeira vez — cria poller + modal de progresso. Modal pode fechar; poller sobrevive p/ notificar fim.
     let offset = 0
     let pre = document.createElement('pre')
     pre.className = 'term-view'
@@ -528,7 +554,7 @@ if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquiv
       } catch { /* aguenta — server pode reiniciar */ }
     }
     timer = setInterval(tick, 1000)
-    dpPollers[key] = { timer }
+    dpPollers[key] = { timer, pre, statusEl }
     tick()
   }
 
