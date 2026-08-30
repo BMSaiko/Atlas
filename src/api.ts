@@ -1,6 +1,6 @@
 export type Prioridade = 'urgent' | 'high' | 'medium' | 'low'
 export interface Nota { id: string; title: string; text: string; ts: number; archived?: boolean; tags?: string[] }
-export interface Card { id: string; colId: string; title: string; description: string; priority: Prioridade; due?: number; ts: number; archived: boolean; result?: string; dp?: string; reviewed?: boolean; startedAt?: number; recur?: 'daily' | 'weekly' | 'monthly'; occurrenceOf?: string }
+export interface Card { id: string; colId: string; title: string; description: string; priority: Prioridade; due?: number; ts: number; archived: boolean; result?: string; dp?: string; reviewed?: boolean; startedAt?: number; recur?: 'daily' | 'weekly' | 'monthly'; occurrenceOf?: string; timerMs?: number; timerStartedAt?: number }
 export interface Coluna { id: string; name: string }
 export interface Board { columns: Coluna[]; cards: Card[] }
 // ponytail: write-token fence (card iykn11lg) — header global em TODOS os PUTs (j<T> é o unico helper

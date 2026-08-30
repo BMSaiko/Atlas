@@ -687,6 +687,25 @@ function runCard(c: Card) {
           <option value="weekly" ${c?.recur==='weekly'?'selected':''}>Semanal</option>
           <option value="monthly" ${c?.recur==='monthly'?'selected':''}>Mensal</option>
         </select></div>
+        ${c ? `<div class="field">
+          <label>Temporizador</label>
+          ${c.timerMs
+            ? `<div class="ktimer-modal" data-timer-modal>
+                <span class="ktimer-modal-label">${c.timerStartedAt ? 'A contar: ' : 'Pausado · '}restantes <strong>${esc(fmtClock(timerRemainingMs(c)))}</strong> · duração total ${esc(fmtClock(c.timerMs))}</span>
+                <span class="ktimer-modal-actions">
+                  <button type="button" class="btn btn-ghost btn-sm" data-timer-act="toggle">${c.timerStartedAt ? 'Pausar' : 'Retomar'}</button>
+                  <button type="button" class="btn btn-ghost btn-sm" data-timer-act="add1">+1 min</button>
+                  <button type="button" class="btn btn-ghost btn-sm" data-timer-act="remove">Remover</button>
+                </span>
+              </div>`
+            : `<div class="ktimer-modal" data-timer-modal>
+                <span class="ktimer-modal-label">Sem temporizador</span>
+                <span class="ktimer-modal-actions">
+                  <input type="number" min="1" max="240" step="1" value="25" name="timerMin" aria-label="Duração em minutos" style="width:5em">
+                  <button type="button" class="btn btn-primary btn-sm" data-timer-act="start">Iniciar</button>
+                </span>
+              </div>`}
+        </div>` : ''}
         <div class="field"><label for="k-col">Coluna</label><select id="k-col" name="colId">${cols}</select></div>`,
       onSubmit: () => {
         const form = document.querySelector('.modal form') as HTMLFormElement
@@ -708,6 +727,49 @@ function runCard(c: Card) {
       },
     })
     if (!c) wireCardTemplate(m.root, slug)
+    // ponytail: handler dos botoes do temporizador no modal de edit. Acoes: start/toggle/add1/remove.
+    // start: grava timerMs+timerStartedAt; toggle: inverte timerStartedAt mantendo timerMs; remove: apaga ambos.
+    // add1: soma 60_000 a timerMs; se a correr, recalcula timerStartedAt para preservar o progresso.
+    // Todas as acoes mutam o card local, persistem, fecham modal e dao toast (padrao dos outros botoes do modal).
+    if (c) {
+      m.root.querySelector<HTMLElement>('[data-timer-modal]')?.addEventListener('click', e => {
+        const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-timer-act]')
+        if (!btn) return
+        const act = btn.dataset.timerAct
+        if (act === 'start') {
+          const inp = m.root.querySelector<HTMLInputElement>('[name=timerMin]')
+          const n = Math.max(1, Math.min(240, Number(inp?.value || 25) || 25))
+          c.timerMs = n * 60_000
+          c.timerStartedAt = Date.now()
+        } else if (act === 'toggle') {
+          if (!c.timerMs) return
+          if (c.timerStartedAt) {
+            // pausar: congelar o progresso subtraindo o elapsed
+            const elapsed = Date.now() - c.timerStartedAt
+            c.timerMs = Math.max(0, c.timerMs - elapsed)
+            delete c.timerStartedAt
+          } else {
+            // retomar: o progresso ja esta em c.timerMs, so precisamos de novo timestamp
+            c.timerStartedAt = Date.now()
+          }
+        } else if (act === 'add1') {
+          if (!c.timerMs) return
+          if (c.timerStartedAt) {
+            const elapsed = Date.now() - c.timerStartedAt
+            // soma 60_000 ao total e reposiciona startedAt para preservar elapsed
+            c.timerMs += 60_000
+            c.timerStartedAt = Date.now() - elapsed
+          } else {
+            c.timerMs += 60_000
+          }
+        } else if (act === 'remove') {
+          delete c.timerMs
+          delete c.timerStartedAt
+        } else return
+        e.stopPropagation()
+        save().then(() => { m.close(); render(); toast(act === 'remove' ? 'Temporizador removido' : act === 'start' ? 'Temporizador iniciado' : act === 'add1' ? '+1 min' : (c.timerStartedAt ? 'Temporizador retomado' : 'Temporizador pausado')) })
+      })
+    }
   }
   function viewModal(c: Card) {
     const col = board.columns.find(x => x.id === c.colId)?.name || ''
@@ -834,12 +896,28 @@ setInterval(() => {
   })
 }, 8000)
 // ponytail: tick de 1s atualiza os .ktimer do doing (elapsed desde startedAt) sem re-render do board
+// + os badges .kbadge-timer do per-card timer (label + warn/running). Custo zero extra (mesmo loop).
 setInterval(() => {
   const now = Date.now()
   document.querySelectorAll<HTMLElement>('.ktimer').forEach(el => {
     const start = parseInt(el.dataset.start || '0', 10)
     if (!start) return
     el.textContent = fmtElapsed(now - start)
+  })
+  document.querySelectorAll<HTMLElement>('.kbadge-timer').forEach(el => {
+    const ms = Number(el.dataset.timerMs || 0)
+    if (!ms) return
+    const started = Number(el.dataset.timerStarted || 0)
+    const isRunning = !!started
+    const remaining = isRunning ? Math.max(0, ms - (Date.now() - started)) : ms
+    const warn = isRunning && remaining <= ms * 0.2
+    const running = isRunning && !warn
+    el.textContent = isRunning ? fmtClock(remaining) : `pausado ${fmtClock(ms)}`
+    el.classList.toggle('warn', warn)
+    el.classList.toggle('running', running)
+    el.setAttribute('title', isRunning
+      ? (remaining <= 0 ? 'Temporizador concluído · carrega em Editar para reiniciar' : `Temporizador · falta ${fmtClock(remaining)}`)
+      : 'Temporizador parado · carrega em Editar para retomar')
   })
 }, 1000)
 
@@ -919,5 +997,36 @@ function toInputDate(ts: number): string {
 }
 function fmtDate(ts: number): string {
   return new Date(ts).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' })
+}
+// ponytail: helpers do temporizador por-cartao (badge + modal). Estado vive no Card (timerMs, timerStartedAt);
+// derivamos tudo em runtime (progresso, label, classe). Sem libs; tick reusa o de 1s que ja atualiza o .ktimer.
+function fmtClock(ms: number): string {
+  const s = Math.max(0, Math.ceil(ms / 1000))
+  const m = Math.floor(s / 60), sec = s % 60
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+}
+function timerRemainingMs(c: Card): number {
+  if (!c.timerMs) return 0
+  if (!c.timerStartedAt) return c.timerMs  // parado: mostra a duracao total como paused label
+  return Math.max(0, c.timerMs - (Date.now() - c.timerStartedAt))
+}
+function timerLabel(c: Card): string {
+  if (!c.timerMs) return ''
+  if (!c.timerStartedAt) return `pausado ${fmtClock(c.timerMs)}`
+  return fmtClock(timerRemainingMs(c))
+}
+function timerTooltip(c: Card): string {
+  if (!c.timerMs) return ''
+  if (!c.timerStartedAt) return 'Temporizador parado · carrega em Editar para retomar'
+  const rem = timerRemainingMs(c)
+  if (rem <= 0) return 'Temporizador concluído · carrega em Editar para reiniciar'
+  return `Temporizador · falta ${fmtClock(rem)}`
+}
+function timerBadge(c: Card): string {
+  if (!c.timerMs || c.archived) return ''
+  const remaining = timerRemainingMs(c)
+  const cls = c.timerStartedAt && remaining <= c.timerMs * 0.2 ? ' warn'
+  : c.timerStartedAt ? ' running' : ''
+  return `<span class="kbadge kbadge-timer${cls}" data-timer-card="${c.id}" data-timer-ms="${c.timerMs}" data-timer-started="${c.timerStartedAt || 0}" title="${esc(timerTooltip(c))}">${esc(timerLabel(c))}</span>`
 }
 function esc(s: string) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
