@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-08-30 — fix worker crash (argv off-by-1 root cause)
+
+- **fix(kanban): argv off-by-1 no wrapper python** (commit `dee0c2d`) — `python -c SCRIPT` faz `sys.argv[0]='-c'`, não o python path. Wrapper de `launchHermes` lia `argv[2..8]` quando devia ler `argv[1..6]`. O commit `2397db5` tentou corrigir mas continuou off-by-1 (assumiu argv[0]=python path). Corrigido: `st=argv[1]; wt=argv[2]; branch=argv[3]; repo=argv[4]; prompt=argv[5]; bb=argv[6]`.
+- **fix(kanban): `os.chdir(base)` → `os.chdir(repo)`** (`dee0c2d`) — `base` nunca foi definido nesta scope (typo antigo do commit `de12033`); em sucesso o `if rc==0:` crashava com `NameError` e o card ficava preso em `doing` (auto-merge não corria).
+- **Repro:** `bao35dg0` / `phqqhn10` / `q49x3w24` (2026-08-30) — `.status=state:running` + `.log=0b` + card voltou a `todo` via watchdog aos 90s.
+- **E2E pós-fix:** argv parse correto (`st`=stPath, `wt`=wt, ...), rc=0, `.status` gravado com `pane`, sem IndexError. tsc+build verde.
+- **Refs:** `plans/2026-08-30-worker-crash-argv-off-by1-DP.md`
+
 ## 2026-08-30 — terminal-control-v2
 
 - `killPaneForCard`: ao matar pane, se card ainda em `doing`, reset para `todo` (worker não promoveu ou master kill) — patch `b44c56c`
@@ -13,6 +21,7 @@ Todas as mudanças notáveis do Atlas. Formato baseado em [Keep a Changelog](htt
 ## [Unreleased]
 
 ### Added
+- **PWA instalável + offline shell** — `vite-plugin-pwa` (1 dep dev) com manifest Web App (`ATLAS`, theme `#d6a83f`, bg `#050403`, ícones 192/512/maskable/SVG), `registerType: 'autoUpdate'` + `injectRegister: 'auto'`, Workbox precache do shell + assets públicos (74 entries, 318 KiB). `devOptions.enabled: false` (SW só ativa em build/preview). `vite.config.ts` + `public/icons/icon-{192,512,512-maskable}.png` (PNGs gerados a partir do `favicon.svg`). Sem cache de `/api/*` (rede continua a ser a fonte dos dados — card fixou "offline só lê cache de UI"). `package.json` + `vite.config.ts` + `public/icons/`.
 - **Temporizador por cartão** — badge `mm:ss` no card + bloco no modal de edição (Iniciar/Pausar/Retomar/+1min/Remover). Estado (`timerMs`, `timerStartedAt`) persiste no `kanban.json`; alarme global em `src/main.ts` dispara `notify` (toast sempre, Notification nativa se houver permissão) ao fim, limpa `timerStartedAt` e mantém `timerMs` para Retomar. Cor: accent a correr, warn nos últimos 20%, ghost quando parado.
 - **docs:** README temático Atlas — metáfora "mundo" (workdir) como voz central na documentação, sincronizada com as features de `dev`.
 - **docs (refinamento 29/08):** README cobre agora também épocas do ano/estações, command palette (`Ctrl+K`), templates, botões Brainstorm e Gerar DP, visualização da tarefa em execução (stream de log), prazos/deadlines, prioridades urgentes e bulk actions — voz Atlas/"mundo" mantida sem perder precisão técnica.
@@ -39,6 +48,15 @@ Todas as mudanças notáveis do Atlas. Formato baseado em [Keep a Changelog](htt
 - **Dashboard defloat** — strip da "floaty decoration" do dashboard hub (anéis orbitais ficam só em vistas por mundo); mantém stat-grid, stepper, sessões ativas e `Ctrl+K`. (kejap87w — `2f16cd2`)
 - **Widget Meteorologia (Open-Meteo) no dashboard** — widget no dashboard hub com temperatura, condição textual (PT) e emoji (☀️/⛅/🌧/❄️); cache 10 min, geolocation via `Intl`/IP fallback, lat/lon configurável em Definições. (qoukodvd — `49b559f`)
 - **Refactor `dpCard/viewDp`** — botão "Gerar DP" reusável entre cards (substitui duplicação em `dpCard`/`viewDp`); idempotente, não regenera se `dp` já existe salvo se `force=1`. (bao35dg0 — `c9afb6c`)
+
+### Added
+- **Crash detection + auto-recovery** — `server/api.ts` (`/api/w/:slug/orphans` GET, idempotente) + `src/main.ts` (`watchOrphanCrashes` 30s poll): card em `doing` há >90s com log parado ou wrapper python morto → toast + native notification + reset `doing→todo` + grava `result: 'CRASH: worker nao respondeu por >90s ...'`. Sem isto, runs orfãos ficavam invisíveis para o user. `0408ee8` + `34039f0` + `d8482f0`.
+- **Auto-cleanup stuck runs** — `cleanupRuns` apaga `.status` com `state=running` há >6h. Runs activos (mtime recente) intactos. Log companheiro preserva output. `0408ee8`.
+
+### Fixed
+- **argv off-by-1 no wrapper python** (root cause dos crashes) — `python -c WRAPPER args...` faz `sys.argv[0]='-c'`, mas o wrapper lia a partir de `sys.argv[1]`, recebendo `'-c'` em vez de `stPath` e o `wt` (worktree path) em vez do `prompt`. O hermes recebia o caminho como prompt, crashava silenciosamente, e o card ficava preso em `doing` (auto-merge só corre se `rc==0`). Fix em `launchHermes` (wrapper + wrapperWithPane) + `launchDp` + `launchBrainstorm` + `launchGitOp` (todos liam `argv[1]` em vez de `argv[2]`). `2397db5`.
+- **Patch 2 (kill-pane) tinha 1 path que saía antes** (`sys.exit(0)` no `if co.returncode!=0:` no auto-merge). Patch cobre o caminho comum; o fix de argv cobre o resto.
+- **Empty `.log` no wezterm mode é por design** (output vai para a pane, não para o Node `p.stdout`). Watchdog ajustado para não disparar em false positives.
 
 ### Changed
 - Cards com **2 tamanhos** (conteúdo vs output `.has-output`): limita o título do resultado (line-clamp 2 no card, completo no modal).
