@@ -717,12 +717,20 @@ export default function atlasApi(): Plugin {
           }
         } catch { /* fallback repo */ }
         try {
-          // ponytail: --always-new-process forca uma NOVA janela em vez de adicionar tab ao mux
-          // existente (que pode estar minimizado/off-screen e dai o user "ver" o toast mas nao
-          // a janela). --cwd e' nativo do wezterm, evita dependencia do cwd do spawn.
-          spawn(cfg.wezterm, ['start', '--always-new-process', '--cwd', cwd, '--', 'cmd.exe'],
-            { detached: true, stdio: 'ignore' }).unref()
-          send(200, { ok: true, cwd }); return
+          // ponytail: se ja' ha um wezterm-gui a correr, adiciona tab (focus fica no wezterm
+          // existente que o user ja' tem a frente); senao abre janela nova. Sem isto, o user
+          // via' o toast mas tinha de clicar na nova janela para usar.
+          // Use tasklist para detectar: 'wezterm-gui.exe' sem arg de comando = o GUI host.
+          const probe = spawn('tasklist', ['/FI', 'IMAGENAME eq wezterm-gui.exe', '/NH'],
+            { stdio: ['ignore', 'pipe', 'ignore'] })
+          let hasInstance = false
+          probe.stdout.on('data', (d: Buffer) => { if (/wezterm-gui\.exe/i.test(d.toString())) hasInstance = true })
+          await new Promise<void>(r => probe.on('close', () => r()))
+          const args = hasInstance
+            ? ['start', '--cwd', cwd, '--', 'cmd.exe']                                  // tab no mux existente
+            : ['start', '--always-new-process', '--cwd', cwd, '--', 'cmd.exe']          // janela nova
+          spawn(cfg.wezterm, args, { detached: true, stdio: 'ignore' }).unref()
+          send(200, { ok: true, cwd, reused: hasInstance }); return
         } catch (e: any) {
           send(500, { error: 'wezterm start falhou: ' + e.message }); return
         }
