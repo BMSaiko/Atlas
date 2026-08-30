@@ -92,3 +92,46 @@ export function weekdayLabel(iso: string): string {
     return new Intl.DateTimeFormat('pt-PT', { weekday: 'short', day: '2-digit', month: 'short' }).format(d)
   } catch { return '—' }
 }
+
+
+// ponytail: modal "previsão 7 dias" — fonte única reutilizada por dashboard.ts (.stat[data-weather-card])
+// e por shell.ts (.clock-wx). O forecast é a mesma cache 15min de fetchForecast().
+import { icon } from './icons'
+import { openModal } from './modal'
+
+const esc = (s: unknown) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+
+export function openWeatherWeekModal() {
+  openModal({
+    title: 'Previsão · Porto · 7 dias',
+    submitText: 'Fechar',
+    cancelText: 'Fechar',
+    onSubmit: () => {},
+    onCancel: () => {},
+    body: () =>
+      `<output class="weather-week-wrap" aria-live="polite">` +
+        `<div class="weather-loading">${icon('cloud', 14)} A carregar previsão…</div>` +
+      `</output>` +
+      `<div class="weather-attr" style="margin-top:var(--s4)"><a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather by Open-Meteo.com (CC BY 4.0)</a></div>`,
+  })
+  const out = document.querySelector('.modal-backdrop output.weather-week-wrap') as HTMLElement | null
+  if (!out) return
+  const todayIso = new Date().toISOString().slice(0, 10)
+  fetchForecast()
+    .then(f => {
+      const rows = f.days.map(d => {
+        const isToday = d.iso === todayIso
+        const weekday = weekdayLabel(d.iso).split(',')[0]
+        return `<tr class="${isToday ? 'is-today' : ''}">` +
+          `<td class="w-wd">${esc(weekday)}${isToday ? ' <span class="w-today-tag">hoje</span>' : ''}</td>` +
+          `<td class="w-ico" aria-hidden="true">${icon(d.icon, 18)}</td>` +
+          `<td class="w-temp"><span class="w-max">${Math.round(d.maxC)}°</span><span class="w-min">${Math.round(d.minC)}°</span></td>` +
+          `<td class="w-lbl">${esc(d.label)}</td>` +
+          `</tr>`
+      }).join('')
+      out.innerHTML = `<table class="weather-week"><thead><tr><th>Dia</th><th></th><th>Min/Max</th><th>Condição</th></tr></thead><tbody>${rows}</tbody></table>`
+    })
+    .catch(err => {
+      out.innerHTML = `<div class="dash-none">${icon('cloud', 14)} Previsão indisponível — ${esc(err.message || String(err))}</div>`
+    })
+}

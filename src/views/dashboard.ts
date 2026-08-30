@@ -3,7 +3,7 @@ import { icon } from '../ui/icons'
 import { navigate } from '../router'
 import { toast } from '../ui/toast'
 import { today, week } from '../ui/stats'
-import { fetchWeather, weatherAgeLabel, fetchForecast, weekdayLabel } from '../ui/weather'
+import { fetchWeather, weatherAgeLabel, openWeatherWeekModal } from '../ui/weather'
 import { openModal } from '../ui/modal'
 
 interface Wd { slug: string; name: string; description?: string; icon?: string }
@@ -489,52 +489,17 @@ function esc(s: unknown) { return String(s ?? '').replace(/&/g, '&amp;').replace
 // Um só fetch por 15 min (mesma cache da Weather); se falhar, modal mostra aviso.
 function bindWeatherCards(panel: HTMLElement) {
   if ((panel as any).__weatherBound) return
-  (panel as any).__weatherBound = true
-  const open = (target: HTMLElement) => {
-    openModal({
-      title: 'Previsão · Porto · 7 dias',
-      submitText: 'Fechar',
-      cancelText: 'Fechar',
-      onSubmit: () => {},
-      onCancel: () => {},
-      body: () => {
-        // Optimistic skeleton; fetchForecast repaints via innerHTML on the <output>.
-        return `<output class="weather-week-wrap" aria-live="polite">` +
-          `<div class="weather-loading">${icon('cloud', 14)} A carregar previsão…</div>` +
-          `</output>` +
-          `<div class="weather-attr" style="margin-top:var(--s4)"><a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather by Open-Meteo.com (CC BY 4.0)</a></div>`
-      },
-    })
-    const root = document.querySelector('.modal-backdrop .modal-body')
-    const out = root?.querySelector('output.weather-week-wrap') as HTMLElement | null
-    if (!out) return
-    const todayIso = new Date().toISOString().slice(0, 10)
-    fetchForecast()
-      .then(f => {
-        const rows = f.days.map(d => {
-          const isToday = d.iso === todayIso
-          const weekday = weekdayLabel(d.iso).split(',')[0]  // "sex" curto
-          return `<tr class="${isToday ? 'is-today' : ''}">` +
-            `<td class="w-wd">${esc(weekday)}${isToday ? ' <span class="w-today-tag">hoje</span>' : ''}</td>` +
-            `<td class="w-ico" aria-hidden="true">${icon(d.icon, 18)}</td>` +
-            `<td class="w-temp"><span class="w-max">${Math.round(d.maxC)}°</span><span class="w-min">${Math.round(d.minC)}°</span></td>` +
-            `<td class="w-lbl">${esc(d.label)}</td>` +
-            `</tr>`
-        }).join('')
-        out.innerHTML = `<table class="weather-week"><thead><tr><th>Dia</th><th></th><th>Min/Max</th><th>Condição</th></tr></thead><tbody>${rows}</tbody></table>`
-      })
-      .catch(err => {
-        out.innerHTML = `<div class="dash-none">${icon('cloud', 14)} Previsão indisponível — ${esc(err.message || String(err))}</div>`
-      })
-  }
+  ;(panel as any).__weatherBound = true
+  // ponytail: fonte única do modal em weather.ts; aqui só delegação
+  const fire = (target: HTMLElement) => { if (panel.contains(target)) openWeatherWeekModal() }
   panel.addEventListener('click', e => {
     const t = (e.target as HTMLElement).closest<HTMLElement>('[data-weather-card]')
-    if (t && panel.contains(t)) open(t)
+    if (t) fire(t)
   })
   panel.addEventListener('keydown', e => {
     if (e.key !== 'Enter' && e.key !== ' ') return
     const t = (e.target as HTMLElement).closest<HTMLElement>('[data-weather-card]')
-    if (t && panel.contains(t)) { e.preventDefault(); open(t) }
+    if (t) { e.preventDefault(); fire(t) }
   })
 }
 
