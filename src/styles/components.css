@@ -336,6 +336,12 @@ a.link:hover { color:var(--gold-soft); }
 @keyframes kfade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion: reduce){.kdoing .kdot{animation:none;opacity:.5}.kfade{animation:none}}
 .ktimer{margin-left:6px;padding:0 5px;border:1px solid var(--line);border-radius:4px;font-size:.68rem;font-weight:600;letter-spacing:.02em;color:var(--muted);font-variant-numeric:tabular-nums;text-transform:none}
+.kbadge-timer{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:4px;padding:0 6px;font-size:.68rem;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;text-transform:none;background:transparent}
+.kbadge-timer.running{color:var(--accent);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%, transparent)}
+.kbadge-timer.warn{color:var(--warn);border-color:var(--warn);background:color-mix(in srgb,var(--warn) 15%, transparent)}
+.ktimer-modal{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;border:1px solid var(--line);border-radius:4px;padding:6px 8px;background:color-mix(in srgb,var(--line) 30%, transparent)}
+.ktimer-modal-actions{display:inline-flex;gap:6px;align-items:center}
+.ktimer-modal-label{font-size:.82rem;color:var(--muted)}
 .kresult{margin:6px 2px 4px;padding:6px 8px;border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:6px;font-size:.78rem;color:var(--muted)}
 .kcard.has-output .kresult{background:color-mix(in srgb,var(--gold) 6%, transparent);border-color:var(--gold)}
 .kresult-title{font-weight:400;color:var(--muted);font-size:.95rem;margin-bottom:2px}

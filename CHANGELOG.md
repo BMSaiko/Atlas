@@ -5,6 +5,7 @@ Todas as mudanças notáveis do Atlas. Formato baseado em [Keep a Changelog](htt
 ## [Unreleased]
 
 ### Added
+- **Temporizador por cartão** — badge `mm:ss` no card + bloco no modal de edição (Iniciar/Pausar/Retomar/+1min/Remover). Estado (`timerMs`, `timerStartedAt`) persiste no `kanban.json`; alarme global em `src/main.ts` dispara `notify` (toast sempre, Notification nativa se houver permissão) ao fim, limpa `timerStartedAt` e mantém `timerMs` para Retomar. Cor: accent a correr, warn nos últimos 20%, ghost quando parado.
 - **docs:** README temático Atlas — metáfora "mundo" (workdir) como voz central na documentação, sincronizada com as features de `dev`.
 - **docs (refinamento 29/08):** README cobre agora também épocas do ano/estações, command palette (`Ctrl+K`), templates, botões Brainstorm e Gerar DP, visualização da tarefa em execução (stream de log), prazos/deadlines, prioridades urgentes e bulk actions — voz Atlas/"mundo" mantida sem perder precisão técnica.
 - **Main dashboard** no root (`/`, `src/views/dashboard.ts`): visão geral de todos os workdirs — stat-grid (projetos, notas, cartões em aberto, concluídos), pipeline de trabalho em stepper com conectores + paleta por etapa (todo/doing/review/done nos 3 shifts), projetos com anel orbital de conclusão e sessões/terminais ativos (tempo decorrido com ticker de 1s). `src/views/dashboard.ts`.

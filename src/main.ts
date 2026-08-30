@@ -11,6 +11,7 @@ router.init()
 watchReviewTransitions()
 watchBrainstormCompletions()
 watchDueReminders()
+watchTimerAlarms()
 watchRecurrence()
 
 // ponytail: as notificacoes de review sao GLOBAIS (qualquer vista/tab) — antes so disparavam no poll
@@ -88,6 +89,35 @@ function watchDueReminders() {
       }
     }
   }, 30000)
+}
+
+// ponytail: alarme por-cartao do temporizador (per-card countdown). Padrao watchDueReminders: poll global a 1s,
+// dedup por chave. Quando timerMs && timerStartedAt && elapsed >= timerMs => dispara 1 notif + toast, limpa
+// timerStartedAt (mantem timerMs para o utilizador retomar). Limpa entradas mortas (card arquivado ou timerMs apagado).
+const timerFired = new Set<string>()  // keys ja disparadas; limpas quando timerMs desaparece/arquivado
+function watchTimerAlarms() {
+  setInterval(async () => {
+    let slugs: string[]
+    try { slugs = (await api.workdirs()).map(w => w.slug) } catch { return }
+    for (const slug of slugs) {
+      const b = await api.kanban.get(slug).catch(() => null)
+      if (!b) continue
+      for (const c of b.cards) {
+        const key = `${slug}:${c.id}`
+        if (c.archived || !c.timerMs || !c.timerStartedAt) { timerFired.delete(key); continue }
+        if (Date.now() - c.timerStartedAt < c.timerMs) continue
+        if (timerFired.has(key)) continue
+        notify(`Atlas · ${c.title}`, 'Temporizador concluído')
+        timerFired.add(key)
+        // limpa startedAt (mantem timerMs); utilizador pode retomar com o botao Retomar no modal
+        try {
+          delete c.timerStartedAt
+          const r = await api.kanban.put(slug, b)
+          if (r && r.ver) b.ver = r.ver
+        } catch { /* ignora — UI nao vai refletir, mas alarme ja disparou */ }
+      }
+    }
+  }, 1000)
 }
 
 // ponytail: cards recorrentes — quando uma ocorrencia e concluida (done ou arquivada) e nao ha
