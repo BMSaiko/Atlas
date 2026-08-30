@@ -647,6 +647,18 @@ function runCard(c: Card) {
     wireRefineTemplate(m.root, slug)
   }
 
+  function resetCard(c: Card) {
+    // ponytail: reset semantico - limpa historico de execucao e volta a TODO;
+    // reutiliza save() (PUT com retry 409) em vez de criar um endpoint novo.
+    delete c.dp
+    delete c.result
+    delete c.reviewed
+    delete c.startedAt
+    c.colId = 'todo'
+    save().then(render)
+    toast('Recomeçado do zero')
+  }
+
   function bindDnd(boardEl: HTMLElement) {
     let dragId: string | null = null
     const colEls = Array.from(boardEl.querySelectorAll('.kcol')) as HTMLElement[]
@@ -744,7 +756,8 @@ function runCard(c: Card) {
                    <button type="button" class="btn btn-ghost btn-sm" data-card-act="term">${icon('term',14)} Ver terminal</button>`
                 : c.colId === 'review'
                   ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="approve">${icon('check',14)} Aprovar</button>
-                     <button type="button" class="btn btn-ghost btn-sm" data-card-act="reject">${icon('pencil',14)} Refinar</button>`
+                     <button type="button" class="btn btn-ghost btn-sm" data-card-act="reject">${icon('pencil',14)} Refinar</button>
+                     <button type="button" class="btn btn-ghost btn-sm" data-card-act="reset">${icon('reset',14)} Começar do zero</button>`
                   : '<span class="muted" style="font-size:.82rem">Sem ações para esta coluna</span>'}
           </div>
           <div class="kmodal-actions-meta">
@@ -777,6 +790,7 @@ function runCard(c: Card) {
       else if (a === 'term') { m.close(); viewTerminal(c) }
       else if (a === 'approve') { m.close(); approveCard(c) }
       else if (a === 'reject') { m.close(); rejectCard(c) }
+      else if (a === 'reset') { m.close(); resetCard(c) }
       else if (a === 'move') {
         const dir = parseInt(actBtn.dataset.dir || '0'); const i = board.columns.findIndex(x => x.id === c.colId)
         const target = board.columns[i + dir]; if (!target) return
