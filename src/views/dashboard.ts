@@ -3,6 +3,7 @@ import { icon } from '../ui/icons'
 import { navigate } from '../router'
 import { toast } from '../ui/toast'
 import { today, week } from '../ui/stats'
+import { fetchWeather, weatherAgeLabel } from '../ui/weather'
 
 interface Wd { slug: string; name: string; description?: string; icon?: string }
 interface Row { wd: Wd; notes: Nota[]; board: { columns: { id: string; name: string }[]; cards: Card[] } }
@@ -219,6 +220,35 @@ function keysSection(keys: HermesKey[] | null, usage: HermesUsage | null): strin
 }
 
 
+// card qoukodvd: widget Open-Meteo (Porto). DR — free, sem chave, 10k/dia, CORS OK.
+// Attribution CC BY 4.0 obrigatoria: "Weather by Open-Meteo.com".
+// ponytail: cache em memoria 15min em fetchWeather() — sem re-fetch por render.
+function weatherSection(w: Awaited<ReturnType<typeof fetchWeather>> | null, err: string | null): string {
+  const attribution = `<div class="weather-attr"><a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather by Open-Meteo.com (CC BY 4.0)</a></div>`
+  if (err) return `
+    <section class="dash-sec">
+      <h2>${icon('cloud', 16)} Meteorologia</h2>
+      <div class="dash-none">${icon('cloud', 14)} Meteorologia indisponivel — ${esc(err)}</div>
+      ${attribution}
+    </section>`
+  if (!w) return `
+    <section class="dash-sec">
+      <h2>${icon('cloud', 16)} Meteorologia</h2>
+      <div class="dash-none">${icon('cloud', 14)} A carregar meteorologia…</div>
+      ${attribution}
+    </section>`
+  const t = `${Math.round(w.tempC)}°C`
+  return `
+    <section class="dash-sec">
+      <h2>${icon('cloud', 16)} Meteorologia</h2>
+      <div class="stat-grid">
+        ${stat('Temperatura', t, 'Porto · agora', w.icon, 'var(--gold)')}
+        ${stat('Condicao', w.label, `Atualizado as ${weatherAgeLabel(w.time)}`, 'aura', 'var(--pipe-doing)')}
+      </div>
+      ${attribution}
+    </section>`
+}
+
 function searchResults(rows: Row[], q: string): { html: string; count: number } {
   const ql = q.trim().toLowerCase()
   if (!ql) return { html: '', count: 0 }
@@ -260,10 +290,12 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
   const { total, byWd } = tally(rows)
   // API keys + uso: 2 chamadas globais, paralelas (auth.json + usage.jsonl do hermes).
   // card ebvqt746: usage complementa "hoje / tokens / custo" — sem ficheiro = '—' (v1 intacta).
-  const [keys, usage] = await Promise.all([
-    api.hermes.keys().catch(() => null),
-    api.hermes.usage().catch(() => null),
+  const [[keys, usage], wx] = await Promise.all([
+    Promise.all([api.hermes.keys().catch(() => null), api.hermes.usage().catch(() => null)]),
+    fetchWeather().then(w => ({ ok: true as const, w })).catch(e => ({ ok: false as const, err: e.message as string })),
   ])
+  const weather = wx.ok ? wx.w : null
+  const weatherErr = wx.ok ? null : wx.err
   const first = items[0]
 
 
@@ -294,6 +326,8 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
         ${stat('Cartões em aberto', String(openCards(total)), 'a percorrer o céu', 'board', 'var(--pipe-todo)')}
         ${stat('Concluídos', String(total.done), total.done ? 'estrelas fixas no firmamento' : 'ainda a orbitar', 'check', 'var(--pipe-done)')}
       </div>
+
+      ${weatherSection(weather, weatherErr)}
 
       <section class="dash-sec">
         <h2>${icon('forward', 16)} Pipeline de trabalho</h2>
@@ -375,12 +409,15 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
 
 
 export async function renderWorldDashboard(panel: HTMLElement, wd: Wd) {
-  const [notes, board, keys, usage] = await Promise.all([
+  const [notes, board, keys, usage, wx] = await Promise.all([
     api.notes.get(wd.slug).catch(() => null),
     api.kanban.get(wd.slug).catch(() => null),
     api.hermes.keys().catch(() => null),
     api.hermes.usage().catch(() => null),
+    fetchWeather().then(w => ({ ok: true as const, w })).catch(e => ({ ok: false as const, err: e.message as string })),
   ])
+  const weather = wx.ok ? wx.w : null
+  const weatherErr = wx.ok ? null : wx.err
   const rows: Row[] = [{ wd, notes: notes?.items ?? [] as Nota[], board: board ?? { columns: [], cards: [] } }]
   const { byWd } = tally(rows)
   const t = byWd.get(wd.slug)!
@@ -403,6 +440,8 @@ export async function renderWorldDashboard(panel: HTMLElement, wd: Wd) {
         ${stat('Em aberto', String(openCards(t)), 'todo · doing · review', 'board', 'var(--pipe-todo)')}
         ${stat('Concluídos', String(t.done), 'feitos neste mundo', 'check', 'var(--pipe-done)')}
       </div>
+
+      ${weatherSection(weather, weatherErr)}
 
       <section class="dash-sec">
         <h2>${icon('forward', 16)} Pipeline de trabalho</h2>

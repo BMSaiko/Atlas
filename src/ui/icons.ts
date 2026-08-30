@@ -30,7 +30,12 @@ const I = {
   bellOff: '<path d="M12 4a6 6 0 0 1 6 6c0 3 .8 4.6 1.3 5.3M4.5 15.5S6 14 6 10a6 6 0 0 1 .6-2.6M9.5 19a2.6 2.6 0 0 0 5 0M4 4l16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>',
   term: '<rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 9l3 3-3 3M12 15h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
   snow: '<path d="M12 3v18M6.5 6.5l15 11M19.5 6.5l-15 11M12 7l-2-2M12 7l2-2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-  sprout: '<path d="M12 21v-8M12 13c0-4 3-6 7-6 0 4-3 6-7 6zM12 15c-1-3-3-5-7-5 0 3 2 5 7 5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>'
+  sprout: '<path d="M12 21v-8M12 13c0-4 3-6 7-6 0 4-3 6-7 6zM12 15c-1-3-3-5-7-5 0 3 2 5 7 5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+  cloud: '<path d="M7 17h10a4 4 0 0 0 .8-7.9 6 6 0 0 0-11.6 1A4.5 4.5 0 0 0 7 17z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+  fog: '<path d="M4 9h12M3 13h14M5 17h12M6 21h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M9 5h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".5"/>',
+  rain: '<path d="M7 13h10a4 4 0 0 0 .8-7.9 6 6 0 0 0-11.6 1A4.5 4.5 0 0 0 7 13zM9 17l-1 3M13 17l-1 3M17 17l-1 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  storm: '<path d="M7 13h10a4 4 0 0 0 .8-7.9 6 6 0 0 0-11.6 1A4.5 4.5 0 0 0 7 13zM13 14l-3 5h4l-2 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'
+
 }
 export function icon(name: keyof typeof I, size = 20): string {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" aria-hidden="true">${I[name]}</svg>`
