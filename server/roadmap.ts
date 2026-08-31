@@ -16,7 +16,7 @@ export interface ImportedTask {
 
 // ponytail: marcadores de "feito" podem aparecer fundo na celula (T75/T80/T83).
 // ponytail: marcador real e um TOKEN em maiusculas (DONE/FEITO/BLOCKED...). Nao casar lowercase 'blocked'/'feita'/'feita' em prosa corrente (ex. 'JS-rendered+blocked', 'ser feita ANTES') que sao falso positivo.
-const DONE = /\b(?:DONE|FEITO|FEITA|DESCARTADA|BLOCKED|SKIP|DROPPED|NAO\s*[\- ]?\s*PROBLEMA)\b/
+const DONE = /\b(?:DONE|FEITO|FEITA|DESCARTADA|BLOCKED|SKIP|(?:DROPPED|DROP)|NAO\s*[\- ]?\s*PROBLEMA)\b/
 const TX = /\bT(\d+(?:\.\d+)?)\b/i
 
 function strip(t: string) {

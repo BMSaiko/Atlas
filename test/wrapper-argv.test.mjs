@@ -1,11 +1,15 @@
 // test/wrapper-argv.test.mjs
 //
-// Regressao: argv off-by-1 do wrapper python em server/api.ts (launchHermes +
-// wrapperWithPane + chdir(repo)). Bug historico: python -c faz sys.argv[0]='-c'
-// (NAO o python path). Confirma 3 invariantes:
+// Regressao: argv off-by-1 do wrapper python em server/api.ts. Cobre 3 wrappers:
+//   A. launchHermes headless (L406-441) — 6-arg set [stPath,wt,branch,repo,prompt,baseBranch]
+//   B. launchHermes with-pane (L453-461) — prepended pane-capture, mesmo 6-arg set
+//   C. launchDp (L529-534) — wrapper minimo, 1-arg set [prompt] (sem git/merge)
+//
+// Bug historico: python -c faz sys.argv[0]='-c' (NAO o python path). Confirma:
 //   1. wrapperWithPane grava .status com pane=WEZTERM_PANE e argv[1]=stPath
 //   2. wrapper principal le sys.argv[1..6] corretamente (stPath..baseBranch)
 //   3. os.chdir(repo) corre OK (NUNCA os.chdir(base) que crashava com NameError)
+//   4. launchDp le sys.argv[1]=prompt corretamente (1-arg set, sem git)
 //
 // Reproduzido em 2026-08-30 nos cards bao35dg0/phqqhn10/q49x3w24.
 //
@@ -15,7 +19,10 @@
 import { execFileSync } from 'child_process'
 import { mkdtempSync, readFileSync, unlinkSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
+
+const here = dirname(fileURLToPath(import.meta.url))
 
 const havePython = (() => {
   try { execFileSync('python', ['-V'], { stdio: 'ignore' }); return true } catch { return false }
@@ -112,6 +119,67 @@ assert(!status.includes('argv1=' + wtArg),    'NAO ha off-by-1 (argv[1] NAO deve
 assert(!status.includes('argv5=' + wtArg),    'NAO ha off-by-1 (argv[5]/prompt NAO deve ser wt)')
 assert(!status.includes('argv4=' + promptArg),'NAO ha off-by-1 (argv[4]/repo NAO deve ser prompt)')
 
+// ============================================================
+// [5] launchDp wrapper (1-arg set, sem git/merge) — server/api.ts L529-534
+// ============================================================
+console.log('\n[5] launchDp: wrapper minimo 1-arg set')
+{
+  const dpStPath = join(tmp, 'dp-card.status')
+  const dpPrompt = 'Gera DP para o card q49x3w24'
+  // Stub: dump argv (sem chamar hermes real) e sys.exit(0)
+  const dumpWrapper = [
+    'import sys',
+    'open("' + dpStPath.replace(/\\/g, '\\\\') + '","w").write("argv0="+sys.argv[0]+"|argv1="+sys.argv[1]+"|argc="+str(len(sys.argv)))',
+  ].join('\n')
+  execFileSync('python',
+    ['-c', dumpWrapper, dpPrompt],
+    { stdio: ['ignore', 'pipe', 'pipe'] }
+  )
+  const dpStatus = readFileSync(dpStPath, 'utf-8')
+  assert(dpStatus.includes('argv0=-c'),         'launchDp: argv[0]=-c (python -c)')
+  assert(dpStatus.includes('argv1=' + dpPrompt),'launchDp: argv[1]=prompt')
+  assert(dpStatus.includes('argc=2'),           'launchDp: argc=2 (script + 1 arg)')
+
+  unlinkSync(dpStPath)
+}
+
+// ============================================================
+// [6] SOURCE EQUALITY — server/api.ts L406-441 + L453-461 + L529-534 inalterados
+// ============================================================
+console.log('\n[6] SOURCE EQUALITY (wrappers inalterados)')
+{
+  const apiSrc = readFileSync(join(here.replace(/test.*$/, ''), 'server', 'api.ts'), 'utf-8')
+  const anchors = [
+    // L408: argv map do wrapper principal
+    /st=sys\.argv\[1\]; wt=sys\.argv\[2\]; branch=sys\.argv\[3\]; repo=sys\.argv\[4\]; prompt=sys\.argv\[5\]; bb=sys\.argv\[6\]/,
+    // L413: chdir(repo) NOT chdir(base) — old-bug regression
+    /os\.chdir\(repo\)/,
+    // L416: checkout bb abort
+    /if co\.returncode!=0/,
+    // L421: merge branch --no-edit
+    /subprocess\.run\(\[r"GITBIN","merge",branch,"--no-edit"\],capture_output=True\)/,
+    // L423: push origin bb (NUNCA push com retry — ainda NAO implementado, BUG 3e)
+    /subprocess\.run\(\[r"GITBIN","push","origin",bb\],capture_output=True\)/,
+    // L430: merge-failed so imprime, NAO signal .status.state (BUG 3e fix por fazer)
+    /print\("MERGE dev<-"\+branch\+" FALHOU/,
+    // L455: wrapperWithPane st=sys.argv[1]
+    /'st=sys\.argv\[1\]'/,
+    // L457: pane=WEZTERM_PANE
+    /pane=int\(os\.environ\.get/,
+    // L462-465: headless dispatch
+    /const headless = !cfg\.wezterm \|\| !existsSync\(cfg\.wezterm\)/,
+    /\['-c', wrapperWithPane, stPath, wt, branch, repo, prompt, baseBranch\]/,
+    // L529-532: launchDp wrapper minimo (1 arg)
+    /'rc=subprocess\.call\(\[sys\.executable,"-m","hermes_cli\.main","-z",sys\.argv\[1\]\]\)'/,
+  ]
+  for (const a of anchors) {
+    assert(a.test(apiSrc), `ancora presente: ${a.toString().slice(0,70)}...`)
+  }
+  // Confirmar o BUG 3e fix NAO esta implementado (regression contract)
+  assert(!/state.*['"]merge-failed['"]/.test(apiSrc), 'BUG 3e fix (merge-failed signal) NAO implementado no source — esperado (regression guard)')
+  assert(!/non-fast-forward/.test(apiSrc),               'BUG 3e fix (non-fast-forward retry) NAO implementado no source — esperado (regression guard)')
+}
+
 // Cleanup
 unlinkSync(stPath)
 rmSync(tmp, { recursive: true, force: true })
@@ -121,4 +189,4 @@ if (failures > 0) {
   console.error(`\nFAIL: ${failures} assercao(oes) falharam`)
   process.exit(1)
 }
-console.log('\nOK: argv fix regression passed (todas as assercoes)')
+console.log('\nOK: argv fix regression passed (3 wrappers, todas as assercoes)')
