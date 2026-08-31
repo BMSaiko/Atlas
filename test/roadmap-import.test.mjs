@@ -186,7 +186,7 @@ if (!importBlock) {
   ok(/inside\(allowedRoot,\s*path\)/.test(blk), 'inside(allowedRoot, path) bloqueia path fora do projeto')
   // Verificar que existe guard (inside, relative, startsWith VAULT, ou helper isPathAllowed)
   // aplicada a b.path entre o `b.path` e o `readFile`
-  const pathBlockMatch = blk.match(/b\.path[\s\S]{0,500}?readFile\(\s*path/)
+  const pathBlockMatch = blk.match(/b\.path[\s\S]{0,1000}?readFile\(\s*path/)
   if (pathBlockMatch) {
     const between = pathBlockMatch[0]
     const hasGuard = /inside\(|relative\(|resolve\(|\.startsWith\(.*VAULT|isPathAllowed/.test(between)

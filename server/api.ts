@@ -4,7 +4,7 @@ import { readFile, writeFile, rm } from 'node:fs/promises'
 import { createWriteStream } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { join, dirname, delimiter, normalize, extname, relative, sep } from 'node:path'
+import { join, dirname, delimiter, normalize, extname, relative, resolve, sep } from 'node:path'
 import { parseRoadmap } from './roadmap'
 import { cfg } from './config'
 
@@ -1144,8 +1144,14 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         const file = join(DATA, slug, 'kanban.json')
         if (!SLUG.test(slug) || !inside(DATA, file)) { send(400, { error: 'bad request' }); return }
         const b = (await body(req)) || {}
-        const path = typeof b.path === 'string' ? b.path : ''
+        let path = typeof b.path === 'string' ? b.path : ''
         if (!path) { send(400, { error: 'path required' }); return }
+        // ponytail: allow-list ao readFile — o path do body tem de viver dentro de
+        // <VAULT>/knowledge/projects/<slug>/. Sem isto, /import-roadmap le ficheiros
+        // arbitrarios do disco (path-traversal). resolve() normaliza ../ antes do inside().
+        const allowedRoot = join(VAULT, 'knowledge', 'projects', slug)
+        path = resolve(path)
+        if (!inside(allowedRoot, path)) { send(400, { error: 'path outside project' }); return }
         let md: string
         try { md = await readFile(path, 'utf8') } catch { send(400, { error: 'ficheiro nao encontrado: ' + path }); return }
         const tasks = parseRoadmap(md)
