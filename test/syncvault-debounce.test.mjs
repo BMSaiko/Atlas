@@ -7,7 +7,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const GIT = process.env.TEST_GIT
+const GIT = process.env.TEST_GIT || 'git'  // ponytail: stdlib fallback when CI forgets to inject
 let VAULT = null
 
 let vaultDirty = false
