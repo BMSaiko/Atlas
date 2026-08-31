@@ -175,9 +175,9 @@ console.log('\n[6] SOURCE EQUALITY (wrappers inalterados)')
   for (const a of anchors) {
     assert(a.test(apiSrc), `ancora presente: ${a.toString().slice(0,70)}...`)
   }
-  // Confirmar o BUG 3e fix NAO esta implementado (regression contract)
-  assert(!/state.*['"]merge-failed['"]/.test(apiSrc), 'BUG 3e fix (merge-failed signal) NAO implementado no source — esperado (regression guard)')
-  assert(!/non-fast-forward/.test(apiSrc),               'BUG 3e fix (non-fast-forward retry) NAO implementado no source — esperado (regression guard)')
+  // Confirmar o BUG 3e fix ESTA implementado (regression contract)
+  assert(/json\.dumps\(\{\"state\":\"merge-failed\"/.test(apiSrc),  'BUG 3e fix: wrapper sinaliza merge-failed em .status')
+  assert((apiSrc.match(/fetch.*origin.*bb.*capture_output=True/g) || []).length >= 2, 'BUG 3e fix: fetch origin bb >= 2x (retry apos push falhar)')
 }
 
 // Cleanup

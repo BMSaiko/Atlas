@@ -404,7 +404,7 @@ async function launchHermes(slug: string, card: any) {
   // remove a junction node_modules (rmdir NAO segue), remove a worktree e a branch -> auto-cleanup do card.
   // Em falha: log fica gravado em disco p/ o BMS ver; worktree mantida p/ resolver.
   const wrapper = [
-    'import subprocess,sys,os,shutil',
+    'import subprocess,sys,os,shutil,json,time',
     // ponytail: python -c faz sys.argv[0]='-c' (nao python path), argv[1]=stPath..argv[6]=baseBranch. Spawn: ['-c', wrapperWithPane, stPath, wt, branch, repo, prompt, baseBranch]
     "st=sys.argv[1]; wt=sys.argv[2]; branch=sys.argv[3]; repo=sys.argv[4]; prompt=sys.argv[5]; bb=sys.argv[6]",
     'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",prompt])',
@@ -420,14 +420,22 @@ async function launchHermes(slug: string, card: any) {
     '\x20\x20\x20\x20\x20\x20\x20\x20co2=subprocess.run([r"GITBIN","merge","origin/"+bb,"--no-edit"],capture_output=True)',
     '\x20\x20\x20\x20\x20\x20\x20\x20mg=subprocess.run([r"GITBIN","merge",branch,"--no-edit"],capture_output=True)',
     '\x20\x20\x20\x20\x20\x20\x20\x20if mg.returncode==0:',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","push","origin",bb],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20nj=os.path.join(wt,"node_modules")',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20try: os.rmdir(nj)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20except OSError: shutil.rmtree(nj,ignore_errors=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","worktree","remove","--force",wt],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","branch","-D",branch],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20else:',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20print("MERGE dev<-"+branch+" FALHOU (conflito?) - worktree mantido, verifica.")',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20ps=subprocess.run([r"GITBIN","push","origin",bb],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20if ps.returncode!=0:',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","fetch","origin",bb],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","merge","origin/"+bb,"--no-edit"],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","merge",branch,"--no-edit"],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20ps=subprocess.run([r"GITBIN","push","origin",bb],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20if ps.returncode==0:',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20nj=os.path.join(wt,"node_modules")',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20try: os.rmdir(nj)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20except OSError: shutil.rmtree(nj,ignore_errors=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","worktree","remove","--force",wt],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","branch","-D",branch],capture_output=True)',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20else:',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20try: open(st,"w",encoding="utf-8").write(json.dumps({"state":"merge-failed","branch":branch,"log":(mg.stderr or b"").decode("utf-8","replace"),"ts":time.time()}))',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20except: pass',
+    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20print("MERGE dev<-"+branch+" FALHOU apos retry (conflito real?) - worktree mantido, verifica.")',
     '    except Exception as e:',
     '\x20\x20\x20\x20\x20\x20\x20\x20print("AUTO-CLEANUP FALHOU: %r - push/merge incompleto. Worktree e branch mantidas p/ inspecao." % (e,))',
     // ponytail: kill-pane o wrapper para o wezterm-gui sair -> p.on('close) do Node corre ->
@@ -470,6 +478,9 @@ async function launchHermes(slug: string, card: any) {
   p.on('error', e => { ws.end(); void fail((headless ? 'spawn headless' : 'spawn wezterm') + ' falhou: ' + e.message) })
   p.on('close', async (code) => {
     ws.end()
+      // ponytail: BUG 3e — se o wrapper sinalizou merge-failed no .status, NAO promover doing->review (worktree mantida para inspecao)
+      const stRun = await readJ(stPath).catch(() => null)
+      const mergeFailed = stRun?.state === 'merge-failed'
     await writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {})
     const ff = join(DATA, slug, 'kanban.json')
     // ponytail: em falha deixa um marcador ERRO no card p/ a UI saber que terminou com erro (debug facil)
@@ -484,7 +495,11 @@ async function launchHermes(slug: string, card: any) {
     // no PUT apanha a inconsistencia; em ultimo caso o pollTimer/watchReviewTransitions resolvem).
     const board2 = await readJ(ff).catch(() => null)
     const c2 = board2?.cards?.find((x: any) => x.id === card.id)
-    if (c2 && !c2.archived && c2.colId === 'doing' && code === 0 && c2.result) {
+      if (mergeFailed && c2 && !c2.result) {
+      c2.result = 'MERGE FALHOU apos retry (conflito real ou divergencia). Abre o log do card para inspecao — worktree mantida.'
+      await writeJ(ff, board2).catch(() => {})
+      }
+    if (c2 && !c2.archived && c2.colId === 'doing' && code === 0 && !mergeFailed && c2.result) {
       void killPaneForCard(slug, card.id)  // card terminal-control: fecha pane do run antes de promover
       c2.colId = 'review'
       await writeJ(ff, board2).catch(() => {})
