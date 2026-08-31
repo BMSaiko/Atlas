@@ -8,3 +8,8 @@ atlas.config.json
 
 # HEIMDALL drafts (cross-session work-in-progress for cards)
 .hermes/
+
+# logs locais (vite preview/run, nao sao source)
+preview.log
+preview2.log
+vite_run.log
