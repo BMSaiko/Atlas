@@ -3,11 +3,20 @@
 // temp git repo so the real vault is never touched. Fails if a burst of writes
 // produces more than one batch commit.
 import { spawn, execFileSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const GIT = process.env.TEST_GIT || 'git'  // ponytail: stdlib fallback when CI forgets to inject
+const GIT = (() => {
+  if (process.env.TEST_GIT) return process.env.TEST_GIT
+  // ponytail: Windows fallback — node spawnSync não herda PATH do bash do user (git em C:\Program Files\Git\bin)
+  if (process.platform === 'win32') {
+    for (const p of ['C:/Program Files/Git/bin/git.exe', 'C:/Program Files/Git/cmd/git.exe']) {
+      if (existsSync(p)) return p
+    }
+  }
+  return 'git'
+})()
 let VAULT = null
 
 let vaultDirty = false
