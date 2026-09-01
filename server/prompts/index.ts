@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path'
 
 const DIR = dirname(fileURLToPath(import.meta.url))
 
-export type PromptKey = 'run-card' | 'brainstorm' | 'dp' | 'git-op'
+export type PromptKey = 'run-card' | 'brainstorm' | 'dp' | 'git-op' | 'merge-approve'
 
 const cache = new Map<PromptKey, string>()
 
