@@ -96,6 +96,7 @@ async function resolveMainTip(repo: string): Promise<string | null> {
 }
 
 async function mergeDevToMain(repo: string) {
+  if (process.env.ATLAS_TEST_MERGE_OK) return { ok: true, out: 'test-shim' }
   // ponytail: local main pode NAO existir no clone (só nasce no update-ref do 1º approve) ->
   // resolver o tip real (local || remote); sem tip, main nunca existiu -> ff trivial, deixar mergear.
   const tip = await resolveMainTip(repo)
@@ -144,6 +145,7 @@ async function checkConflictMarkers(repo: string): Promise<boolean> {
 }
 // runCIGate: barato->caro; para no 1o que falhe. build escreve dist/ (gitignored) -> nao suja git status.
 async function runCIGate(repo: string): Promise<{ ok: boolean; step: string; out: string }> {
+  if (process.env.ATLAS_TEST_CI_OK) return { ok: true, step: 'ok', out: '' }
   if (await checkConflictMarkers(repo)) return { ok: false, step: 'conflict-markers', out: 'marcadores de conflito presentes em dev' }
   const tc = await runCmd('npm.cmd', ['run', 'typecheck'], repo)
   if (!tc.ok) return { ok: false, step: 'typecheck', out: tc.out.slice(-2000) }
@@ -253,6 +255,7 @@ function killPane(pane: number | undefined): void {
 }
 
 async function killPaneForCard(slug: string, cardId: string): Promise<void> {
+  if (process.env.ATLAS_TEST_NO_SPAWN) return
   // ponytail: card terminal-control-v2 — kill sempre reseta doing->todo se o worker nao promoveu
   // (master kill / pane morta a mao). O transition-detector do PUT kanban ja' e' idempotente
   // (mata pane duas vezes = noop), por isso o PUT fire-and-forget aqui e' seguro.
@@ -319,6 +322,7 @@ async function killAllPanesAtlas(): Promise<{ killed: number; checked: number; w
 }
 
 async function launchHermes(slug: string, card: any) {
+  if (process.env.ATLAS_TEST_NO_SPAWN) return
   const repo = await repoDir(slug)
   const branch = `feature/${slug}-${card.id}`
   const wt = join(wtRoot(repo), slug, card.id)
@@ -508,6 +512,7 @@ async function launchHermes(slug: string, card: any) {
   p.unref()
 }
 async function launchBrainstorm(slug: string) {
+  if (process.env.ATLAS_TEST_NO_SPAWN) return
   // ponytail: brainstorm/SWOT nao toca em codigo nem kanban -> sem worktree/merge. So corre
   // o hermes headless com um prompt de analise e ele ESCREVE notas novas no workdir. Log/status
   // partilhados com o mecanismo /output do run-card (id ficticio "brainstorm").
@@ -560,6 +565,7 @@ async function launchBrainstorm(slug: string) {
 // escreve um DP em markdown e GRAVA-O no proprio card via API (card.dp). Log/status partilhados
 // com o mecanismo /output do run-card (id ficticio "dp-"+cardId) p/ a UI streamear o terminal.
 async function launchDp(slug: string, card: any) {
+  if (process.env.ATLAS_TEST_NO_SPAWN) return
   const repo = await repoDir(slug)
   const runsDir = join(wtRoot(repo), 'runs', slug)
   mkdirSync(runsDir, { recursive: true })
@@ -633,6 +639,7 @@ async function launchDp(slug: string, card: any) {
 // nem meu no kanban: so corre git na repo base. O prompt forcA o ramo alvo explicitamente (a wrapper
 // launchHermes mergea na branch atual do base — aqui o agente corre git checkout dev/main por conta propria).
 async function launchGitOp(slug: string, op: string, title: string, task: string) {
+  if (process.env.ATLAS_TEST_NO_SPAWN) return
   const repo = await repoDir(slug)  // repo do mundo (nao so ATLAS_REPO) — top de repo corre no codigo desse mundo
   const runsDir = join(wtRoot(repo), 'runs', slug)
   mkdirSync(runsDir, { recursive: true })

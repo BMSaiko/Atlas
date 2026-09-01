@@ -192,12 +192,20 @@ export async function spinAtlas(opts = {}) {
     return r.json?.token
   }
 
+  // ponytail: opts.env merge em process.env (test seam ATLAS_TEST_*). Snapshot
+  // no close() restaura; testes sao isolados em env dentro do mesmo processo.
+  const _envSnap = opts.env ? { ...process.env } : null
+  if (opts.env) Object.assign(process.env, opts.env)
+
   async function close() {
     try { await server.close() } catch {}
     // ponytail: nao restauramos cwd — testes partilham o tempdir, e o
     // processo termina no fim. Se um test subsequente precisar de cwd
     // real, passa {fresh: true, prefix: 'atlas-iso-'}.
+    if (opts.env) {
+      for (const k of Object.keys(opts.env)) delete process.env[k]
+      for (const [k, v] of Object.entries(_envSnap)) if (!(k in process.env)) process.env[k] = v
+    }
   }
-
   return { cwd, port: actualPort, base, req, reqRaw, wtoken, close }
 }
