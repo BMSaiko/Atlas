@@ -98,6 +98,12 @@ export async function spinAtlas(opts = {}) {
   const server = await vite.createServer({
     root: cwd, configFile: false,
     server: { port, host: '127.0.0.1', strictPort: true, hmr: false },
+    // ponytail: per-test Vite deps cache. The default `~/.vite/deps` is a global
+    // path shared across every Vite process; concurrent test processes race on its
+    // atomic rename (`deps` -> `deps_temp_*`) and one exits ENOENT, which the test
+    // runner marks as a failure even when the test logic passed (orphan-race bug,
+    // 2026-09-01). Per-cwd cacheDir isolates each spinAtlas() instance.
+    cacheDir: join(cwd, 'node_modules', '.vite'),
     appType: 'custom', plugins: [api.default()],
   })
   await server.listen()
