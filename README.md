@@ -26,7 +26,7 @@ Num Atlas, não trabalhas em pastas: atravessas **mundos**. Cada **mundo** é um
 - **Cards recorrentes + lembretes** — `recur` (diária/semanal/mensal) com badge `↻`; cards `due` em ≤30min disparam notificação/toast (dedup por `slug:id`); próximo ciclo materializa-se sozinho em `todo`.
 - **Dashboards de operação do Hermes** — API keys (`/api/hermes/keys`, com `access_token` censurado e `secret_fingerprint` sha256) e Usage (`/api/hermes/usage`, hoje/tokens/custo) em ambas as dashboards.
 - **Backup/Export/Import de workdir** — Definições → Backup: exportar notas+kanban+meta como JSON, ou importar (replace destrutivo); útil para migrar mundos entre máquinas.
-- **Cobertura de testes do backend** — 24 testes `node --test` puros (vanilla `node:assert`) cobrem ~16 routes de `server/api.ts` (token fence, wtoken loopback, bundle roundtrip, hermes keys redaction, hermes usage, workdirs, review action, notes/kanban PUT, run/dp, run-finish close handler, etc.); harness partilhado `test/_atlas-runtime.mjs` sobe Vite em `middlewareMode` contra tempdir isolado + test seam `ATLAS_TEST_*` (zero risco prod). `npm test` passa 24/24 em ~17s.
+- **Cobertura de testes do backend** — **28 testes** `node --test` puros (vanilla `node:assert`) cobrem **~16 routes** de `server/api.ts` (token fence, wtoken loopback, bundle roundtrip, hermes keys redaction, hermes usage, workdirs, review action, notes/kanban PUT, run/dp, run-finish close handler, etc.) **+ fluxo end-to-end** (`POST /run` -> python child -> git worktree -> `p.on('close')` doing->review, com fixtures `test/fixtures/hermes_cli/`). Harnesses partilhados: `test/_atlas-runtime.mjs` (Vite `middlewareMode` + seam `ATLAS_TEST_*`) e `test/_atlas-harness.mjs` (integration real); ambos zero risco prod. `npm test` passa 28/28 em ~17s.
 
 - **Notificações de review** — avisos globais quando um card está pronto a rever.
 - **Import roadmap** — um `.md` vira um card por tarefa + nota de detalhe, idempotente.
@@ -52,7 +52,7 @@ npm install
 npm run dev        # http://localhost:5173 (dev server + API)
 npm run build      # build de produção -> dist/
 npm run preview    # serve o build + API (persistência funciona igual)
-npm test           # 24 testes do backend (node --test vanilla, ~17s)
+npm test           # 28 testes do backend (node --test vanilla, ~17s)
 ```
 
 > O CI (GitHub Actions) corre `npm run typecheck` (`tsc --noEmit`) + `build` em `dev`/`main`.
