@@ -51,7 +51,9 @@ function loadConfig(): AtlasConfig {
     hermesHome: process.env.HERMES_LIVE_HOME || fromFile.hermesHome || DEFAULTS.hermesHome,
     atlasRepo: process.env.ATLAS_REPO || fromFile.atlasRepo || DEFAULTS.atlasRepo,
     vault: process.env.ATLAS_VAULT || fromFile.vault || DEFAULTS.vault,
-    wezterm: process.env.WEZTERM_BIN || fromFile.wezterm || DEFAULTS.wezterm,
+    // ponytail: ?? (nao ||) -- alinha com os outros campos. || comeria string vazia e cairia no default
+    // (wezterm-gui.exe), fazendo os tests headless spawnarem GUI real. '' explicito = 'nao tenho wezterm' = headless.
+    wezterm: process.env.WEZTERM_BIN ?? fromFile.wezterm ?? DEFAULTS.wezterm,
     // ponytail: wtoken — env fixa para setups persistentes; sem env, aleatório a cada boot (curta duração = janela curta de exposição).
     // Card iykn11lg: impresso 1x no boot para o BMS colar como ?token=... no URL do client.
     wtoken: process.env.ATLAS_WTOKEN || fromFile.wtoken || randomBytes(32).toString('hex'),

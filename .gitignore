@@ -13,3 +13,6 @@ atlas.config.json
 preview.log
 preview2.log
 vite_run.log
+
+# python bytecache (fixtures de test)
+__pycache__/
