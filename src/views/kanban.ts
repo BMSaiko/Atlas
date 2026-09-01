@@ -677,13 +677,13 @@ function runCard(c: Card) {
   function approveCard(c: Card) {
     // ponytail: o handler do viewModal ja fez m.close() antes desta chamada. O confirmDialog
     // abre o seu proprio modal — fechamos o backdrop remanescente so em sucesso (cancel => mantem aberto).
+    // Decisao R3.Q2: o approve e' headless (agente faz git ff + push + flip do card via API). Nao fazemos
+    // flip otimista — o card fica em 'review' ate o watcher detectar a transicao feita pelo agente.
     confirmDialog({ title: 'Aprovar e concluir', message: 'Validar na branch dev, marcar como concluído e fazer merge dev → main?' })
       .then(ok => { if (!ok) return
-        api.review.approve(slug, c.id).then(d => {
-          c.colId = 'done'; c.reviewed = true
+        api.review.approveAgent(slug, c.id).then(d => {
           document.querySelector('.modal-backdrop')?.remove()
-          save().then(render)
-          toast(d.merge ? `Concluído (${d.merge})` : 'Concluído')
+          toast('A concluir (agente)…')
         }).catch(e => toast('Erro: ' + e.message))
       })
   }

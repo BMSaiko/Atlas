@@ -593,23 +593,11 @@ async function launchDp(slug: string, card: any) {
 // log/status por id ficticio `op` p/ a UI streamear via /api/w/:slug/output/<op>). NAO usa worktree
 // nem meu no kanban: so corre git na repo base. O prompt forcA o ramo alvo explicitamente (a wrapper
 // launchHermes mergea na branch atual do base — aqui o agente corre git checkout dev/main por conta propria).
-async function launchGitOp(slug: string, op: string, title: string, task: string) {
+// spawnHeadless: spawn hermes headless detached com prompt pre-renderizado, log + status partilhados.
+// Usado por launchGitOp (prompt 'git-op') e pelo handler /review/approve-agent (prompt 'merge-approve').
+async function spawnHeadless(repo: string, logPath: string, stPath: string, banner: string, prompt: string) {
   if (process.env.ATLAS_TEST_NO_SPAWN) return
-  const repo = await repoDir(slug)  // repo do mundo (nao so ATLAS_REPO) — top de repo corre no codigo desse mundo
-  const runsDir = join(wtRoot(repo), 'runs', slug)
-  mkdirSync(runsDir, { recursive: true })
-  const logPath = join(runsDir, op + '.log')
-  const stPath = join(runsDir, op + '.status')
-  const prompt = interpolate(await loadPrompt('git-op'), {
-    slug,
-    repo,
-    task,
-    title,
-    logPath,
-  })
-  // banner imediato no log -> o term-view mostra feedback logo no 1o poll (hermes headless leva
-  // ~min a produzir a 1a linha; sem isto o terminal fica mudo e parece que o botao nao funciona).
-  await writeFile(logPath, '◆ ' + title + ' — gestor git headless a arrancar…\n', 'utf8')
+  await writeFile(logPath, '◆ ' + banner + '\n', 'utf8')
   const ws = createWriteStream(logPath, { flags: 'a' })
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
   const wrapper = [
@@ -624,6 +612,18 @@ async function launchGitOp(slug: string, op: string, title: string, task: string
   p.on('error', () => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code: 1, ts: Date.now() }), 'utf8').catch(() => {}) })
   p.on('close', (code: number) => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {}) })
   p.unref()
+}
+
+async function launchGitOp(slug: string, op: string, title: string, task: string) {
+  const repo = await repoDir(slug)  // repo do mundo (nao so ATLAS_REPO) — top de repo corre no codigo desse mundo
+  const runsDir = join(wtRoot(repo), 'runs', slug)
+  mkdirSync(runsDir, { recursive: true })
+  const logPath = join(runsDir, op + '.log')
+  const stPath = join(runsDir, op + '.status')
+  const prompt = interpolate(await loadPrompt('git-op'), { slug, repo, task, title, logPath })
+  // banner imediato no log -> o term-view mostra feedback logo no 1o poll (hermes headless leva
+  // ~min a produzir a 1a linha; sem isto o terminal fica mudo e parece que o botao nao funciona).
+  void spawnHeadless(repo, logPath, stPath, title + ' — gestor git headless a arrancar…', prompt)
 }
 
 function body(req: any) { return new Promise<any>(res => { let d=''; req.on('data', (c: Buffer)=>d+=c); req.on('end', ()=>{ try{res(JSON.parse(d||'null'))}catch{res(null)} }) }) }
@@ -858,6 +858,38 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         card.reviewed = true
         await writeJ(file, board)
         send(200, { ok: true, merge: mgr.out })
+        return
+      }
+
+      // /api/w/:slug/review/approve-agent -> gate sync + spawna hermes headless (prompt 'merge-approve').
+      // Decisao R3.Q2: git-op.md fica magro (merge ad-hoc, resolve conflict); este endpoint e' especializado
+      // para o approve do workflow Review — alem de git ff + push, atualiza o card no kanban via API e
+      // escreve `result` no card em caso de falha. /review/approve (inline) continua a existir como revert path.
+      if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'review' && parts[3] === 'approve-agent' && m === 'POST') {
+        const slug = parts[1]
+        if (!SLUG.test(slug)) { send(400, { error: 'bad slug' }); return }
+        const b = (await body(req)) || {}
+        const id = typeof b.cardId === 'string' ? b.cardId : ''
+        const file = join(DATA, slug, 'kanban.json')
+        if (!inside(DATA, file) || !id) { send(400, { error: 'bad request' }); return }
+        const board = await readJ(file)
+        const card = board?.cards?.find((c: any) => c.id === id)
+        if (!card) { send(404, { error: 'card not found' }); return }
+        if (card.archived) { send(409, { error: 'card archived' }); return }
+        if (card.colId !== 'review') { send(409, { error: 'card not in review' }); return }
+        const repo = await repoDir(slug)
+        const gate = await runCIGate(repo)
+        if (!gate.ok) { send(500, { error: 'CI gate falhou (' + gate.step + '): ' + gate.out }); return }
+        // fecha pane wezterm cedo — runner nao toca em nada vivo (best-effort, idempotente)
+        void killPaneForCard(slug, card.id)
+        const title = 'Approve review: ' + (card.title || '')
+        const logPath = join(wtRoot(repo), 'runs', slug, 'merge-approve.log')
+        const stPath = join(wtRoot(repo), 'runs', slug, 'merge-approve.status')
+        const prompt = interpolate(await loadPrompt('merge-approve'), {
+          slug, repo, cardId: id, kanbanPath: file, apiUrl: '/api/w/' + slug + '/kanban', logPath, title,
+        })
+        void spawnHeadless(repo, logPath, stPath, title + ' — agente headless a arrancar…', prompt)
+        send(200, { ok: true, mode: 'agent', logPath })
         return
       }
 

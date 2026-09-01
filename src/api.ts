@@ -86,6 +86,7 @@ export const api = {
 
   review: {
     approve: (slug: string, cardId: string) => j<{ ok: boolean; merge?: string }>(`/api/w/${slug}/review/approve`, 'POST', { cardId }),
+    approveAgent: (slug: string, cardId: string) => j<{ ok: boolean; mode: 'agent'; logPath: string }>(`/api/w/${slug}/review/approve-agent`, 'POST', { cardId }),
     reject: (slug: string, cardId: string, p: { note?: string; title?: string; description?: string; priority?: Prioridade }) => j<{ ok: boolean }>(`/api/w/${slug}/review/reject`, 'POST', { cardId, ...p }),
   },
   run: {
