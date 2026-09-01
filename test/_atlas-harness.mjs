@@ -30,7 +30,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const FIXTURES_DIR = join(here, 'fixtures')
 
 // hasGit: skip defensivo (CI sem git). tests/* ja' exigem git noutros sitios.
-function gitBin() { return process.env.GIT_BIN || 'C:\\Program Files\\Git\\bin\\git.exe' }
+function gitBin() { return process.env.GIT_BIN || (process.platform === 'win32' ? 'C:\\Program Files\\Git\\bin\\git.exe' : 'git') }
 const hasGit = (() => {
   try { execFileSync(gitBin(), ['--version'], { stdio: 'ignore' }); return true } catch { return false }
 })()
