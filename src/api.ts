@@ -1,6 +1,6 @@
 export type Prioridade = 'urgent' | 'high' | 'medium' | 'low'
 export interface Nota { id: string; title: string; text: string; ts: number; archived?: boolean; tags?: string[] }
-export interface Card { id: string; colId: string; title: string; description: string; priority: Prioridade; due?: number; ts: number; archived: boolean; result?: string; dp?: string; reviewed?: boolean; startedAt?: number; recur?: 'daily' | 'weekly' | 'monthly'; occurrenceOf?: string; timerMs?: number; timerStartedAt?: number; skills?: string[] }
+export interface Card { id: string; colId: string; title: string; description: string; priority: Prioridade; due?: number; ts: number; archived: boolean; result?: string; dp?: string; reviewed?: boolean; startedAt?: number; recur?: 'daily' | 'weekly' | 'monthly'; occurrenceOf?: string; timerMs?: number; timerStartedAt?: number; skills?: string[]; crashRetry?: boolean; crashAt?: number; orphanWorktreePath?: string }
 export interface Coluna { id: string; name: string }
 export interface Board { columns: Coluna[]; cards: Card[] }
 // ponytail: write-token fence (card iykn11lg) — header global em TODOS os PUTs (j<T> é o unico helper
@@ -93,6 +93,8 @@ export const api = {
     output: (slug: string, cardId: string, offset = 0) => j<{ ok: boolean; started: boolean; done: boolean; code: number | null; chunk: string; offset: number; size: number }>(`/api/w/${slug}/output/${cardId}?offset=${offset}`),
     // ponytail: cards em 'doing' com worker crashado (wrapper morreu / hermes travou). 1 GET, server faz a heuristica.
     orphans: (slug: string) => j<{ orphans: OrphanRun[] }>(`/api/w/${slug}/orphans`),
+    // ponytail: card h1y3yfsy — limpa manualmente a worktree orfa' (POST). 404 se nao ha orphanWorktreePath.
+    clearOrphan: (slug: string, cardId: string) => j<{ ok: boolean; cleared?: string }>(`/api/w/${slug}/cards/${cardId}/clear-orphan`, 'POST'),
   },
   hermes: {
     keys: () => j<HermesKey[]>('/api/hermes/keys'),
@@ -146,6 +148,14 @@ export type OrphanRun = {
   logMtime: number | null
   stMtime: number | null
   cardAgeMs: number
+  // ponytail: card h1y3yfsy crash diagnostics — tail do .log (5 linhas/500ch), heartbeat do .status,
+  // worktree orfa' (path) e classificacao do failure mode. A UI usa isto para o card.result e o
+  // badge de retry sem precisar de abrir o terminal pane.
+  logTail?: string
+  lastHeartbeatAt?: number | null
+  orphanWorktreePath?: string | null
+  classification?: 'CRASH_WRAPPER_DIED' | 'CRASH_HERMES_STUCK' | 'CRASH_TRANSIENT' | 'CRASH_MERGE_FAILED'
+  statusState?: string
 }
 
 

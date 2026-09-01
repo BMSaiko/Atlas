@@ -205,18 +205,26 @@ function watchOrphanCrashes() {
       for (const o of d.orphans) {
         if (notified.has(o.cardId)) continue
         notified.add(o.cardId)
-        notify('Atlas - worker crashou', '"' + o.title + '" parou de responder - voltou a To Do')
+        // ponytail: card h1y3yfsy crash diagnostics — notification especifica por classification.
+        const klass = o.classification || 'CRASH_WRAPPER_DIED'
+        notify('Atlas - ' + klass, '"' + o.title + '" parou de responder - voltou a To Do (' + klass + ')')
         // reset doing->todo
         try {
           const b = await api.kanban.get(slug)
           if (!b) continue
           const c = b.cards.find((x: any) => x.id === o.cardId)
           if (!c || c.archived || c.colId !== 'doing') continue
-          // ponytail: grava motivo do crash no card (mantem historico). O user ve no viewModal.
-          c.result = 'CRASH: worker nao respondeu por >90s (log parado). Voltou a To Do. ' +
-            'cardAge=' + Math.round(o.cardAgeMs/1000) + 's, logSize=' + o.logSize + '.'
+          // ponytail: card h1y3yfsy — gravar resultado estruturado: classificacao + tail do log + meta
+          // (cardAge, logSize, lastHeartbeatAt). O user ve no viewModal sem precisar de abrir o
+          // terminal pane. Mantem crashRetry=true para o botao Run ganhar badge "⚠ retry apos crash".
+          const tailSnippet = o.logTail ? (o.logTail.length > 240 ? o.logTail.slice(-240) : o.logTail) : '(log vazio)'
+          c.result = klass + ' (cardAge=' + Math.round(o.cardAgeMs/1000) + 's, logSize=' + o.logSize +
+            ', lastHeartbeatAt=' + (o.lastHeartbeatAt ? '~' + Math.round((Date.now() - o.lastHeartbeatAt)/1000) + 's atras' : 'n/a') + ').\nUltimas linhas do log:\n' + tailSnippet
           c.colId = 'todo'
           delete c.startedAt
+          c.crashRetry = true
+          c.crashAt = Date.now()
+          if (o.orphanWorktreePath) c.orphanWorktreePath = o.orphanWorktreePath
           const r = await api.kanban.put(slug, b)
           if (r && r.ver) b.ver = r.ver
         } catch { /* best-effort */ }
