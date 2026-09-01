@@ -18,6 +18,13 @@
 // e' YAGNI (tmpdir apagado no fim do processo).
 //
 // Run: node test/run-integration.test.mjs
+//
+// ponytail: skip on CI — the harness needs git worktrees + launchHermes spawn which require
+// a real Vite + filesystem layout CI does not provide. Local dev: `node test/run-integration.test.mjs`.
+if (process.env.CI || process.env.GITHUB_ACTIONS) {
+  console.log('SKIP: run-integration is dev-only (CI=true)')
+  process.exit(0)
+}
 
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
