@@ -183,7 +183,7 @@ console.log('\n[11] SOURCE EQUALITY — OT, wipe, sanitize, backup')
   ok(apiSrc.includes("while (files.length > 10)"), 'backup prune to 10')
   ok(apiSrc.includes("if (a.archived || (a.colId && a.colId !== 'doing'))"), 'kill-on-transition trigger')
   ok(apiSrc.includes("void killPaneForCard(slug, a.id)"), 'kill-pane fire-and-forget')
-  ok(apiSrc.includes("if (kind === 'notes' && b && Array.isArray(b.items))"), 'sanitize branch')
+  ok(apiSrc.includes("if (kind === 'notes' && Array.isArray(b.items))"), 'sanitize branch')
   ok(apiSrc.includes("function bumpVer(v: any)"), 'ver bump helper')
 }
 

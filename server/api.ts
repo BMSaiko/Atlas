@@ -1206,6 +1206,15 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         if (m === 'GET') { send(200, (await readJ(file)) ?? (kind==='kanban'?{ver:0,columns:[],cards:[]}:{ver:0,items:[]})); return }
         if (m === 'PUT') {
           const b = await body(req)
+          // ponytail: guarda contra PUT vazio/invalido (card null-write-fix) — body() devolve null quando
+          // Content-Length=0 ou JSON parse falha; sem guard, writeJ grava 'null' (4 bytes) e wipea kanban.json
+          // (backup pre-PUT tambem fica vitima porque le o ficheiro ja corrompido). Wipe real observado em
+          // 2026-09-01T03:43 — kanban com 117 cards -> 0 cards por um PUT acidental com body vazio.
+          // Posicao: ANTES do OT check (L1212) para que body invalido nao faca 409 confuso (era 409 mas
+          // a razao era "ver mismatch" e nao "body invalido" — debug enganador).
+          if (!b || typeof b !== 'object') { send(400, { error: 'invalid body — expected JSON object' }); return }
+          const arrKey2 = kind === 'notes' ? 'items' : (kind === 'kanban' ? 'cards' : null)
+          if (arrKey2 && !Array.isArray(b[arrKey2])) { send(400, { error: 'invalid body: missing or non-array ' + arrKey2 }); return }
           // optimistic concurrency (card: optimistic concurrency no PUT): o client deve enviar o `ver`
           // que leu; se o ficheiro em disco ja avancou, outro escritor ganhou -> 409 p/ o client re-sync.
           // meta nao entra (nao e reescrito em corrida por agents) — so notes/kanban validam.
@@ -1275,7 +1284,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
           }
           // ponytail: defesa — brainstorm/import/PUT manual pode trazer items sem `id`; sem id os
           // handlers de click/data-id no cliente não resolvem nada. Sanitize em vez de 400.
-          if (kind === 'notes' && b && Array.isArray(b.items)) {
+          if (kind === 'notes' && Array.isArray(b.items)) {
             let missing = 0
             for (const it of b.items) {
               if (!it || typeof it !== 'object') continue
