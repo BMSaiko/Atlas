@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process'
 import { join, dirname, delimiter, normalize, extname, relative, resolve, sep } from 'node:path'
 import { parseRoadmap } from './roadmap'
 import { cfg } from './config'
+import { loadPrompt, interpolate } from './prompts/index'
 
 const DATA = join(process.cwd(), 'data')
 const SLUG = /^[a-z0-9-]+$/
@@ -364,43 +365,20 @@ async function launchHermes(slug: string, card: any) {
   if (!addOut.ok) { await fail('git worktree add falhou: ' + addOut.out); return }
   const linked = await addJunction(join(wt, 'node_modules'), join(repo, 'node_modules'))
   if (!linked) { await fail('nao consegui ligar node_modules partilhado (mklink)'); return }
-  const prompt = [
-    'Tu es um agente autonomo. Executa o trabalho abaixo do card de kanban e atualiza o estado.',
-    `Workdir: ${slug}`,
-    `Kanban JSON (em disco): ${join(DATA, slug, 'kanban.json')}`,
-    `Kanban API (para updates): http://localhost:${cfg.port}/api/w/${slug}/kanban`,
-    `Repo de codigo (source-tree): ${wt} — working-tree isolada deste card. Edita SO nela (ja esta na branch ${branch}).`,
-    '',
-    `CARTAO: ${card.title}`,
-    '',
-    'TAREFA:',
-    card.description || '(sem descricao)',
-    '',
-    (card.dp
-      ? ['DP (Design Plan) ja gerado p/ este card — LE-O ANTES de implementar e segue-o:', '', card.dp, ''].join('\n')
-      : 'SEM DP — escreve um breve plano (objetivo, abordagem, ficheiros afetados) antes de implementar.'),
-    '',
-    'GIT WORKFLOW:',
-    `  - Ja estas na branch ${branch} criada a partir de dev (worktree isolada). NAO mudes de branch, NAO corras git checkout/dev nem git pull.`,
-    '  - Trabalha em ./ e a cada passo faz commit local.',
-    `  - O merge ${branch} -> dev e o push dev sao feitos AUTOMATICAMENTE quando terminares (pelo runner). Nao o facas tu.`,
-    '  - NUNCA cometes para main — main muda so no approve do Review.',
-    '',
-    'REGRAS:',
-    '- node_modules e PARTILHADO (junction -> repo base). NAO corras npm install / npm ci.',
-    '- So termina depois de tsc --noEmit sem erros e vite build ok (funciona sem install, deps partilhadas).',
-    '- A inicios marca o teu card como "doing" (ja feito) e mantem-no ai.',
-    '- Durante o progresso, atualiza o kanban.json/API para refletir o estado real.',
-    '- NUNCA marques o teu card como "done"/concluido. So o BMS conclui apos validar na branch dev.',
-    '- Apos concluires, coloca o teu card na coluna "review" (colId "review") no kanban.json — a task executada vai para review final.',
-    '- No fim, ATUALIZA o teu card com um campo `result`: um resumo breve do que fizeste.',
-    '',
-    'PROGRESSO AO VIVO (OBRIGATORIO):',
-    `  - O utilizador ve o teu trabalho AO VIVO num terminal. A cada passo significativo, anexa 1 linha curta de progresso ao ficheiro de log: ${logPath}`,
-    '  - Formato da linha: [hh:mm] <descricao curta>  (ex.: [14:05] A ler server/api.ts  ·  [14:07] A editar viewTerminal  ·  [14:11] A correr tsc --noEmit).',
-    '  - Faz append UTF-8 ao ficheiro com a tua tool terminal/execute_code (ex.: python -c "open(<logPath>, \'a\', encoding=\'utf-8\').write(...)").',
-    '  - No fim anexa 1 linha com o resumo final. NAO e opcional: sem estas linhas o terminal fica mudo e o utilizador nao ve o teu progresso. E o teu canal de debug/erros visivel.',
-  ].join('\n')
+  const cardDp = card.dp
+    ? 'DP (Design Plan) ja gerado p/ este card — LE-O ANTES de implementar e segue-o:\n\n' + card.dp + '\n'
+    : 'SEM DP — escreve um breve plano (objetivo, abordagem, ficheiros afetados) antes de implementar.'
+  const prompt = interpolate(await loadPrompt('run-card'), {
+    slug,
+    kanbanPath: join(DATA, slug, 'kanban.json'),
+    apiUrl: `http://localhost:${cfg.port}/api/w/${slug}/kanban`,
+    wt,
+    branch,
+    cardTitle: card.title,
+    cardDescription: card.description || '(sem descricao)',
+    cardDp,
+    logPath,
+  })
   // ponytail: terminal em modo headless — NAO abre janela WezTerm. O wrapper python corre direto
   // como processo de fundo (detached, windowsHide) e a saida (stdout+stderr) e capturada para um log
   // por card. "Ver o terminal" na UI faz stream desse log (offset-based) — debugging/erros incluidos.
@@ -522,27 +500,15 @@ async function launchBrainstorm(slug: string) {
   const logPath = join(runsDir, 'brainstorm.log')
   const stPath = join(runsDir, 'brainstorm.status')
   const meta = (await readJ(join(DATA, slug, 'meta.json')) || { name: slug, description: '' })
-  const prompt = [
-    'Tu es um agente autonomo. Faz um brainstorm e um SWOT ao projeto e cria notas com ideias para implementar.',
-    `Workdir: ${slug} («${meta.name}» — ${(meta.description || 'sem descricao').replace(/\n/g, ' ').slice(0, 120)})`,
-    `API notas (get/put): http://localhost:${cfg.port}/api/w/${slug}/notes`,
-    `Source-tree do projeto a analisar: ${repo}`,
-    '',
-    'TAREFA:',
-    '- Le o source-tree e o estado do workdir para perceberes o projeto.',
-    '- Faz uma analise SWOT (forcas, fraquezas, oportunidades, ameacas).',
-    '- Faz um brainstorm de coisas que podemos implementar (features, melhorias, correcoes).',
-    '- Cria notas novas nesse workdir: uma nota por ideia + uma nota com o SWOT. Para gravar, faz GET da lista atual em /api/w/' + slug + '/notes (devolve {ver, items}), preserva o ver lido, faz append das novas em items (cada item NOVO DEVE incluir um `id` curto alfanumerico, ex. "a1b2c3d4" — reutiliza o `uid()` do cliente ou gera tu proprio; sem `id` o cliente nao consegue clicar nas notas) e faz PUT com o objeto completo enviando o mesmo ver. Se receberes 409 (conflito de versao), re-faz GET e re-aplica.',
-    '',
-    'REGRAS:',
-    '- NAO apagues nem alteres notas existentes — so adiciona notas novas (append no array).',
-    '- NAO facas git commits, NAO mexas no kanban, NAO marques nada como done.',
-    '- No fim responde com um resumo curto do que criaste (quantas notas).',
-    '',
-    'PROGRESSO AO VIVO:',
-    `  - Anexa 1 linha curta de progresso por passo ([hh:mm] <descricao>) ao ficheiro de log: ${logPath}`,
-    '  - Faz append UTF-8. No fim, 1 linha de resumo.',
-  ].join('\n')
+  const metaDesc = (meta.description || 'sem descricao').replace(/\n/g, ' ').slice(0, 120)
+  const prompt = interpolate(await loadPrompt('brainstorm'), {
+    slug,
+    metaName: meta.name,
+    metaDesc,
+    apiUrl: `http://localhost:${cfg.port}/api/w/${slug}/notes`,
+    repo,
+    logPath,
+  })
   const ws = createWriteStream(logPath, { flags: 'w' })
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
   // ponytail: wrapper minimo (sem git) — hermes oneshot grava notas via API, sai com rc do processo
@@ -579,32 +545,16 @@ async function launchDp(slug: string, card: any) {
     const c = board?.cards?.find((x: any) => x.id === card.id)
     if (c) { c.dp = 'ERRO: ' + msg; await writeJ(ff, board) }
   }
-  const prompt = [
-    'Tu es um agente autonomo. Escreve um DP (Design Plan / Plano de Desenvolvimento) para o card de kanban abaixo.',
-    `Workdir: ${slug}`,
-    `Kanban JSON (em disco): ${join(DATA, slug, 'kanban.json')}`,
-    `Kanban API (para gravar o DP): http://localhost:${cfg.port}/api/w/${slug}/kanban`,
-    `Source-tree do projeto a analisar: ${repo}`,
-    '',
-    `CARTAO ID: ${card.id}`,
-    `TITULO: ${card.title}`,
-    'DESCRICAO:',
-    card.description || '(sem descricao)',
-    '',
-    'TAREFA:',
-    '- Le o source-tree e o estado atual para perceberes o pedido do card.',
-    '- Escreve um DP em markdown: objetivo, contexto/estado atual, abordagem proposta (passos com ficheiros afetados), criterios de aceite e riscos/consideracoes.',
-    '- Grava o DP no card: faz GET de /api/w/' + slug + '/kanban, encontra o card pelo id acima, define o campo `dp` com o markdown completo e faz PUT com o board inteiro.',
-    '',
-    'REGRAS:',
-    '- NAO mudes colId, NAO apagues result/descricao/outros campos do card.',
-    '- NAO facas git commits, NAO mexas no kanban exceto o campo dp deste card, NAO marques nada como done.',
-    '- No fim responde com 1 linha a resumir o DP (o que se vai implementar).',
-    '',
-    'PROGRESSO AO VIVO:',
-    `  - Anexa 1 linha curta de progresso por passo ([hh:mm] <descricao>) ao ficheiro de log: ${logPath}`,
-    '  - Faz append UTF-8 (open(<logPath>, \'a\', encoding=\'utf-8\')). No fim, 1 linha de resumo.',
-  ].join('\n')
+  const prompt = interpolate(await loadPrompt('dp'), {
+    slug,
+    kanbanPath: join(DATA, slug, 'kanban.json'),
+    apiUrl: `http://localhost:${cfg.port}/api/w/${slug}/kanban`,
+    repo,
+    cardId: card.id,
+    cardTitle: card.title,
+    cardDescription: card.description || '(sem descricao)',
+    logPath,
+  })
   const ws = createWriteStream(logPath, { flags: 'w' })
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
   const wrapper = [
@@ -645,26 +595,13 @@ async function launchGitOp(slug: string, op: string, title: string, task: string
   mkdirSync(runsDir, { recursive: true })
   const logPath = join(runsDir, op + '.log')
   const stPath = join(runsDir, op + '.status')
-  const prompt = [
-    'Tu es um agente autonomo. Executa a operacao git de topo de repo abaixo usando o terminal headless do Hermes.',
-    `Workdir: ${slug}`,
-    `Source-tree (repo base, raiz do repositorio): ${repo}`,
-    '',
-    'TAREFA:',
+  const prompt = interpolate(await loadPrompt('git-op'), {
+    slug,
+    repo,
     task,
-    '',
-    'REGRAS:',
-    '- Roda na repo base (' + repo + ') — NAO em worktree, NAO toques em data/.wt. Forca o ramo alvo explicitamente (`git checkout dev`/`git checkout main`), nunca confies na branch atual.',
-    '- NUNCA uses --force, `git reset`, rebase destrutivo nem forcas para main. Divergencia nao-resolvivel -> reporta e para.',
-    '- NUNCA corras npm install / npm ci (node_modules e partilhado). So npm run typecheck / vite build com deps ja instaladas.',
-    '- Ficheiros TS/CSS resolvidos: normaliza EOL para CRLF (repo usa CRLF) p/ nao gerar diff fantasma.',
-    '- No fim responde com 1 linha a resumir o que fizeste e o estado final.',
-    '',
-    'PROGRESSO AO VIVO:',
-    `  - Anexa 1 linha curta de progresso por passo ([hh:mm] <descricao>) ao ficheiro de log: ${logPath}`,
-    '  - Faz append UTF-8 (open(<logPath>, \'a\', encoding=\'utf-8\')). No fim, 1 linha de resumo.',
-    `Titulo da operacao: ${title}`,
-  ].join('\n')
+    title,
+    logPath,
+  })
   // banner imediato no log -> o term-view mostra feedback logo no 1o poll (hermes headless leva
   // ~min a produzir a 1a linha; sem isto o terminal fica mudo e parece que o botao nao funciona).
   await writeFile(logPath, '◆ ' + title + ' — gestor git headless a arrancar…\n', 'utf8')
