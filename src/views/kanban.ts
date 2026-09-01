@@ -1,6 +1,6 @@
 import { api, Board, Card, Coluna, Prioridade, uid, BoardDoc } from '../api'
 import { icon } from '../ui/icons'
-import { openModal } from '../ui/modal'
+import { openModal, readForm } from '../ui/modal'
 import { refreshTabCounts } from '../ui/counts'
 import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
@@ -120,6 +120,61 @@ export async function openNewCardModal(slug: string) {
     },
   })
   wireCardTemplate(m.root, slug)
+}
+
+// ponytail: openReplyModal — modal de reply reutilizável (exportado p/ notes.ts: botão nas notas grilled).
+// rung 2: reusa openModal/readForm. Sem server change.
+// rung 6: 1 função, 2 callers (botão 'Reply' no terminal + replyGrill em notes.ts).
+// submitText='Reply' = submete só com click/Enter explícito. Esc ou backdrop = cancel. Sem auto-close.
+// ctx.save/render/runCard vêm do caller (renderKanban scope) para não duplicar handlers.
+// ponytail: openReplyModal — 1 painel a esquerda (perguntas) + 1 modal a direita (reply).
+// rung 1 (YAGNI): 2 surfaces independentes. Submit do reply fecha ambos e chama onSubmit.
+// rung 6: painel esquerda via DOM directo (sem form, sem keydown), modal direita via openModal (reusa helper).
+export function openReplyModal(c: Card, ctx: { onSubmit: (reply: string) => Promise<void> | void }, opts?: { noteText?: string; noteTitle?: string }) {
+  const leftTitle = opts?.noteTitle || c.title
+  const leftMd = opts?.noteText || c.description || '(sem descricao)'
+  // ponytail: painel esquerdo — so leitura, sem form. Fixo no canto esquerdo do viewport.
+  const leftPanel = document.createElement('div')
+  leftPanel.className = 'reply-side-panel'
+  leftPanel.setAttribute('role', 'region')
+  leftPanel.setAttribute('aria-label', 'Perguntas do round')
+  leftPanel.style.cssText = 'position:fixed;top:5vh;left:2vw;width:48vw;height:85vh;background:var(--bg-1,#1a1a1a);border:1px solid var(--border,#333);border-radius:8px;padding:1.2rem;overflow:auto;z-index:1900;box-shadow:0 8px 32px rgba(0,0,0,0.4)'
+  leftPanel.innerHTML = '<h3 style="margin:0 0 1rem">' + esc(leftTitle) + '</h3>' +
+    '<div class="md-view" style="min-height:0;max-height:calc(85vh - 100px);overflow-y:auto;overflow-x:hidden;padding-right:0.5rem">' + renderMd(leftMd) + '</div>' +
+    '<div style="position:absolute;top:0.8rem;right:0.8rem"><button type="button" class="btn-icon btn-ghost" data-close-side aria-label="Fechar painel">×</button></div>'
+  document.body.appendChild(leftPanel)
+  const closeLeft = () => leftPanel.remove()
+  leftPanel.querySelector('[data-close-side]')!.addEventListener('click', closeLeft)
+  // ponytail: modal direita — openModal (reusa helper). Style: canto direito do viewport.
+  const m = openModal({
+    title: 'Reply · ' + c.title,
+    body: () => '<div class="field"><label for="reply-tx">Resposta ao grilling</label>' +
+      '<textarea id="reply-tx" name="reply" rows="22" autofocus placeholder="Escreve a tua resposta (Ctrl+Enter submete)" style="height:calc(80vh - 200px);min-height:300px"></textarea>' +
+      '<div class="muted" style="font-size:.8rem;margin-top:.4rem">Cria um novo card de grilling com o teu reply anexado.</div></div>',
+    submitText: 'Reply (novo card)',
+    cancelText: 'Fechar',
+    onCancel: closeLeft,  // ponytail: Esc/click no backdrop fecha os 2
+  })
+  // ponytail: o modal centralizado pelo helper — mover para o canto direito.
+  const modalDiv = m.root.querySelector('.modal') as HTMLElement
+  if (modalDiv) modalDiv.style.cssText = 'position:fixed;top:5vh;right:2vw;width:48vw;height:85vh;max-width:none;max-height:none;display:flex;flex-direction:column'
+  const formBody = m.root.querySelector('.modal-body') as HTMLElement
+  if (formBody) formBody.style.cssText = 'flex:1;overflow:auto'
+  // ponytail: o backdrop de openModal fica centered mas o modal esta fixed right. Manter o backdrop invisivel.
+  m.root.style.background = 'transparent'
+  m.root.style.alignItems = 'flex-start'
+  m.root.style.justifyContent = 'flex-end'
+  const form = m.root.querySelector('form')!
+  form.addEventListener('submit', async e => {
+    e.preventDefault()
+    const reply = readForm(form).reply?.trim()
+    m.close()
+    closeLeft()
+    if (!reply) { toast('Reply vazio'); return }
+    await ctx.onSubmit(reply)
+  })
+  // ponytail: clicar no backdrop transparente agora fecha os dois.
+  m.root.addEventListener('click', e => { if (e.target === m.root) { m.close(); closeLeft() } })
 }
 
 export async function renderKanban(root: HTMLElement, slug: string) {
@@ -357,6 +412,8 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     } else if (c.colId === 'doing') {
       b.push(`<button class="btn-icon btn-ghost" data-act="run" aria-label="Reiniciar execução">${icon('reset', 15)}</button>`)
       b.push(`<button class="btn-icon btn-ghost" data-act="term" aria-label="Ver terminal / log do run">${icon('term', 16)}</button>`)
+      // ponytail: reply — botão universal em doing. Re-spawn com description extendida. Sem filtro por skill.
+      b.push(`<button class="btn-icon btn-ghost" data-act="reply" aria-label="Responder (cola texto e reinicia)">${icon('pencil', 15)}</button>`)
     }
     if (!b.length) return ''
     return `<div class="kops">${b.join('')}</div>`
@@ -574,7 +631,8 @@ function runCard(c: Card) {
     pre.className = 'term-view'
     pre.textContent = ''
     let timer: ReturnType<typeof setInterval> | undefined
-    const body = () => `<div class="term-wrap">${pre.outerHTML}<div class="term-status" id="${esc(c.id)}-tstatus">ainda não lançado</div></div>`
+    const body = () => `<div class="term-wrap">${pre.outerHTML}<div class="term-status" id="${esc(c.id)}-tstatus">ainda não lançado</div></div>` +
+    `<div class="term-actions" style="margin-top:.6rem"><button type="button" class="btn btn-primary" data-act="reply-from-term">Reply</button></div>`
     const m = openModal({
       title: 'Terminal · ' + c.title, submitText: 'Fechar', cancelText: 'Fechar',
       body,
@@ -605,6 +663,15 @@ function runCard(c: Card) {
     // parar polling quando o modal fechar (backdrop removido)
     const obs = new MutationObserver(() => { if (!m.root.isConnected) { if (timer) clearInterval(timer); obs.disconnect() } })
     obs.observe(document.body, { childList: true })
+
+    // ponytail: botão Reply no terminal modal — reusa openReplyModal top-level
+    m.root.querySelector('[data-act=reply-from-term]')!.addEventListener('click', () => openReplyModal(c, { onSubmit: async (reply: string) => {
+  // ponytail: re-spawn (legacy — botao no terminal modal continua a re-spawn no mesmo card)
+  c.description = (c.description || '') + '\n\n## Reply do user (' + new Date().toLocaleString('pt-PT') + ')\n' + reply
+  await save()
+  render()
+  runCard(c)
+} }))
   }
 
   function approveCard(c: Card) {

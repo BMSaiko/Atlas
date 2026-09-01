@@ -6,6 +6,7 @@ import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
 import { renderMd } from '../ui/text'
 import { navigate } from '../router'
+import { openReplyModal } from './kanban'
 
 export const parseTags = (v: string) => Array.from(new Set(v.split(/[,\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean)))
 const existingTags = (notes: Nota[]) => Array.from(new Set(notes.flatMap(n => n.tags || []))).sort()
@@ -256,6 +257,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
         ${(n.tags && n.tags.length) ? `<div class="note-tags">${n.tags.map(t => `<button class="tag-chip" data-tag="${esc(t)}" aria-label="Filtrar por ${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}
         <div class="note-date">${showArch ? unhide('Arquivada') : ''}${fmt(n.ts)}</div>
         <div class="note-actions">
+          ${(n.tags||[]).some(t => t === 'grilled') ? `<button class="btn-icon btn-ghost" data-act="reply-grill" title="Abrir card e continuar grilling" aria-label="Continuar grilling">${icon('pencil', 16)}</button>` : ''}
           <button class="btn-icon btn-ghost" data-act="tocanban" title="Converter para cartão" aria-label="Converter para cartão">${icon('board', 16)}</button>
           <button class="btn-icon btn-ghost" data-act="edit" aria-label="Editar">${icon('pencil', 16)}</button>
           <button class="btn-icon btn-ghost" data-act="${n.archived ? 'unarch' : 'arch'}" title="${n.archived ? 'Restaurar' : 'Arquivar'}" aria-label="${n.archived ? 'Restaurar' : 'Arquivar'}">${icon('archive', 16)}</button>
@@ -325,9 +327,47 @@ export async function renderNotes(root: HTMLElement, slug: string) {
     }
     if (btn.dataset.act === 'edit') noteModal(n)
     if (btn.dataset.act === 'tocanban') toCard(n)
+    if (btn.dataset.act === 'reply-grill') replyGrill(n)
     if (btn.dataset.act === 'arch') { n.archived = true; save().then(()=>doRender(searchInput.value)); toast('Nota arquivada') }
     if (btn.dataset.act === 'unarch') { delete n.archived; save().then(()=>doRender(searchInput.value)); toast('Nota restaurada') }
   })
+
+  // ponytail: replyGrill — botão nas notas com tag 'grilled'. Resolve Card via tag card:<id> e navega.
+  // rung 1 (YAGNI): não faz reply inline — abre o card no kanban, utilizador clica 'Reply' no viewTerminal.
+  // ponytail: replyGrill — busca o Card, abre openReplyModal (split). onSubmit cria NOVO card de grilling
+  // rung 2: reusa openReplyModal + launchRun (palette.ts exporta). 0 server change.
+  function replyGrill(n: Nota) {
+    const cardTag = (n.tags || []).find(t => t.startsWith('card:') || t.startsWith('card-'))
+    if (!cardTag) { toast('Nota sem tag card:<id>'); return }
+    const cardId = cardTag.replace(/^card[-:]/, '')
+    api.kanban.get(slug).then(async b => {
+      const src = b.cards.find(x => x.id === cardId)
+      if (!src) { toast('Card ' + cardId + ' nao encontrado'); return }
+      // importa launchRun sob demanda para evitar ciclo de imports
+      const { launchRun } = await import('./kanban')
+      openReplyModal(src, { onSubmit: async (reply: string) => {
+        // ponytail: clona o card, anexa reply, lança worker. SEM re-spawn no mesmo card.
+        const newCard = {
+          id: Math.random().toString(36).slice(2, 10),
+          title: src.title,
+          description: (src.description || '') + '\n\n## Reply do user (' + new Date().toLocaleString('pt-PT') + ')\n' + reply,
+          priority: src.priority,
+          colId: 'doing' as const,
+          ts: Date.now(),
+          archived: false,
+          // ponytail: skills repostas (removidas no patch headless). Sem isto, worker corre sem grill-me.
+          skills: ['grill-me', 'grilling'] as string[],
+        }
+        b.cards.push(newCard)
+        try {
+          await api.kanban.put(slug, b)
+          await launchRun(slug, newCard)
+          navigate('/w/' + slug + '?tab=kanban&card=' + newCard.id)
+          toast('Novo card de grilling criado')
+        } catch (e: any) { toast('Erro: ' + (e?.message || e)) }
+      } }, { noteText: n.text, noteTitle: 'Perguntas (round) — ' + n.title })
+    }).catch(e => toast('Erro: ' + e.message))
+  }
 
   function toCard(n: Nota) {
     api.kanban.get(slug).then(b => {

@@ -5,7 +5,7 @@ import { launchRun } from '../views/kanban'
 import { quickAdd, newWorkdir } from '../views/shell'
 import { confirmDialog } from './confirm'
 import { toast } from './toast'
-import { openModal } from './modal'
+import { openModal, readForm } from './modal'
 
 // ponytail: palette keyboard-first (Ctrl+K). Overlay proprio (nao reusa openModal — obriga <form>
 // + submit). Reutiliza: navigate (deep-link de workspace.ts p/ reabrir nota/cartao), quickAdd,
@@ -213,10 +213,25 @@ async function runSkillCard(slug: string, skill: string, promptTemplate: string)
       name: (wdm && wdm.name) || slug,
       description: (wdm && wdm.description) || '',
     }
+    // ponytail: input do objetivo/decisão antes de criar o card (reusa openModal — rung 2)
+    const goal = await new Promise<string | null>(resolve => {
+      const m = openModal({
+        title: skill === 'grill-me' ? 'Grill-me: qual o plano?' : 'Grilling: qual a decisão?',
+        body: () => '<div class="field"><label for="grill-q">Objetivo / decisão</label>' +
+          '<textarea id="grill-q" name="goal" rows="6" autofocus placeholder="Descreve em 2-5 linhas…"></textarea></div>',
+        submitText: 'Iniciar grilling',
+        cancelText: 'Cancelar',
+      })
+      const form = m.root.querySelector('form')!
+      form.addEventListener('submit', e => { e.preventDefault(); resolve(readForm(form).goal?.trim() || null); m.close() })
+      m.root.querySelector('[data-act=cancel]')!.addEventListener('click', () => { resolve(null); m.close() })
+    })
+    if (goal === null) { return false }  // ponytail: cancel = no-op
     const desc = promptTemplate
       .replace(/\${{slug}}/g, ctx.slug)
       .replace(/\${{wdm\.name}}/g, ctx.name)
       .replace(/\${{wdm\.description}}/g, ctx.description || '(sem descricao)')
+      .replace(/<descreve[\s\S]*?>/i, goal)  // ponytail: substitui placeholder pelo input
     const newCard: Card = {
       id: Math.random().toString(36).slice(2, 10),
       colId: 'todo',
@@ -225,7 +240,7 @@ async function runSkillCard(slug: string, skill: string, promptTemplate: string)
       priority: 'medium' as const,
       ts: Date.now(),
       archived: false,
-      skills: [skill],
+      // ponytail: headless (sem skills) — terminal do wezterm-gui é desnecessário. Reply é via modal da UI.
     }
     board.cards.push(newCard)
     const saved = await api.kanban.put(slug, board)
