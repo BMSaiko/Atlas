@@ -389,7 +389,10 @@ async function launchHermes(slug: string, card: any) {
     'import subprocess,sys,os,shutil,json,time',
     // ponytail: python -c faz sys.argv[0]='-c' (nao python path), argv[1]=stPath..argv[6]=baseBranch. Spawn: ['-c', wrapperWithPane, stPath, wt, branch, repo, prompt, baseBranch]
     "st=sys.argv[1]; wt=sys.argv[2]; branch=sys.argv[3]; repo=sys.argv[4]; prompt=sys.argv[5]; bb=sys.argv[6]",
-    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",prompt])',
+    '# ponytail: card grill-me-palette — ATLAS_CARD_SKILLS="grill-me,grilling" injectado pelo spawn -> passa --skills ao hermes_cli.main',
+    "_sk=os.environ.get('ATLAS_CARD_SKILLS','')",
+    "_sa=[('--skills',s) for s in (x.strip() for x in _sk.split(',')) if s]",
+    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",prompt]+[a for p in _sa for a in p])',
     'if rc==0:',
     '\x20\x20\x20\x20try:',
     '\x20\x20\x20\x20\x20\x20\x20\x20os.chdir(repo)',
@@ -454,7 +457,9 @@ async function launchHermes(slug: string, card: any) {
   const args: string[] = headless
     ? ['-c', wrapperWithPane, stPath, wt, branch, repo, prompt, baseBranch]
     : ['start', '--', VENV_PY, '-c', wrapperWithPane, stPath, wt, branch, repo, prompt, baseBranch]
-  const p = spawn(exe, args, { cwd: repo, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
+  // ponytail: card grill-me-palette — propaga card.skills ao wrapper Python via env (sem mudar argv indices)',
+  const _skillsEnv = Array.isArray(card.skills) ? card.skills.filter((s:any)=>typeof s==='string'&&s.trim()).map((s:string)=>s.trim()).join(',') : ''
+  const p = spawn(exe, args, { cwd: repo, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME, ...(_skillsEnv ? { ATLAS_CARD_SKILLS: _skillsEnv } : {}) } })
   p.stdout?.on('data', d => ws.write(d))
   p.stderr?.on('data', d => ws.write(d))
   p.on('error', e => { ws.end(); void fail((headless ? 'spawn headless' : 'spawn wezterm') + ' falhou: ' + e.message) })

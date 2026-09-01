@@ -76,6 +76,14 @@ export function openPalette(slug: string | null) {
           const w = (r && typeof r.worlds === 'number') ? r.worlds : 0
           toast(k > 0 ? `${k} terminais fechados em ${w} mundo${w !== 1 ? 's' : ''}` : 'Nenhum terminal aberto')
         } catch (e: any) { toast('Erro: ' + (e?.message || e)) } })
+    // ponytail: card grill-me-palette — items Skills criam cards pré-preenchidos
+    // carregando a skill no hermes (card.skills -> spawn env ATLAS_CARD_SKILLS).
+    // Sem pré-filtro: se skill não está instalada, launchRun falha com toast claro.
+    push('Skills', 'aura', 'Grill-me — entrevista a plano/decisão', 'grill me stress test plano decisao entrevista',
+      () => { close(); runSkillCard(slug, 'grill-me', SKILL_PROMPT_GRILL_ME) })
+    push('Skills', 'aura', 'Grilling — stress-test contínuo', 'grilling stress test decision',
+      () => { close(); runSkillCard(slug, 'grilling', SKILL_PROMPT_GRILLING) })
+
   }
 
   const visible = () => {
@@ -190,3 +198,78 @@ function viewGitTerm(slug: string, opId: string, label: string) {
   const obs = new MutationObserver(() => { if (!m.root.isConnected) { if (timer) clearInterval(timer); obs.disconnect() } })
   obs.observe(document.body, { childList: true })
 }
+
+// ponytail: card grill-me-palette — cria card com skills[] pré-preenchido, prompt template
+// do mundo (nome+descrição do workdir), e corre. Idêntico ao runPaletteCard mas cria o card.
+async function runSkillCard(slug: string, skill: string, promptTemplate: string) {
+  try {
+    const [board, wdm] = await Promise.all([
+      api.kanban.get(slug).catch(() => null),
+      api.meta(slug).catch(() => null),
+    ])
+    if (!board) { toast('Kanban nao carregou'); return false }
+    const ctx = {
+      slug,
+      name: (wdm && wdm.name) || slug,
+      description: (wdm && wdm.description) || '',
+    }
+    const desc = promptTemplate
+      .replace(/\${{slug}}/g, ctx.slug)
+      .replace(/\${{wdm\.name}}/g, ctx.name)
+      .replace(/\${{wdm\.description}}/g, ctx.description || '(sem descricao)')
+    const newCard: Card = {
+      id: Math.random().toString(36).slice(2, 10),
+      colId: 'todo',
+      title: skill === 'grill-me' ? 'Grill-me: plano' : 'Grilling: decisao',
+      description: desc,
+      priority: 'medium' as const,
+      ts: Date.now(),
+      archived: false,
+      skills: [skill],
+    }
+    board.cards.push(newCard)
+    const saved = await api.kanban.put(slug, board)
+    if (saved && saved.ver) board.ver = saved.ver
+    const ok = await launchRun(slug, newCard)
+    if (!ok) return false
+    newCard.colId = 'doing'; newCard.startedAt = Date.now()
+    await api.kanban.put(slug, board).catch(() => {})
+    navigate('/w/' + slug + '?tab=kanban')
+    return true
+  } catch (e) {
+    toast('Erro skill: ' + ((e as any)?.message || String(e)))
+    return false
+  }
+}
+
+const SKILL_PROMPT_GRILL_ME = [
+  '# Atlas world: ${{wdm.name}}',
+  '',
+  'Skill: grill-me (entry point). Carrega a skill "grilling" e interrogar-me sobre o plano/decisao que descrevo abaixo. Trabalha em rounds (frontier), nao shotgun. Quando a frontier esvaziar, confirma a compreensao partilhada e espera. NAO atues sem confirmacao.',
+  '',
+  '## Contexto',
+  '- Mundo: ${{wdm.name}} (slug: ${{slug}})',
+  '- Descricao: ${{wdm.description}}',
+  '',
+  '## O que quero grillar',
+  '<descreve o plano / decisao / design que queres stress-test>',
+  '',
+  '## Notas no fim',
+  'Quando acabares, cria notas em /api/w/${{slug}}/notes com cada decisao settled (1 nota por decisao; tags: grilled, decision).',
+].join('\n')
+
+const SKILL_PROMPT_GRILLING = [
+  '# Atlas world: ${{wdm.name}}',
+  '',
+  'Skill grilling carregada. Stress-test continuo da decisao que descrevo abaixo. Mesmas regras da skill: design tree, rounds, frontier, nao atues sem confirmacao partilhada.',
+  '',
+  '## Contexto',
+  '- Mundo: ${{wdm.name}} (slug: ${{slug}})',
+  '- Descricao: ${{wdm.description}}',
+  '',
+  '## A decisao a stress-test',
+  '<descreve a decisao>',
+  '',
+  '## Notas no fim',
+  'Mesma convencao: 1 nota por decisao settled, tags grilled + decision.',
+].join('\n')
