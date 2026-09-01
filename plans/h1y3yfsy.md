@@ -60,3 +60,44 @@ Possíveis R4 se user pedir:
 - Nota R3 criada com 5Q settled + tag `awaiting-user`.
 - tsc --noEmit: OK (sem diff em server/ nem src/).
 - Working tree: 1 ficheiro novo (`plans/h1y3yfsy.md`), 1 ficheiro dirty (kanban.json via API), rest igual ao estado anterior.
+
+
+---
+
+# h1y3yfsy — DP addendum (R3 final, user replied 01/09/2026 22:29:25 + 22:37:58)
+
+User replied to R3. As 5 Q estão settled. Refinamento explícito: "adiciona cada Qx: a uma nota nova".
+
+## Objetivo
+Formalizar cada Qx (R2) como uma nota `Decision` separada no board, com a decisão settled pelo user + rationale + caminho de implementação. Mover card para `review` com `result` descritivo.
+
+## Abordagem
+1. **5 notas** (1 por Q1-Q5), tags: `grilled, decision, card-h1y3yfsy, round-3, m<x>h1y3yfsy` (convenção: tag curta `m<x><cardId>` para linkage).
+2. **Atualizar kanban.json**: card → `review`, `result` com summary de 5 decisões.
+3. **Commit local** na worktree `feature/atlas-h1y3yfsy` com o plano actualizado.
+4. **Não implementar** código — R4 (DA) só após user aprovar "vai em frente".
+
+## Decisões settled (input do user)
+
+| Q | Tópico | Decisão |
+|---|--------|---------|
+| Q1 | Retry policy | NÃO auto-retry. Manual 1-click. UI Run badge "⚠ retry após crash". Sem auto-retry mesmo com backoff 30s em transient. |
+| Q2 | Worktree recovery | Cleanup passivo no boot. NÃO auto-clean agressivo. Sinalização explícita (`orphanWorktreePath`). Botão manual "Limpar worktree órfã" no viewModal. |
+| Q3 | Tail do log no card.result | SIM — últimas 5 linhas OU 500 chars, o que for menor. |
+| Q4 | Telemetria — 2 fontes | .log progresso AO VIVO (já involuntário) + `lastHeartbeatAt` no .status a cada 30s (novo, escrito pelo wrapper). |
+| Q5 | Classificação de failure modes | SIM — 4 strings no card.result: `CRASH_WRAPPER_DIED`, `CRASH_HERMES_STUCK`, `CRASH_TRANSIENT`, `CRASH_MERGE_FAILED`. |
+
+## Ficheiros afetados (neste run)
+- `plans/h1y3yfsy.md` (este addendum)
+- `data/atlas/notes.json` via PUT `/api/w/atlas/notes` (5 notas adicionadas)
+- `data/atlas/kanban.json` via PUT `/api/w/atlas/kanban` (card → review + `result`)
+
+## Ficheiros NÃO tocados (R4 = DA, se user confirmar)
+- `server/api.ts` (wrapper python: heartbeat loop; `/orphans`: tail + classification + orphanWorktreePath)
+- `src/main.ts`, `src/views/kanban.ts` (cliente já lê os campos; sem diff)
+
+## Verificação
+- 5 notas criadas (ver `notes.json` `items` cresce de 30 → 35).
+- Card `h1y3yfsy` em `review` com `result` descritivo.
+- tsc --noEmit: OK (sem diff em server/ nem src/).
+- Commit local: `feat(atlas): grill-me R3 final — 5 decisoes formalizadas (card h1y3yfsy)`.
