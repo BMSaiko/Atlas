@@ -10,6 +10,18 @@
 - **Run + status:** 24/24 PASS sequencial em ~17s (`node --experimental-strip-types --test test/*.test.mjs`); tsc verde. `npm test` continua a falhar em Windows (PATH `cmd.exe`); runner sequencial com `TEST_GIT` set passa 19–24/24 conforme o commit.
 - **Padrão:** vanilla `node:assert` + counter `failures++` + `SOURCE EQUALITY` guard no fim ancora as linhas críticas do `api.ts` (regex/fence/strings) para apanhar silent divergence. Atlas-testing skill (`SKILL.md` v0.3.1) patchada com os pitfalls: DATA sticky (api.ts:11), PassThrough `push()` upfront, `res.statusCode` em Writable sintético, SLUG regex sem underscore.
 
+## 2026-09-01 — integration tests i1..i4 + config.ts wezterm fix (root cause)
+
+- **fix(server/config.ts): `||` -> `??` em `wezterm`** (commit `fd37ac4`) — `server/config.ts:67` usava `||` que comia string vazia vinda do `atlas.config.json` (`wezterm: ""` em testes headless) e caía no default `wezterm-gui.exe`. Como o GUI sai 0 imediatamente, o `p.on('close')` disparava com `code=0` antes do worker filho terminar, gravava valores errados no `.status`, e o close handler não promovía (merge-failed/sem `result`/code errado). Correcção alinha com o campo `port` que já usava `??`. Ponytail: o bug não era Node22, era config.
+- **4 integration tests i1..i4** (`test/run-integration.test.mjs`, 122 LOC) — substituem `hermes_cli` por `test/fixtures/hermes_cli/` (PYTHONPATH shim) e exercitam o caminho REAL (`POST /run` -> python child -> git worktree -> `p.on('close')` doing->review). Cobertura:
+  - **`[i1]` happy path** — fake worker grava `card.result`; close handler promove `doing`->`review`; wt removida pelo wrapper após merge OK.
+  - **`[i2]` B1 forget_result** — worker NÃO grava `result`; card fica em `doing` (sintoma exacto do bug B1 "card preso em doing"); gap conhecido: wt é removida mesmo sem `result` — doc'd.
+  - **`[i3]` B1+B2 crash** — worker exit 1; `card.result='ERRO: processo terminou com código 1 ...'`; `colId=doing`. Cobre o marker `ERRO` (B2 detect).
+  - **`[i4]` source equality** — ancora `wrapperWithPane` grava `.status={state:running,pane,ts}`, `argv[1..6]=st..bb` (sem off-by-1), `os.chdir(repo)` (sem `base`), `p.on('close')` intacto, branches `code!=0` + ERRO marker + `!c2.result` guard de promoção (regressão do `dee0c2d`).
+- **Harness `test/_atlas-harness.mjs`** (125 LOC) — `spinAtlasHarness({slug,cardId,mode})` partilha 1 `atlasRepo` (`_sharedCwd` sticky) entre os 4 testes (isolamento por slug único); `waitForClose(stPath, boardPath)` poll o `.status`. **+5 LOC** para suportar bare remote + push inicial dev (sem isso, `push origin dev` falhava em test e gravava `merge-failed` no `.status`, mascarando o close handler).
+- **Fixture `test/fixtures/hermes_cli/main.py`** (62 LOC) — três modos: `write_result` (i1), `forget_result` (i2), `crash` (i3, exit 1).
+- **Run + status:** 24/24 PASS sequencial em ~17s (routes-e2e); **28/28** com i1..i4. tsc verde. Cobertura backend salta de ~16 routes para ~16 routes **+** fluxo end-to-end `run`/`dp`/`close-handler`.
+
 ## 2026-08-30 — fix worker crash (argv off-by-1 root cause)
 
 - **fix(kanban): argv off-by-1 no wrapper python** (commit `dee0c2d`) — `python -c SCRIPT` faz `sys.argv[0]='-c'`, não o python path. Wrapper de `launchHermes` lia `argv[2..8]` quando devia ler `argv[1..6]`. O commit `2397db5` tentou corrigir mas continuou off-by-1 (assumiu argv[0]=python path). Corrigido: `st=argv[1]; wt=argv[2]; branch=argv[3]; repo=argv[4]; prompt=argv[5]; bb=argv[6]`.
