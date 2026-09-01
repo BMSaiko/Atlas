@@ -80,7 +80,6 @@ function wireRefineTemplate(root: HTMLElement, slug: string) {
 export async function openNewCardModal(slug: string) {
   let board = await api.kanban.get(slug).catch(() => null)
   if (!board) { toast('Falha a carregar o quadro'); return }
-  const cols = board.columns.map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')
   const m = openModal({
     title: 'Novo cartão', submitText: 'Criar',
     body: () => `<div class="field"><label for="k-template">Template</label><select name="template" id="k-template"><option value="">Novo a partir de template…</option></select></div>
@@ -98,8 +97,7 @@ export async function openNewCardModal(slug: string) {
         <option value="daily">Diária</option>
         <option value="weekly">Semanal</option>
         <option value="monthly">Mensal</option>
-      </select></div>
-      <div class="field"><label for="k-col">Coluna</label><select id="k-col" name="colId">${cols}</select></div>`,
+      </select></div>`,
     onSubmit: async () => {
       const form = m.root.querySelector('form') as HTMLFormElement
       const title = (form.querySelector('[name=title]') as HTMLInputElement).value.trim()
@@ -112,7 +110,7 @@ export async function openNewCardModal(slug: string) {
         id: uid(), ts: Date.now(), archived: false,
         title, description: (form.querySelector('[name=description]') as HTMLTextAreaElement).value,
         priority: (form.querySelector('[name=priority]') as HTMLSelectElement).value as Prioridade,
-        colId: (form.querySelector('[name=colId]') as HTMLSelectElement).value, due,
+        colId: 'todo', due,
         recur: recurV || undefined,
       })
       try { board = await putKanbanRetry(slug, board!) } catch (e: any) { toast((e && e.message) || 'Falha ao criar') ; return }
