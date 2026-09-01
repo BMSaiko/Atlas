@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 
@@ -59,6 +60,16 @@ function loadConfig(): AtlasConfig {
     wtoken: process.env.ATLAS_WTOKEN || fromFile.wtoken || randomBytes(32).toString('hex'),
   }
 }
+// ponytail: resolve git binary — probe 'git' via PATH (works on Linux/macOS + Windows-with-cmd-on-PATH),
+// fall back to known Windows install. GIT_BIN env wins (explicit override). Cached per process.
+function _resolveGit(): string {
+  if (process.env.GIT_BIN) return process.env.GIT_BIN
+  // shell:true -> cmd.exe on Windows does PATH+PATHEXT lookup; on POSIX shells pass-through.
+  const probe = spawnSync('git', ['--version'], { shell: true, stdio: 'ignore' })
+  if (probe.status === 0) return 'git'
+  return DEFAULTS.git
+}
 const _cfg = loadConfig()
+_cfg.git = _cfg.git === DEFAULTS.git ? _resolveGit() : _cfg.git  // ponytail: only probe when default
 console.log('[atlas] write token:', _cfg.wtoken.slice(0,8) + '...')  // imprimido 1x (8 chars) p/ o utilizador copiar no client; resto via npm run dev:token (card iykn11lg)
 export const cfg: AtlasConfig = _cfg
