@@ -26,7 +26,7 @@ let pollTimer: ReturnType<typeof setInterval> | undefined
 const dpPollers: Record<string, { timer?: ReturnType<typeof setInterval>; pre?: HTMLPreElement; statusEl?: HTMLElement }> = {}
 
 // ponytail: modal complete de criar cartão — standalone (leva o seu board + retry 409), usado
-// TAKE: identical pneum BUTTON (#kadd) e palette quickAdd. Fonte unica do "Novo cartão". A
+// TAKE: palette Ctrl+K (quickAdd) e a UNICA entrada para "Novo cartão". Botao #kadd removido do toolbar. A
 // criacao re-sync ver no 409 e retenta 1x (mesmo putBoard da vista) e depois recarrega o tab.
 // ponytail: PUT com retry no 409 (escritor concorrente avançou `ver`) — re-sync + re-aplica criacao local e retenta 1x.
 export async function putKanbanRetry(slug: string, doc: BoardDoc): Promise<BoardDoc> {
@@ -259,7 +259,6 @@ export async function renderKanban(root: HTMLElement, slug: string) {
   function render() {
     root.innerHTML = `
       <div class="kanban-toolbar">
-        <button class="btn btn-primary kbdhint" id="kadd" aria-describedby="kadd-tip">${icon('plus', 16)} Novo cartão<span class="kbdhint-tip" id="kadd-tip" role="tooltip"><kbd>Ctrl</kbd>+<kbd>K</kbd></span></button>
         <span class="kt-sec">
           <button class="btn-icon btn-ghost" id="karch" title="Cartões arquivados">${icon('archive', 16)}</button>
           <button class="btn-icon btn-ghost" id="kimport" title="Importar roadmap (markdown)">${icon('forward', 16)}</button>
@@ -291,7 +290,6 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     bind()
     // ponytail: re-aplica running nos botoes DP apos re-render (o finish() dispara render; fonte de verdade = dpPollers)
     board.cards.forEach(cc => { if (dpPollers[`${slug}:dp-${cc.id}`]) setDpRunning(cc.id, true) })
-    root.querySelector('#kadd')!.addEventListener('click', () => openNewCardModal(slug))
     root.querySelectorAll<HTMLSelectElement>('.k-sort').forEach(sel => sel.addEventListener('change', e => {
       sortKey[sel.dataset.col!] = (e.target as HTMLSelectElement).value as SortKey
       localStorage.setItem(`atlas.kbsort.${slug}`, JSON.stringify(sortKey))
