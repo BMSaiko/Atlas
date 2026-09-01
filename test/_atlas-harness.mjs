@@ -30,7 +30,16 @@ const here = dirname(fileURLToPath(import.meta.url))
 const FIXTURES_DIR = join(here, 'fixtures')
 
 // hasGit: skip defensivo (CI sem git). tests/* ja' exigem git noutros sitios.
-function gitBin() { return process.env.GIT_BIN || (process.platform === 'win32' ? 'C:\\Program Files\\Git\\bin\\git.exe' : 'git') }
+// ponytail: probe 'git' (PATH-resolved; works on Linux/macOS + Windows-with-Git\cmd-on-PATH)
+// then fall back to known Windows install. GIT_BIN env overrides both. Cached.
+const _gitBin = (() => {
+  if (process.env.GIT_BIN) return process.env.GIT_BIN
+  for (const c of ['git', 'C:\\Program Files\\Git\\bin\\git.exe']) {
+    try { execFileSync(c, ['--version'], { stdio: 'ignore' }); return c } catch {}
+  }
+  return null
+})()
+function gitBin() { return _gitBin || 'git' }
 const hasGit = (() => {
   try { execFileSync(gitBin(), ['--version'], { stdio: 'ignore' }); return true } catch { return false }
 })()
