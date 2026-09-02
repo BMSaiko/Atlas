@@ -874,53 +874,6 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         send(200, { ok: true }); return
       }
 
-      // /api/hermes/keys -> lista as API keys configuradas no Hermes (lê auth.json, censura access_token).
-      // ponytail: status derivado do último erro (auth.json NAO carrega estado "exhausted" canónico — usamos
-      // 429/401 + reason conhecido como proxy de "esgotada"; 5xx/other = "error"; tudo null = "unknown").
-      // access_token NUNCA sai do atlas (whitelist de campos + fingerprint derivado).
-      if (parts[0] === 'hermes' && parts[1] === 'keys' && parts.length === 2 && m === 'GET') {
-        const auth = await readJ(join(HERMES_HOME, 'auth.json'))
-        const cp = (auth && typeof auth === 'object' && auth.credential_pool && typeof auth.credential_pool === 'object') ? auth.credential_pool : {}
-        const out: any[] = []
-        for (const [provider, list] of Object.entries(cp)) {
-          if (!Array.isArray(list)) continue
-          for (const k of list) {
-            if (!k || typeof k !== 'object') continue
-            const code = typeof k.last_error_code === 'number' ? k.last_error_code : null
-            const reason = typeof k.last_error_reason === 'string' ? k.last_error_reason : null
-            let status: 'active' | 'exhausted' | 'error' | 'unknown' = 'unknown'
-            if (code === 429 || /quota|rate.?limit|exhaust/i.test(reason || '')) status = 'exhausted'
-            else if (code && code >= 400) status = 'error'
-            else if (typeof k.last_status === 'number' && k.last_status >= 200 && k.last_status < 300) status = 'active'
-            // ponytail: deriva fingerprint do token SEM o enviar. sha256(access_token).slice(0,10).
-            // whitelist abaixo é a única coisa que sai — access_token omitido por construção.
-            const tok = typeof (k as any).access_token === 'string' ? (k as any).access_token : ''
-            const fp = tok ? createHash('sha256').update(tok).digest('hex').slice(0, 10) : null
-            out.push({
-              provider,
-              id: typeof k.id === 'string' ? k.id : null,
-              label: typeof k.label === 'string' ? k.label : null,
-              source: typeof k.source === 'string' ? k.source : null,
-              auth_type: typeof k.auth_type === 'string' ? k.auth_type : null,
-              base_url: typeof k.base_url === 'string' ? k.base_url : null,
-              priority: typeof k.priority === 'number' ? k.priority : null,
-              status,
-              last_status: typeof k.last_status === 'number' ? k.last_status : null,
-              last_status_at: k.last_status_at ?? null,
-              last_error_code: code,
-              last_error_reason: reason,
-              last_error_message: typeof k.last_error_message === 'string' ? k.last_error_message : null,
-              last_error_reset_at: k.last_error_reset_at ?? null,
-              request_count: typeof k.request_count === 'number' ? k.request_count : 0,
-              secret_fingerprint: fp,
-              has_token: !!tok,
-            })
-          }
-        }
-        out.sort((a, b) => (a.provider.localeCompare(b.provider)) || ((a.priority ?? 999) - (b.priority ?? 999)))
-        send(200, out); return
-      }
-
       // /api/hermes/usage -> agregacao por key_id do JSONL capturado pelo HEIMDALL em cada pedido LLM
       // (HERMES_HOME/logs/atlas/usage.jsonl, 1 linha por request).
       // Schema esperado por linha: { ts:number, model:string, prompt_tokens:number, completion_tokens:number,
@@ -929,41 +882,6 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
       // no balde '__unknown__' para nao se misturarem com chaves reais.
       // Captura (escrita no JSONL) e da responsabilidade do HEIMDALL; este endpoint e read-only.
       // ponytail: leitura inteira do ficheiro por GET e O(N) em memoria — aceitavel ate dezenas de milhar
-      // de linhas (meses de uso). Upgrade path: tail + line-count se passar disso.
-      if (parts[0] === 'hermes' && parts[1] === 'usage' && parts.length === 2 && m === 'GET') {
-        const sinceQ = parseInt(url.searchParams.get('since') || '0', 10)
-        const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
-        const since = Number.isFinite(sinceQ) && sinceQ > 0 ? sinceQ : startOfToday.getTime()
-        const rows: any[] = []
-        const totals: Record<string, any> = {}
-        const file = join(HERMES_HOME, 'logs', 'atlas', 'usage.jsonl')
-        try {
-          const text = await readFile(file, 'utf8')
-          for (const line of text.split('\n')) {
-            if (!line) continue
-            let r: any
-            try { r = JSON.parse(line) } catch { continue }
-            const ts = typeof r?.ts === 'number' ? r.ts : 0
-            if (!ts || ts < since) continue
-            const keyId = typeof r?.key_id === 'string' && r.key_id ? r.key_id : '__unknown__'
-            const pt = typeof r?.prompt_tokens === 'number' ? r.prompt_tokens : 0
-            const ct = typeof r?.completion_tokens === 'number' ? r.completion_tokens : 0
-            const cost = typeof r?.cost_usd === 'number' ? r.cost_usd : 0
-            const model = typeof r?.model === 'string' ? r.model : undefined
-            const provider = typeof r?.provider === 'string' ? r.provider : undefined
-            rows.push({ ts, key_id: keyId, model, prompt_tokens: pt, completion_tokens: ct, cost_usd: cost, provider })
-            const t = totals[keyId] || (totals[keyId] = { requests: 0, prompt_tokens: 0, completion_tokens: 0, cost_usd: 0, last_ts: 0, model, provider })
-            t.requests += 1
-            t.prompt_tokens += pt
-            t.completion_tokens += ct
-            t.cost_usd += cost
-            if (ts > t.last_ts) { t.last_ts = ts; if (model) t.model = model; if (provider) t.provider = provider }
-          }
-        } catch { /* ficheiro ausente / ilegivel -> resposta vazia, dashboard cai para "—" */ }
-        send(200, { rows, totals_by_key: totals, since, generated_at: Date.now() })
-        return
-      }
-
       // /api/w/:slug/orphans -> cards em 'doing' com .status.state=running e log parado > 90s (worker crash).
       // ponytail: heuristica simples - 90s sem actividade no log OU mtime do .status em 'running' ha > 90s
       // e log vazio. O front-end usa isto para notificar + resetar doing->todo. Idempotente: GET nao muta.
@@ -1391,7 +1309,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         pickIcon, toSlug, runGit, runCmd, runCIGate, checkConflictMarkers,
         resolveMainTip, mergeDevToMain, tickAll, tickSnapshot, listSnapshots,
         getSnapshotFile, restoreSnapshot, writeWipeGuardSnapshot, slotFor,
-        parseRoadmap, loadPrompt, interpolate, readJsonBody,
+        parseRoadmap, loadPrompt, interpolate, readJsonBody, createHash, readFile,
       } })) return
       send(404, { error:'not found' })
     } catch (e:any) { send(500, { error: e.message }) }
