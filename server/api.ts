@@ -408,6 +408,14 @@ async function launchHermes(slug: string, card: any) {
     '# ponytail: card grill-me-palette — ATLAS_CARD_SKILLS="grill-me,grilling" injectado pelo spawn -> passa --skills ao hermes_cli.main',
     "_sk=os.environ.get('ATLAS_CARD_SKILLS','')",
     "_sa=[('--skills',s) for s in (x.strip() for x in _sk.split(',')) if s]",
+    '# ponytail: card h1y3yfsy \xe2\x80\x94 heartbeat daemon (30s) grava lastHeartbeatAt no .status para distinguir wrapper nunca arrancou de hermes travou. Thread daemon morre com o processo (sys.exit). Custo zero.',
+    "import threading as _th,_t",
+    "def _hb():",
+    "\x20\x20\x20\x20while True:",
+    "\x20\x20\x20\x20\x20\x20\x20try: open(st,'w',encoding='utf-8').write(json.dumps({'state':'running','pane':(os.environ.get('WEZTERM_PANE') or None),'lastHeartbeatAt':_t.time(),'ts':_t.time()}))",
+    "\x20\x20\x20\x20\x20\x20\x20except: pass",
+    "\x20\x20\x20\x20\x20\x20\x20_t.sleep(30)",
+    "_th.Thread(target=_hb,daemon=True).start()",
     'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",prompt]+[a for p in _sa for a in p])',
     'if rc==0:',
     '\x20\x20\x20\x20try:',
@@ -1056,14 +1064,17 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
       // /api/w/:slug/orphans -> cards em 'doing' com .status.state=running e log parado > 90s (worker crash).
       // ponytail: heuristica simples - 90s sem actividade no log OU mtime do .status em 'running' ha > 90s
       // e log vazio. O front-end usa isto para notificar + resetar doing->todo. Idempotente: GET nao muta.
+      // card h1y3yfsy: payload enriquecido com logTail/lastHeartbeatAt/orphanWorktreePath/classification/statusState
+      // para a UI distinguir 4 modos de crash (WRAPPER_DIED / HERMES_STUCK / TRANSIENT / MERGE_FAILED) sem auto-retry.
       if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'orphans' && m === 'GET') {
         const slug = parts[1]
         if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
-        const STALE_MS = 5 * 60 * 1000  // ponytail: 5min (era 90s) — workers lentos OK, o que para e nao escreve log no .log e crash real
+        const STALE_MS = 5 * 60 * 1000  // ponytail: 5min (era 90s) â workers lentos OK, o que para e nao escreve log no .log e crash real
         const now = Date.now()
         const board = await readJ(join(DATA, slug, 'kanban.json')).catch(() => null)
         if (!board) { send(200, { orphans: [] }); return }
-        const runsDir = join(wtRoot(await repoDir(slug)), 'runs', slug)
+        const repo = await repoDir(slug)
+        const runsDir = join(wtRoot(repo), 'runs', slug)
         const orphans: any[] = []
         for (const c of (board.cards || [])) {
           if (c.archived || c.colId !== 'doing' || !c.startedAt) continue
@@ -1082,6 +1093,26 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
           if (cardAge < STALE_MS) continue
           const logStale = logMtime === 0 || (now - logMtime) > STALE_MS
           if (!logStale) continue
+          // ponytail: enriquecimento h1y3yfsy â logTail (5 linhas ou 500ch), lastHeartbeatAt (worker ainda
+          // vivo?), orphanWorktreePath (worktree a inspeccionar), classification (string para o user),
+          // statusState (eco do .status.state). Tudo read-only — classificacao aqui Ã© informativa; a
+          // canonical classification vem do POST /orphans/ack (que escreve no card).
+          let logTail = ''
+          try {
+            const txt = await readFile(logPath, 'utf8')
+            const lines = txt.split('\n')
+            logTail = lines.slice(-5).join('\n').slice(-500)
+          } catch { /* no log */ }
+          const lastHeartbeatAt = typeof st.lastHeartbeatAt === 'number' ? st.lastHeartbeatAt : null
+          const wtDir = join(wtRoot(repo), slug, c.id)
+          const orphanWorktreePath = existsSync(wtDir) ? wtDir : null
+          const classification = (() => {
+            if (st.state === 'merge-failed') return 'CRASH_MERGE_FAILED'
+            if (logSize === 0 && lastHeartbeatAt === null) return 'CRASH_WRAPPER_DIED'
+            if (lastHeartbeatAt !== null && (now - lastHeartbeatAt * 1000) > STALE_MS) return 'CRASH_HERMES_STUCK'
+            if (logSize > 0 && logMtime > 0 && (now - logMtime) > STALE_MS) return 'CRASH_HERMES_STUCK'
+            return 'CRASH_HERMES_STUCK'  // fallback
+          })()
           orphans.push({
             cardId: c.id,
             title: c.title,
@@ -1091,9 +1122,69 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
             logMtime: logMtime || null,
             stMtime: stMtime || null,
             cardAgeMs: cardAge,
+            statusState: st.state,
+            lastHeartbeatAt,
+            logTail,
+            orphanWorktreePath,
+            classification,
           })
         }
         send(200, { orphans }); return
+      }
+      // ponytail: card h1y3yfsy â POST /api/w/:slug/orphans/ack. Move cards doing->todo, classifica
+      // crash, seta crashRetry/crashAt/orphanWorktreePath/result, limpa startedAt. Body: { cardIds: string[] }.
+      // Idempotente: card ja' nao-doing com crashRetry=true -> skip (ack duplicado). OT check em cada write.
+      if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'orphans' && parts[3] === 'ack' && m === 'POST') {
+        const slug = parts[1]
+        if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
+        const b = await body(req)
+        const cardIds = Array.isArray(b?.cardIds) ? b.cardIds.filter((x: any) => typeof x === 'string') : []
+        if (!cardIds.length) { send(400, { error: 'cardIds required' }); return }
+        const board = await readJ(join(DATA, slug, 'kanban.json')).catch(() => null)
+        if (!board) { send(404, { error: 'board not found' }); return }
+        const repo = await repoDir(slug)
+        const runsDir = join(wtRoot(repo), 'runs', slug)
+        const now = Date.now()
+        const STALE_MS = 5 * 60 * 1000  // ponytail: 5min (mesmo threshold do GET /orphans)
+        const results: any[] = []
+        let mutated = false
+        for (const cardId of cardIds) {
+          const c = (board.cards || []).find((x: any) => x.id === cardId)
+          if (!c) { results.push({ cardId, ok: false, reason: 'card not found' }); continue }
+          if (c.archived) { results.push({ cardId, ok: false, reason: 'archived' }); continue }
+          if (c.colId !== 'doing') { results.push({ cardId, ok: false, reason: 'not doing (idempotent skip)', currentColId: c.colId }); continue }
+          const stPath = join(runsDir, c.id + '.status')
+          const st = await readJ(stPath).catch(() => null)
+          const logPath = join(runsDir, c.id + '.log')
+          let logSize = 0, logMtime = 0
+          try { const s = statSync(logPath); logSize = s.size; logMtime = s.mtimeMs } catch { /* no log */ }
+          let logTail = ''
+          try {
+            const txt = await readFile(logPath, 'utf8')
+            logTail = txt.split('\n').slice(-5).join('\n').slice(-200)
+          } catch { /* no log */ }
+          const lastHeartbeatAt = typeof st?.lastHeartbeatAt === 'number' ? st.lastHeartbeatAt : null
+          const wtDir = join(wtRoot(repo), slug, c.id)
+          const orphanWorktreePath = existsSync(wtDir) ? wtDir : null
+          const classification = (() => {
+            if (st?.state === 'merge-failed') return 'CRASH_MERGE_FAILED'
+            if (logSize === 0 && lastHeartbeatAt === null) return 'CRASH_WRAPPER_DIED'
+            if (lastHeartbeatAt !== null && (now - lastHeartbeatAt * 1000) > STALE_MS) return 'CRASH_HERMES_STUCK'
+            if (logSize > 0 && logMtime > 0 && (now - logMtime) > STALE_MS) return 'CRASH_HERMES_STUCK'
+            return 'CRASH_HERMES_STUCK'
+          })()
+          c.colId = 'todo'
+          delete c.startedAt
+          c.crashRetry = true
+          c.crashAt = now
+          if (orphanWorktreePath) c.orphanWorktreePath = orphanWorktreePath
+          if (!c.result) c.result = classification + ': ' + (logTail || '(log vazio)')
+          results.push({ cardId, ok: true, classification, orphanWorktreePath })
+          mutated = true
+        }
+        if (mutated) { board.ver = (board.ver || 0) + 1; await writeJ(join(DATA, slug, 'kanban.json'), board) }
+        send(200, { ok: true, results, mutated })
+        return
       }
 
       // /api/w/:slug/output/:cardId -> stream do log do run headless (offset-based, p/ debugging/erros)
