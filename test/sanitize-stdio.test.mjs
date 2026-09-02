@@ -37,5 +37,10 @@ ok(apiSrc.includes("[\\u0080-\\u009F\\uFFFD]"), 'regex covers C1 + U+FFFD')
 ok(apiSrc.includes("ws.write(sanitize(d))"), 'apply in stdout/stderr (2 sites)')
 ok((apiSrc.match(/ws\.write\(sanitize\(d\)\)/g) || []).length === 8, '8 call sites (4 launch* wrappers x 2 stdout+stderr)')
 
+// ponytail: card t02krhls — endpoints que re-leem o .log file e devolvem-no a UI tb devem sanitize
+ok(apiSrc.includes('function _sanitizeText('), '_sanitizeText helper exists')
+ok((apiSrc.split("_sanitizeText(await readFile(logPath, 'utf8'))").length - 1) === 3, '3 _sanitizeText reads (2 /orphans + 1 /output/:cardId)')
+ok(apiSrc.includes('full = _sanitizeText(await readFile(logPath, \'utf8\'))'), '_sanitizeText in /output/:cardId read')
+
 console.log('\n' + (failures === 0 ? 'PASS' : 'FAIL') + ': ' + failures + ' failures')
 process.exit(failures === 0 ? 0 : 1)

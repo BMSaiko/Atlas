@@ -658,6 +658,8 @@ function body(req: any) { return new Promise<any>(res => { let d=''; req.on('dat
 async function readJ(p: string) { try { return JSON.parse(await readFile(p,'utf8')) } catch { return null } }
 // ponytail: termwiz drop C1 0x80-0x9F (latin1->utf8 mal-codado no child Python) + U+FFFD (substituicao que o decoder UTF-8 do node aplica a bytes invalidos). Mantem C0 0x00-0x1F (\n/\t) e tudo >= 0xA0 (UTF-8 multi-byte intacto).
 function sanitize(d: Buffer): Buffer { return Buffer.from(d.toString('utf8').replace(/[\u0080-\u009F\uFFFD]/g, ''), 'utf8') }
+// ponytail: card t02krhls — string variant do sanitize() para re-leituras do .log file (endpoints GET que devolvem o log a UI).
+function _sanitizeText(s: string): string { return s.replace(/[\u0080-\u009F\uFFFD]/g, '') }
 // ponytail: ETag por ficheiro — TODA escrita via writeJ avanca `ver` (1 ponto, nao um guard por escritor).
 // index.json/meta.json nao tem `ver` -> `'ver' in v` cobre-os (nada a fazer).
 function bumpVer(v: any) { if (v && typeof v === 'object' && ('ver' in v)) v.ver = (Number(v.ver) || 0) + 1; return v }
@@ -1105,7 +1107,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
           // canonical classification vem do POST /orphans/ack (que escreve no card).
           let logTail = ''
           try {
-            const txt = await readFile(logPath, 'utf8')
+            const txt = _sanitizeText(await readFile(logPath, 'utf8'))
             const lines = txt.split('\n')
             logTail = lines.slice(-5).join('\n').slice(-500)
           } catch { /* no log */ }
@@ -1166,7 +1168,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
           try { const s = statSync(logPath); logSize = s.size; logMtime = s.mtimeMs } catch { /* no log */ }
           let logTail = ''
           try {
-            const txt = await readFile(logPath, 'utf8')
+            const txt = _sanitizeText(await readFile(logPath, 'utf8'))
             logTail = txt.split('\n').slice(-5).join('\n').slice(-200)
           } catch { /* no log */ }
           const lastHeartbeatAt = typeof st?.lastHeartbeatAt === 'number' ? st.lastHeartbeatAt : null
@@ -1234,7 +1236,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         const started = !!st
         const st2 = st || { state: 'running' }
         let full = ''
-        try { full = await readFile(logPath, 'utf8') } catch { full = '' }
+        try { full = _sanitizeText(await readFile(logPath, 'utf8')) } catch { full = '' }
         const done = st2.state !== 'running'
         // ponytail: envia chunk desde o offset e reporta a posicao nova p/ o cliente pedir so o delta
         const chunk = full.slice(offset)
