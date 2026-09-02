@@ -16,6 +16,8 @@
 // Run: node test/null-write-guard.test.mjs
 // CI:   scripts/run_tests.sh test/null-write-guard.test.mjs -q
 
+import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { spinAtlas } from './_atlas-runtime.mjs'
 
 const TOK = 'test-token-1234'
@@ -24,6 +26,8 @@ const ok = (cond, msg) => { if (cond) console.log('  ok:', msg); else { console.
 
 console.log('\n[setup] spinAtlas + seed 1 card')
 const a = await spinAtlas({ env: { ATLAS_WTOKEN: TOK } })
+// ponytail: writeJ nao cria parent dirs (card null-write-fix spinAtlas so' cria data/, nao data/<slug>/)
+mkdirSync(join(a.cwd, 'data', 'atlas'), { recursive: true })
 const base = `http://127.0.0.1:${a.port}`
 const getBoard = async () => await (await fetch(`${base}/api/w/atlas/kanban`)).json()
 const seed = { ver: 0, columns: [{id:'todo',name:'To Do'}], cards: [{id:'tst12345',title:'seed',colId:'todo'}] }

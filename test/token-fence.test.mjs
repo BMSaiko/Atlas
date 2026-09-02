@@ -9,7 +9,7 @@
 //
 // Run: node test/token-fence.test.mjs
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { spinAtlas } from './_atlas-runtime.mjs'
@@ -44,6 +44,8 @@ console.log('\n[1] PUT fence: no token, non-loopback remote -> 401')
 console.log('\n[2] PUT fence: with token, non-loopback remote -> 200')
 {
   const a = await spinAtlas()
+  // ponytail: writeJ nao cria parent dirs (spinAtlas so' cria data/, nao data/<slug>/)
+  mkdirSync(join(a.cwd, 'data', 'x'), { recursive: true })
   const token = await a.wtoken()
   const r = await a.reqRaw({ method:'PUT', url:'/api/w/x/notes', body:{ ver:0, items:[] }, remote:'10.0.0.1', headers:{'x-atlas-token': token} })
   ok(r.status === 200, `PUT notes c/ token + remote 10.0.0.1 -> 200 (got ${r.status})`)
@@ -57,6 +59,8 @@ console.log('\n[2] PUT fence: with token, non-loopback remote -> 200')
 console.log('\n[3] PUT fence: loopback remote -> 200 sem token (bypass)')
 {
   const a = await spinAtlas()
+  // ponytail: writeJ nao cria parent dirs — pre-criar slugs do PUT loopback. safeRemote='127.0.0.1'->'127-0-0-1'->'loopback-127-0-0-1'; '::1'->'--1'->'loopback---1' (3 hifens); '::ffff:127.0.0.1'->'--ffff-127-0-0-1'->'loopback---ffff-127-0-0-1'
+  for (const s of ['loop-fetch', 'loopback-127-0-0-1', 'loopback---1', 'loopback---ffff-127-0-0-1']) mkdirSync(join(a.cwd, 'data', s), { recursive: true })
   // fetch from 127.0.0.1 is loopback by definition. The middleware recognises
   // 127.0.0.1, ::1, ::ffff:127.0.0.1. No token needed.
   const r = await a.req('PUT', '/api/w/loop-fetch/notes', { ver:0, items:[] })
