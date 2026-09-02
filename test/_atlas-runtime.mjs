@@ -204,7 +204,13 @@ export async function spinAtlas(opts = {}) {
   if (opts.env) Object.assign(process.env, opts.env)
 
   async function close() {
-    try { await server.close() } catch {}
+    // ponytail: drain sockets keep-alive antes de fechar — senao server.close() nunca resolve (orphan test processes = terminal unresponsive).
+    try { server.httpServer?.closeIdleConnections?.() } catch {}
+    try { server.httpServer?.closeAllConnections?.() } catch {}
+    try { await server.watcher?.close?.() } catch {}
+    // ponytail: hard-timeout (2s) no server.close() — se o drain nao bastar, nao bloqueamos o runner.
+    try { await Promise.race([server.close(), new Promise(r => setTimeout(r, 2000))]) } catch {}
+    if (opts.autoExit !== false) process.exit(process.exitCode ?? 0)
     // ponytail: nao restauramos cwd — testes partilham o tempdir, e o
     // processo termina no fim. Se um test subsequente precisar de cwd
     // real, passa {fresh: true, prefix: 'atlas-iso-'}.
