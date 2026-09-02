@@ -10,6 +10,12 @@ import { cfg } from './config'
 import { loadPrompt, interpolate } from './prompts/index'
 // ponytail: snapshots — 4/dia, retenção 7d, dedup por hash, cron via setInterval. Ver server/snapshots.ts.
 import { tickAll, tickSnapshot, listSnapshots, getSnapshotFile, restoreSnapshot, writeWipeGuardSnapshot, slotFor } from './snapshots'
+// ponytail: shared HTTP helpers (Phase 1 of the backend refactor). See server/lib/http.ts.
+import { isLoopback, makeSend, readJsonBody } from './lib/http'
+// ponytail: route table + dispatcher (Phase 2A of the backend refactor).
+// See server/routes.ts. Empty table for now; the dispatcher is a no-op
+// until routes are added in Phase 2B+ (per-domain files).
+import { dispatch } from './routes'
 
 const DATA = join(process.cwd(), 'data')
 const SLUG = /^[a-z0-9-]+$/
@@ -654,7 +660,7 @@ async function launchGitOp(slug: string, op: string, title: string, task: string
   void spawnHeadless(repo, logPath, stPath, title + ' — gestor git headless a arrancar…', prompt)
 }
 
-function body(req: any) { return new Promise<any>(res => { let d=''; req.on('data', (c: Buffer)=>d+=c); req.on('end', ()=>{ try{res(JSON.parse(d||'null'))}catch{res(null)} }) }) }
+// ponytail: body() moved to lib/http as readJsonBody (Phase 1).
 async function readJ(p: string) { try { return JSON.parse(await readFile(p,'utf8')) } catch { return null } }
 // ponytail: termwiz drop C1 0x80-0x9F (latin1->utf8 mal-codado no child Python) + U+FFFD (substituicao que o decoder UTF-8 do node aplica a bytes invalidos). Mantem C0 0x00-0x1F (\n/\t) e tudo >= 0xA0 (UTF-8 multi-byte intacto).
 function sanitize(d: Buffer): Buffer { return Buffer.from(d.toString('utf8').replace(/[\u0080-\u009F\uFFFD]/g, ''), 'utf8') }
@@ -672,7 +678,7 @@ export default function atlasApi(): Plugin {
     const url = new URL(req.url || '/', 'http://localhost')
     const p = url.pathname
     const m = req.method || 'GET'
-    const send = (code: number, v: any) => { res.statusCode=code; res.setHeader('Content-Type','application/json'); res.end(JSON.stringify(v)) }
+    const send = makeSend(res)
     try {
       if (!p.startsWith('/api/')) return next()   // static handled by vite, preview fallback (ex: dist/index.html em produção)
       // ponytail: fence anti-corrida (card iykn11lg) — writers externos (PUT notes/kanban/bundle) tem de apresentar
@@ -680,8 +686,7 @@ export default function atlasApi(): Plugin {
       // server em launchHermes/dp worker) NAO passam pelo middleware HTTP, ficam trusted. GETs livre (UI+meta).
       if (m === 'PUT' && /^\/api\/w\/[^/]+\/(notes|kanban|bundle)$/.test(p)) {
         const got = (req.headers['x-atlas-token'] || '') as string
-        const remote = (req.socket as any)?.remoteAddress || ''
-        const loopback = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1'
+        const loopback = isLoopback(req)
         if (!loopback && got !== cfg.wtoken) { send(401, { error: 'unauthorized: missing or invalid X-Atlas-Token' }); return }
       }
       const parts = p.replace(/^\/api\//,'').split('/').filter(Boolean)
@@ -690,8 +695,7 @@ export default function atlasApi(): Plugin {
       // Sem este endpoint, abrir localhost:5173 sem ?token=... cai em 401 permanente ate o utilizador adivinhar
       // o token impresso no console. Loopback-only = mesma proteccao que o PUT (fence).
       if (parts[0] === 'wtoken' && parts.length === 1 && m === 'GET') {
-        const remote = (req.socket as any)?.remoteAddress || ''
-        const loopback = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1'
+        const loopback = isLoopback(req)
         if (!loopback) { send(403, { error: 'forbidden' }); return }
         res.setHeader('Cache-Control', 'no-store')
         send(200, { token: cfg.wtoken }); return
@@ -701,7 +705,7 @@ export default function atlasApi(): Plugin {
       // abertos por cards em doing do slug dado no body. Loopback-only (mesma proteccao que wtoken/
       // PUTs). Master button no workspace chama isto com confirm-dialog antes.
       if (parts[0] === 'terms' && parts[1] === 'kill-all' && m === 'POST') {
-        const b2 = (await body(req)) || {}
+        const b2 = (await readJsonBody(req)) || {}
         const slug = typeof b2.slug === 'string' ? b2.slug : ''
         if (!SLUG.test(slug)) { send(400, { error: 'slug required' }); return }
         const r = await killAllPanesForSlug(slug)
@@ -716,7 +720,7 @@ export default function atlasApi(): Plugin {
       // ativo (palette Ctrl+K). Sem hermes, sem prompt; so' a pane visivel. cwd preferido: worktree do
       // primeiro card running (se houver), senao repo root do mundo, senao ATLAS_REPO.
       if (parts[0] === 'terms' && parts[1] === 'open' && m === 'POST') {
-        const b2 = (await body(req)) || {}
+        const b2 = (await readJsonBody(req)) || {}
         const slug = typeof b2.slug === 'string' ? b2.slug : ''
         if (!SLUG.test(slug)) { send(400, { error: 'slug required' }); return }
         if (!cfg.wezterm || !existsSync(cfg.wezterm)) { send(503, { error: 'wezterm nao instalado' }); return }
@@ -790,7 +794,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
       if (parts[0] === 'workdirs' && parts.length === 1) {
         if (m === 'GET') { send(200, await readIdx()); return }
         if (m === 'PUT') {
-          const b = await body(req) || {}
+          const b = await readJsonBody(req) || {}
           const order = Array.isArray(b.order) ? b.order.filter((x: any) => typeof x === 'string') : null
           if (!order) { send(400,{error:'order required'}); return }
           const idx = await readIdx()
@@ -802,7 +806,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
           send(200, next); return
         }
         if (m === 'POST') {
-          const b = await body(req)
+          const b = await readJsonBody(req)
           if (!b || typeof b.name !== 'string' || !b.name.trim()) { send(400,{error:'name required'}); return }
           const idx = await readIdx()
           let slug = toSlug(b.name) || 'workdir'; let base = slug, i = 1
@@ -825,7 +829,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         if (!wd) { send(404,{error:'not found'}); return }
         const dir = join(DATA, slug)
         if (m === 'PATCH') {
-          const b = await body(req) || {}
+          const b = await readJsonBody(req) || {}
           if (typeof b.name === 'string' && b.name.trim()) wd.name = b.name.trim()
           if (typeof b.description === 'string') wd.description = b.description.trim()
           if (typeof b.icon === 'string' && iconCatalog().includes(b.icon)) wd.icon = b.icon
@@ -848,7 +852,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
       if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'review' && parts[3] === 'approve-agent' && m === 'POST') {
         const slug = parts[1]
         if (!SLUG.test(slug)) { send(400, { error: 'bad slug' }); return }
-        const b = (await body(req)) || {}
+        const b = (await readJsonBody(req)) || {}
         const id = typeof b.cardId === 'string' ? b.cardId : ''
         const file = join(DATA, slug, 'kanban.json')
         if (!inside(DATA, file) || !id) { send(400, { error: 'bad request' }); return }
@@ -877,7 +881,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
       if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'review' && m === 'POST') {
         const slug = parts[1], action = parts[3]
         if (action !== 'approve' && action !== 'reject') { send(400,{error:'bad action'}); return }
-        const b = (await body(req)) || {}
+        const b = (await readJsonBody(req)) || {}
         const id = typeof b.cardId === 'string' ? b.cardId : ''
         const file = join(DATA, slug, 'kanban.json')
         if (!inside(DATA, file) || !id) { send(400, { error: 'bad request' }); return }
@@ -929,7 +933,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
       // /api/w/:slug/run -> marca doing + abre wezterm com hermes (tarefa = description)
       if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'run' && m === 'POST') {
         const slug = parts[1]
-        const b = (await body(req)) || {}
+        const b = (await readJsonBody(req)) || {}
         const id = typeof b.cardId === 'string' ? b.cardId : ''
         const file = join(DATA, slug, 'kanban.json')
         if (!inside(DATA, file) || !id) { send(400, { error: 'bad request' }); return }
@@ -959,7 +963,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
       if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'dp' && m === 'POST') {
         const slug = parts[1]
         if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
-        const b = (await body(req)) || {}
+        const b = (await readJsonBody(req)) || {}
         const id = typeof b.cardId === 'string' ? b.cardId : ''
         if (!id) { send(400, { error: 'cardId required' }); return }
         const file = join(DATA, slug, 'kanban.json')
@@ -1145,7 +1149,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
       if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'orphans' && parts[3] === 'ack' && m === 'POST') {
         const slug = parts[1]
         if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
-        const b = await body(req)
+        const b = await readJsonBody(req)
         const cardIds = Array.isArray(b?.cardIds) ? b.cardIds.filter((x: any) => typeof x === 'string') : []
         if (!cardIds.length) { send(400, { error: 'cardIds required' }); return }
         const board = await readJ(join(DATA, slug, 'kanban.json')).catch(() => null)
@@ -1281,7 +1285,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         const slug = parts[1]
         const file = join(DATA, slug, 'kanban.json')
         if (!SLUG.test(slug) || !inside(DATA, file)) { send(400, { error: 'bad request' }); return }
-        const b = (await body(req)) || {}
+        const b = (await readJsonBody(req)) || {}
         let path = typeof b.path === 'string' ? b.path : ''
         if (!path) { send(400, { error: 'path required' }); return }
         // ponytail: allow-list ao readFile — o path do body tem de viver dentro de
@@ -1332,7 +1336,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
           send(200, { slug, meta, notes, kanban, ts: Date.now() }); return
         }
         if (m === 'PUT') {
-          const b = (await body(req)) || {}
+          const b = (await readJsonBody(req)) || {}
           // ponytail: valida shape minimo (recusar bundle malformado NAO sobrescreve estado). Aceita
           // {meta, notes, kanban} no payload. Faltar qualquer um -> 400 sem tocar em disco.
           if (!b || typeof b !== 'object' || !('meta' in b) || !('notes' in b) || !('kanban' in b)) {
@@ -1407,7 +1411,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         if (!inside(DATA, file)) { send(400,{error:'bad path'}); return }
         if (m === 'GET') { send(200, (await readJ(file)) ?? (kind==='kanban'?{ver:0,columns:[],cards:[]}:{ver:0,items:[]})); return }
         if (m === 'PUT') {
-          const b = await body(req)
+          const b = await readJsonBody(req)
           // ponytail: guarda contra PUT vazio/invalido (card null-write-fix) — body() devolve null quando
           // Content-Length=0 ou JSON parse falha; sem guard, writeJ grava 'null' (4 bytes) e wipea kanban.json
           // (backup pre-PUT tambem fica vitima porque le o ficheiro ja corrompido). Wipe real observado em
@@ -1485,6 +1489,9 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
       if (parts[0] === 'w' && parts.length === 2 && m === 'GET') {
         const slug = parts[1]; send(200, (await readJ(join(DATA, slug, 'meta.json'))) || { error:'not found' }); return
       }
+      // ponytail: route table (Phase 2A). Empty for now; becomes the
+      // primary dispatcher in Phase 2B+ as handlers move out of api.ts.
+      if (dispatch({ req, res, send, parts, m })) return
       send(404, { error:'not found' })
     } catch (e:any) { send(500, { error: e.message }) }
   }
