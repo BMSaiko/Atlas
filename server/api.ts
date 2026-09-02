@@ -484,8 +484,9 @@ async function launchHermes(slug: string, card: any) {
   // ponytail: card grill-me-palette — propaga card.skills ao wrapper Python via env (sem mudar argv indices)',
   const _skillsEnv = Array.isArray(card.skills) ? card.skills.filter((s:any)=>typeof s==='string'&&s.trim()).map((s:string)=>s.trim()).join(',') : ''
   const p = spawn(exe, args, { cwd: repo, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME, ...(_skillsEnv ? { ATLAS_CARD_SKILLS: _skillsEnv } : {}) } })
-  p.stdout?.on('data', d => ws.write(d))
-  p.stderr?.on('data', d => ws.write(d))
+  // ponytail: termwiz drop C1 (sanitize em readJ)
+  p.stdout?.on('data', d => ws.write(sanitize(d)))
+  p.stderr?.on('data', d => ws.write(sanitize(d)))
   p.on('error', e => { ws.end(); void fail((headless ? 'spawn headless' : 'spawn wezterm') + ' falhou: ' + e.message) })
   p.on('close', async (code) => {
     ws.end()
@@ -549,8 +550,9 @@ async function launchBrainstorm(slug: string) {
   ].join('\n')
   const p = spawn(VENV_PY, ['-c', wrapper, prompt],
     { cwd: repo, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
-  p.stdout?.on('data', (d: Buffer) => ws.write(d))
-  p.stderr?.on('data', (d: Buffer) => ws.write(d))
+  // ponytail: termwiz drop C1 (sanitize em readJ)
+  p.stdout?.on('data', (d: Buffer) => ws.write(sanitize(d)))
+  p.stderr?.on('data', (d: Buffer) => ws.write(sanitize(d)))
   p.on('error', () => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code: 1, ts: Date.now() }), 'utf8').catch(() => {}) })
   p.on('close', (code: number) => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {}) })
   p.unref()
@@ -593,8 +595,9 @@ async function launchDp(slug: string, card: any) {
   ].join('\n')
   const p = spawn(VENV_PY, ['-c', wrapper, prompt],
     { cwd: repo, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
-  p.stdout?.on('data', (d: Buffer) => ws.write(d))
-  p.stderr?.on('data', (d: Buffer) => ws.write(d))
+  // ponytail: termwiz drop C1 (sanitize em readJ)
+  p.stdout?.on('data', (d: Buffer) => ws.write(sanitize(d)))
+  p.stderr?.on('data', (d: Buffer) => ws.write(sanitize(d)))
   p.on('error', () => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code: 1, ts: Date.now() }), 'utf8').catch(() => {}); void fail('spawn DP falhou') })
   p.on('close', async (code: number) => {
     ws.end()
@@ -631,8 +634,9 @@ async function spawnHeadless(repo: string, logPath: string, stPath: string, bann
   ].join('\n')
   const p = spawn(VENV_PY, ['-c', wrapper, prompt],
     { cwd: repo, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
-  p.stdout?.on('data', (d: Buffer) => ws.write(d))
-  p.stderr?.on('data', (d: Buffer) => ws.write(d))
+  // ponytail: termwiz drop C1 (sanitize em readJ)
+  p.stdout?.on('data', (d: Buffer) => ws.write(sanitize(d)))
+  p.stderr?.on('data', (d: Buffer) => ws.write(sanitize(d)))
   p.on('error', () => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code: 1, ts: Date.now() }), 'utf8').catch(() => {}) })
   p.on('close', (code: number) => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {}) })
   p.unref()
@@ -652,6 +656,8 @@ async function launchGitOp(slug: string, op: string, title: string, task: string
 
 function body(req: any) { return new Promise<any>(res => { let d=''; req.on('data', (c: Buffer)=>d+=c); req.on('end', ()=>{ try{res(JSON.parse(d||'null'))}catch{res(null)} }) }) }
 async function readJ(p: string) { try { return JSON.parse(await readFile(p,'utf8')) } catch { return null } }
+// ponytail: termwiz drop C1 0x80-0x9F (latin1->utf8 mal-codado no child Python) + U+FFFD (substituicao que o decoder UTF-8 do node aplica a bytes invalidos). Mantem C0 0x00-0x1F (\n/\t) e tudo >= 0xA0 (UTF-8 multi-byte intacto).
+function sanitize(d: Buffer): Buffer { return Buffer.from(d.toString('utf8').replace(/[\u0080-\u009F\uFFFD]/g, ''), 'utf8') }
 // ponytail: ETag por ficheiro — TODA escrita via writeJ avanca `ver` (1 ponto, nao um guard por escritor).
 // index.json/meta.json nao tem `ver` -> `'ver' in v` cobre-os (nada a fazer).
 function bumpVer(v: any) { if (v && typeof v === 'object' && ('ver' in v)) v.ver = (Number(v.ver) || 0) + 1; return v }
