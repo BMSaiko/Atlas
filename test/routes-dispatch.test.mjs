@@ -15,18 +15,18 @@ function mkCtx(parts, m = "GET") {
   return { ctx: { req: {}, res: {}, send, parts, m }, lastCode, lastBody }
 }
 
-test("dispatch: empty table returns false (no match)", () => {
+test("dispatch: empty table returns false (no match)", async () => {
   const { ctx } = mkCtx(["w", "myslug"], "GET")
-  assert.equal(dispatch(ctx), false)
+  assert.equal(await dispatch(ctx), false)
 })
 
-test("dispatch: matches GET with exact length and parts", () => {
+test("dispatch: matches GET with exact length and parts", async () => {
   // build a temporary route by importing the module and pushing into a local copy
   // (the exported ROUTES is empty; we just need to verify the matcher behaviour)
   // ponytail: simplest is to inline-construct via a sub-import of a test-only route
   // For now, assert the empty-table path; the populated-table tests come in Phase 2B.
   const { ctx } = mkCtx(["wtoken"], "GET")
-  assert.equal(dispatch(ctx), false)
+  assert.equal(await dispatch(ctx), false)
 })
 
 // ponytail: the matcher logic itself is worth a unit test even before any
@@ -38,7 +38,7 @@ test("dispatch: matches GET with exact length and parts", () => {
 
 import * as routesModule from "../server/routes.ts"
 
-test("dispatcher honours a synthetic route (matcher sanity)", () => {
+test("dispatcher honours a synthetic route (matcher sanity)", async () => {
   let called = false
   const synth = {
     method: "GET",
@@ -54,7 +54,7 @@ test("dispatcher honours a synthetic route (matcher sanity)", () => {
   routesModule.ROUTES.push(synth)
   try {
     const { ctx } = mkCtx(["wtoken"], "GET")
-    const matched = dispatch(ctx)
+    const matched = await dispatch(ctx)
     assert.equal(matched, true)
     assert.equal(called, true)
   } finally {
@@ -63,7 +63,7 @@ test("dispatcher honours a synthetic route (matcher sanity)", () => {
   }
 })
 
-test("dispatcher: wrong method does not match", () => {
+test("dispatcher: wrong method does not match", async () => {
   let called = false
   const synth = { method: "GET", length: 1, match: ["wtoken"], handler: () => { called = true }, name: "t" }
   const saved = routesModule.ROUTES.slice()
@@ -71,7 +71,7 @@ test("dispatcher: wrong method does not match", () => {
   routesModule.ROUTES.push(synth)
   try {
     const { ctx } = mkCtx(["wtoken"], "POST")
-    assert.equal(dispatch(ctx), false)
+    assert.equal(await dispatch(ctx), false)
     assert.equal(called, false)
   } finally {
     routesModule.ROUTES.length = 0
@@ -79,7 +79,7 @@ test("dispatcher: wrong method does not match", () => {
   }
 })
 
-test("dispatcher: wrong length does not match", () => {
+test("dispatcher: wrong length does not match", async () => {
   let called = false
   const synth = { method: "GET", length: 1, match: ["wtoken"], handler: () => { called = true }, name: "t" }
   const saved = routesModule.ROUTES.slice()
@@ -87,7 +87,7 @@ test("dispatcher: wrong length does not match", () => {
   routesModule.ROUTES.push(synth)
   try {
     const { ctx } = mkCtx(["wtoken", "extra"], "GET")
-    assert.equal(dispatch(ctx), false)
+    assert.equal(await dispatch(ctx), false)
     assert.equal(called, false)
   } finally {
     routesModule.ROUTES.length = 0
@@ -95,7 +95,7 @@ test("dispatcher: wrong length does not match", () => {
   }
 })
 
-test("dispatcher: null match slot is wildcard", () => {
+test("dispatcher: null match slot is wildcard", async () => {
   let called = false
   const synth = { method: "POST", length: 2, match: ["w", null], handler: () => { called = true }, name: "t" }
   const saved = routesModule.ROUTES.slice()
@@ -103,7 +103,7 @@ test("dispatcher: null match slot is wildcard", () => {
   routesModule.ROUTES.push(synth)
   try {
     const { ctx } = mkCtx(["w", "anything"], "POST")
-    assert.equal(dispatch(ctx), true)
+    assert.equal(await dispatch(ctx), true)
     assert.equal(called, true)
   } finally {
     routesModule.ROUTES.length = 0
@@ -111,7 +111,7 @@ test("dispatcher: null match slot is wildcard", () => {
   }
 })
 
-test("dispatcher: first match wins", () => {
+test("dispatcher: first match wins", async () => {
   let firstCalled = false, secondCalled = false
   const first  = { method: "GET", length: 1, match: ["wtoken"], handler: () => { firstCalled = true }, name: "first" }
   const second = { method: "GET", length: 1, match: ["wtoken"], handler: () => { secondCalled = true }, name: "second" }
@@ -120,7 +120,7 @@ test("dispatcher: first match wins", () => {
   routesModule.ROUTES.push(first, second)
   try {
     const { ctx } = mkCtx(["wtoken"], "GET")
-    assert.equal(dispatch(ctx), true)
+    assert.equal(await dispatch(ctx), true)
     assert.equal(firstCalled, true)
     assert.equal(secondCalled, false)
   } finally {
@@ -129,7 +129,7 @@ test("dispatcher: first match wins", () => {
   }
 })
 
-test("dispatcher: method '*' matches anything", () => {
+test("dispatcher: method '*' matches anything", async () => {
   let called = false
   const synth = { method: "*", length: 1, match: ["bundle"], handler: () => { called = true }, name: "t" }
   const saved = routesModule.ROUTES.slice()
@@ -138,7 +138,7 @@ test("dispatcher: method '*' matches anything", () => {
   try {
     for (const m of ["GET", "POST", "PUT", "DELETE"]) {
       const { ctx } = mkCtx(["bundle"], m)
-      assert.equal(dispatch(ctx), true, `method ${m} should match '*'`)
+      assert.equal(await dispatch(ctx), true, `method ${m} should match '*'`)
     }
     assert.equal(called, true)
   } finally {

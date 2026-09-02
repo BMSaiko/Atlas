@@ -39,6 +39,13 @@ export interface RouteCtx {
   // does, but the slot is here so adding one later doesn't require
   // editing the Route type.
   state?: Record<string, unknown>
+  // ponytail: handlers reach into module-level helpers in api.ts
+  // (killAllPanesForSlug, repoDir, writeJ, ...). Rather than lift every
+  // helper to its own module (and add N import statements per route file),
+  // we pass a single bag with the names handlers need. Built once in
+  // api.ts and shared via dispatch(). Untyped on purpose: lazy ceiling,
+  // tighten per route file when one handler needs more than 2 deps.
+  deps?: Record<string, any>
 }
 
 export type Handler = (ctx: RouteCtx) => Promise<void> | void
@@ -56,22 +63,24 @@ export interface Route {
   name: string
 }
 
-// ponytail: empty for now. Routes are added in Phase 2B+ by per-domain
-// files. The dispatcher is a no-op until the first route is added.
-export const ROUTES: Route[] = []
+// ponytail: routes are spread from per-domain files in ./routes/index.ts.
+// Adding a new domain = add a file in ./routes/ + re-export in index.ts.
+// This module stays type-only; data lives in the index barrel.
+import { ALL_ROUTES } from "./routes/index"
+export const ROUTES: Route[] = [...ALL_ROUTES]
 
 // ponytail: dispatcher. Linear scan (the table is < 30 entries; a hash
 // map would be slower at this size due to JS object overhead). First
 // match wins. Returns true if a route handled the request, false if the
 // caller should fall through (today: send 404).
-export function dispatch(ctx: RouteCtx): boolean {
+export async function dispatch(ctx: RouteCtx): Promise<boolean> {
   for (const r of ROUTES) {
     if (!matchRoute(r, ctx.parts, ctx.m)) continue
-    // ponytail: handlers may be async; we don't await the result because
-    // the original middleware was fire-and-await inside a try/catch.
-    // Errors must be caught inside the handler (or in the surrounding
-    // try/catch in api.ts which still wraps everything).
-    void r.handler(ctx)
+    // ponytail: await the handler. The original middleware was async
+    // and wrapped everything in a try/catch, so awaiting here is safe.
+    // Awaiting (vs fire-and-forget) means tests can assert against
+    // post-handler state without races.
+    await r.handler(ctx)
     return true
   }
   return false

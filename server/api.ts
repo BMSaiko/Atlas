@@ -701,63 +701,6 @@ export default function atlasApi(): Plugin {
         send(200, { token: cfg.wtoken }); return
       }
 
-      // ponytail: card terminal-control — /api/terms/kill-all -> mata todos os panes WezTerm
-      // abertos por cards em doing do slug dado no body. Loopback-only (mesma proteccao que wtoken/
-      // PUTs). Master button no workspace chama isto com confirm-dialog antes.
-      if (parts[0] === 'terms' && parts[1] === 'kill-all' && m === 'POST') {
-        const b2 = (await readJsonBody(req)) || {}
-        const slug = typeof b2.slug === 'string' ? b2.slug : ''
-        if (!SLUG.test(slug)) { send(400, { error: 'slug required' }); return }
-        const r = await killAllPanesForSlug(slug)
-        send(200, { ok: true, killed: r.killed, checked: r.checked }); return
-      }
-      // ponytail: card terminal-control-v2 — cross-workdir. Mata panes de todos os mundos.
-      if (parts[0] === 'terms' && parts[1] === 'kill-all-atlas' && m === 'POST') {
-        const r = await killAllPanesAtlas()
-        send(200, { ok: true, killed: r.killed, checked: r.checked, worlds: r.worlds }); return
-      }
-      // ponytail: card terminal-control-v2 — abre um wezterm-gui.exe start -- cmd.exe no workdir
-      // ativo (palette Ctrl+K). Sem hermes, sem prompt; so' a pane visivel. cwd preferido: worktree do
-      // primeiro card running (se houver), senao repo root do mundo, senao ATLAS_REPO.
-      if (parts[0] === 'terms' && parts[1] === 'open' && m === 'POST') {
-        const b2 = (await readJsonBody(req)) || {}
-        const slug = typeof b2.slug === 'string' ? b2.slug : ''
-        if (!SLUG.test(slug)) { send(400, { error: 'slug required' }); return }
-        if (!cfg.wezterm || !existsSync(cfg.wezterm)) { send(503, { error: 'wezterm nao instalado' }); return }
-        const repo = await repoDir(slug)
-        let cwd = repo
-        try {
-          const runsDir = join(wtRoot(repo), 'runs', slug)
-          if (existsSync(runsDir)) {
-            for (const f of readdirSync(runsDir).filter(x => x.endsWith('.status'))) {
-              const st = await readJ(join(runsDir, f)).catch(() => null)
-              if (st?.state === 'running') {
-                const wt = join(wtRoot(repo), slug, f.replace(/\.status$/, ''))
-                if (existsSync(wt)) { cwd = wt; break }
-              }
-            }
-          }
-        } catch { /* fallback repo */ }
-        try {
-          // ponytail: se ja' ha um wezterm-gui a correr, adiciona tab (focus fica no wezterm
-          // existente que o user ja' tem a frente); senao abre janela nova. Sem isto, o user
-          // via' o toast mas tinha de clicar na nova janela para usar.
-          // Use tasklist para detectar: 'wezterm-gui.exe' sem arg de comando = o GUI host.
-          const probe = spawn('tasklist', ['/FI', 'IMAGENAME eq wezterm-gui.exe', '/NH'],
-            { stdio: ['ignore', 'pipe', 'ignore'] })
-          let hasInstance = false
-          probe.stdout.on('data', (d: Buffer) => { if (/wezterm-gui\.exe/i.test(d.toString())) hasInstance = true })
-          await new Promise<void>(r => probe.on('close', () => r()))
-          const args = hasInstance
-            ? ['start', '--cwd', cwd, '--', 'cmd.exe']                                  // tab no mux existente
-            : ['start', '--always-new-process', '--cwd', cwd, '--', 'cmd.exe']          // janela nova
-          spawn(cfg.wezterm, args, { detached: true, stdio: 'ignore' }).unref()
-          send(200, { ok: true, cwd, reused: hasInstance }); return
-        } catch (e: any) {
-          send(500, { error: 'wezterm start falhou: ' + e.message }); return
-        }
-      }
-
       // /api/orchestrator/start[/<slug>] -> passa TODO(s) nao arquivados (de um mundo, se slug) para doing
       // ponytail: so move colIds (nao dispara runs headless nem toca review/done/archived)
       if (parts[0] === 'orchestrator' && parts[1] === 'start' && (parts.length === 2 || parts.length === 3) && m === 'POST') {
@@ -1491,7 +1434,17 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
       }
       // ponytail: route table (Phase 2A). Empty for now; becomes the
       // primary dispatcher in Phase 2B+ as handlers move out of api.ts.
-      if (dispatch({ req, res, send, parts, m })) return
+      // ponytail: deps bag — every module-level helper a route might need.
+      // Keep it lean: only what routes actually use, not speculative exports.
+      if (await dispatch({ req, res, send, parts, m, deps: {
+        SLUG, DATA, INDEX, cfg, readIdx, readJ, writeJ, syncVault, repoDir, wtRoot,
+        killPane, killPaneForCard, killAllPanesForSlug, killAllPanesAtlas,
+        launchHermes, launchBrainstorm, launchDp, launchGitOp, spawnHeadless,
+        pickIcon, toSlug, runGit, runCmd, runCIGate, checkConflictMarkers,
+        resolveMainTip, mergeDevToMain, tickAll, tickSnapshot, listSnapshots,
+        getSnapshotFile, restoreSnapshot, writeWipeGuardSnapshot, slotFor,
+        parseRoadmap, loadPrompt, interpolate, body: readJsonBody,
+      } })) return
       send(404, { error:'not found' })
     } catch (e:any) { send(500, { error: e.message }) }
   }
