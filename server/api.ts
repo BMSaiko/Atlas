@@ -825,6 +825,38 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         if (m === 'DELETE') { await rm(dir, { recursive:true, force:true }); await writeJ(join(DATA, INDEX), idx.filter(w=>w.slug!==slug)); send(200,{ok:true}); return }
       }
       // /api/w/:slug/{notes,kanban,meta}
+      // /api/w/:slug/review/approve-agent -> gate sync + spawna hermes headless (prompt 'merge-approve').
+      // Decisao R3.Q2: git-op.md fica magro (merge ad-hoc, resolve conflict); este endpoint e' especializado
+      // para o approve do workflow Review — alem de git ff + push, atualiza o card no kanban via API e
+      // escreve `result` no card em caso de falha. /review/approve (inline) continua a existir como revert path.
+      if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'review' && parts[3] === 'approve-agent' && m === 'POST') {
+        const slug = parts[1]
+        if (!SLUG.test(slug)) { send(400, { error: 'bad slug' }); return }
+        const b = (await body(req)) || {}
+        const id = typeof b.cardId === 'string' ? b.cardId : ''
+        const file = join(DATA, slug, 'kanban.json')
+        if (!inside(DATA, file) || !id) { send(400, { error: 'bad request' }); return }
+        const board = await readJ(file)
+        const card = board?.cards?.find((c: any) => c.id === id)
+        if (!card) { send(404, { error: 'card not found' }); return }
+        if (card.archived) { send(409, { error: 'card archived' }); return }
+        if (card.colId !== 'review') { send(409, { error: 'card not in review' }); return }
+        const repo = await repoDir(slug)
+        const gate = await runCIGate(repo)
+        if (!gate.ok) { send(500, { error: 'CI gate falhou (' + gate.step + '): ' + gate.out }); return }
+        // fecha pane wezterm cedo — runner nao toca em nada vivo (best-effort, idempotente)
+        void killPaneForCard(slug, card.id)
+        const title = 'Approve review: ' + (card.title || '')
+        const logPath = join(wtRoot(repo), 'runs', slug, 'merge-approve.log')
+        const stPath = join(wtRoot(repo), 'runs', slug, 'merge-approve.status')
+        const prompt = interpolate(await loadPrompt('merge-approve'), {
+          slug, repo, cardId: id, kanbanPath: file, apiUrl: '/api/w/' + slug + '/kanban', logPath, title,
+        })
+        void spawnHeadless(repo, logPath, stPath, title + ' — agente headless a arrancar…', prompt)
+        send(200, { ok: true, mode: 'agent', logPath })
+        return
+      }
+
       // /api/w/:slug/review/{approve,reject} -> workflow Review (done c/ merge dev->main | refinar+voltar a doing)
       if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'review' && m === 'POST') {
         const slug = parts[1], action = parts[3]
@@ -877,37 +909,6 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         return
       }
 
-      // /api/w/:slug/review/approve-agent -> gate sync + spawna hermes headless (prompt 'merge-approve').
-      // Decisao R3.Q2: git-op.md fica magro (merge ad-hoc, resolve conflict); este endpoint e' especializado
-      // para o approve do workflow Review — alem de git ff + push, atualiza o card no kanban via API e
-      // escreve `result` no card em caso de falha. /review/approve (inline) continua a existir como revert path.
-      if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'review' && parts[3] === 'approve-agent' && m === 'POST') {
-        const slug = parts[1]
-        if (!SLUG.test(slug)) { send(400, { error: 'bad slug' }); return }
-        const b = (await body(req)) || {}
-        const id = typeof b.cardId === 'string' ? b.cardId : ''
-        const file = join(DATA, slug, 'kanban.json')
-        if (!inside(DATA, file) || !id) { send(400, { error: 'bad request' }); return }
-        const board = await readJ(file)
-        const card = board?.cards?.find((c: any) => c.id === id)
-        if (!card) { send(404, { error: 'card not found' }); return }
-        if (card.archived) { send(409, { error: 'card archived' }); return }
-        if (card.colId !== 'review') { send(409, { error: 'card not in review' }); return }
-        const repo = await repoDir(slug)
-        const gate = await runCIGate(repo)
-        if (!gate.ok) { send(500, { error: 'CI gate falhou (' + gate.step + '): ' + gate.out }); return }
-        // fecha pane wezterm cedo — runner nao toca em nada vivo (best-effort, idempotente)
-        void killPaneForCard(slug, card.id)
-        const title = 'Approve review: ' + (card.title || '')
-        const logPath = join(wtRoot(repo), 'runs', slug, 'merge-approve.log')
-        const stPath = join(wtRoot(repo), 'runs', slug, 'merge-approve.status')
-        const prompt = interpolate(await loadPrompt('merge-approve'), {
-          slug, repo, cardId: id, kanbanPath: file, apiUrl: '/api/w/' + slug + '/kanban', logPath, title,
-        })
-        void spawnHeadless(repo, logPath, stPath, title + ' — agente headless a arrancar…', prompt)
-        send(200, { ok: true, mode: 'agent', logPath })
-        return
-      }
 
       // /api/w/:slug/run -> marca doing + abre wezterm com hermes (tarefa = description)
       if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'run' && m === 'POST') {
