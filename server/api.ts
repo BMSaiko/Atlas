@@ -705,36 +705,7 @@ export default function atlasApi(): Plugin {
 
       // /api/orchestrator/start[/<slug>] -> passa TODO(s) nao arquivados (de um mundo, se slug) para doing
       // ponytail: so move colIds (nao dispara runs headless nem toca review/done/archived)
-      if (parts[0] === 'orchestrator' && parts[1] === 'start' && (parts.length === 2 || parts.length === 3) && m === 'POST') {
-        const only = parts.length === 3 ? decodeURIComponent(parts[2]) : ''
-        const worldIdx = await readIdx()
-        const targets = only ? worldIdx.filter(w => w.slug === only) : worldIdx
-        if (only && targets.length === 0) { send(404, { error: 'mundo nao encontrado' }); return }
-        let moved = 0
-        const launched: { slug: string; card: any }[] = []
-        for (const wd of targets) {
-          const file = join(DATA, wd.slug, 'kanban.json')
-          if (!inside(DATA, file)) continue
-          const board = await readJ(file)
-          if (!board || !Array.isArray(board.cards)) continue
-          let dirty = false
-          for (const card of board.cards) {
-            if (card.archived || card.colId !== 'todo') continue
-            card.colId = 'doing'
-            card.startedAt = Date.now()
-            delete card.result
-            delete card.reviewed
-            moved++; dirty = true
-            launched.push({ slug: wd.slug, card })
-          }
-          if (dirty) await writeJ(file, board)
-        }
-        // ponytail: orquestrador tambem lanca o agente (run headless) por card movido — fire-and-forget, em paralelo.
-        for (const l of launched) void launchHermes(l.slug, l.card).catch((e: any) => console.error('[orchestrator:' + l.slug + ':' + l.card.id + '] ' + (e?.message || e)))
-        send(200, { ok: true, moved, launched: launched.length }); return
-      }
 
-if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { icons: iconCatalog() }); return }
       // /api/w/:slug/{notes,kanban,meta}
       // /api/w/:slug/review/approve-agent -> gate sync + spawna hermes headless (prompt 'merge-approve').
       // Decisao R3.Q2: git-op.md fica magro (merge ad-hoc, resolve conflict); este endpoint e' especializado

@@ -11,11 +11,14 @@ import { ROUTES as termsRoutes } from "./terms"
 import { ROUTES as workdirsRoutes } from "./workdirs"
 import { ROUTES as hermesRoutes } from "./hermes"
 import { ROUTES as wRoutes } from "./w"
+import { ROUTES as iconsRoutes } from "./icons"
+import { ROUTES as orchestratorRoutes } from "./orchestrator"
 
 export const ALL_ROUTES: Route[] = [
   ...termsRoutes,
   ...workdirsRoutes,
   ...hermesRoutes,
   ...wRoutes,
-  // future: ...iconsRoutes, ...orchestratorRoutes,
+  ...iconsRoutes,
+  ...orchestratorRoutes,
 ]
