@@ -15,8 +15,10 @@ function mkCtx(parts, m = "GET") {
   return { ctx: { req: {}, res: {}, send, parts, m }, lastCode, lastBody }
 }
 
-test("dispatch: empty table returns false (no match)", async () => {
-  const { ctx } = mkCtx(["w", "myslug"], "GET")
+test("dispatch: unknown path returns false (no match)", async () => {
+  // ponytail: 2E added /w/:slug meta (length 2), so ["w","myslug"] DOES match.
+  // Use a 2-segment path that nothing owns: ["unmatched","path"].
+  const { ctx } = mkCtx(["unmatched", "path"], "GET")
   assert.equal(await dispatch(ctx), false)
 })
 

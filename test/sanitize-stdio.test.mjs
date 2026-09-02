@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = join(here, '..')
-const apiSrc = readFileSync(join(repoRoot, 'server', 'api.ts'), 'utf8')
+const apiSrc = readFileSync(join(repoRoot, 'server', 'api.ts'), 'utf-8') + readFileSync(join(repoRoot, 'server', 'routes', 'w.ts'), 'utf-8')
 
 // ponytail: byte-level mirror of server/api.ts::sanitize
 function sanitize(d) {

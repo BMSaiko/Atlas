@@ -148,7 +148,8 @@ console.log('\n[6] optimistic concurrency — matching ver / initial doc')
 // [7] OT: kind=meta exempt
 console.log('\n[7] OT — meta kind is exempt per source comment')
 {
-  const src = readFileSync(apiPath, 'utf-8')
+  // ponytail: handlers moved out of api.ts (Phase 2B+ refactor).
+const src = readFileSync(apiPath, 'utf-8') + readFileSync(join(here, '..', 'server', 'routes', 'w.ts'), 'utf-8')
   assert(
     src.includes("if (kind === 'notes' || kind === 'kanban')"),
     'source verifica kind === notes || kanban antes do OT (meta exempt)'
@@ -175,7 +176,8 @@ console.log('\n[9] BUG-CLASS — arrKey ternario p/ kind invalido')
 
 // [10] SOURCE EQUALITY GUARD
 console.log('\n[10] source equality (wipe + OT intactos no api.ts)')
-const src = readFileSync(apiPath, 'utf-8')
+// ponytail: handlers moved out of api.ts (Phase 2B+ refactor) — also read w.ts.
+const src = readFileSync(apiPath, 'utf-8') + readFileSync(join(here, '..', 'server', 'routes', 'w.ts'), 'utf-8')
 
 assert(src.includes('Math.max(5, Math.floor(beforeCount * 0.5))'),
   'wipe guard: threshold = max(5, beforeCount*0.5) presente')

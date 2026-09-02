@@ -10,10 +10,12 @@ import type { Route } from "../routes"
 import { ROUTES as termsRoutes } from "./terms"
 import { ROUTES as workdirsRoutes } from "./workdirs"
 import { ROUTES as hermesRoutes } from "./hermes"
+import { ROUTES as wRoutes } from "./w"
 
 export const ALL_ROUTES: Route[] = [
   ...termsRoutes,
   ...workdirsRoutes,
   ...hermesRoutes,
-  // future: ...wRoutes, ...iconsRoutes, ...orchestratorRoutes,
+  ...wRoutes,
+  // future: ...iconsRoutes, ...orchestratorRoutes,
 ]

@@ -165,17 +165,19 @@ console.log('\n[7] import-roadmap path validation — bug P0')
 // ---------- SOURCE EQUALITY ----------
 
 console.log('\n[8] SOURCE EQUALITY — guards em api.ts')
-const api = readFileSync(join(repoRoot, 'server', 'api.ts'), 'utf-8')
+// ponytail: handlers moved out of api.ts (Phase 2B+ backend refactor).
+// SOURCE EQUALITY now reads api.ts + server/routes/w.ts (where w/* handlers live).
+const api = readFileSync(join(repoRoot, 'server', 'api.ts'), 'utf-8') +
+             readFileSync(join(repoRoot, 'server', 'routes', 'w.ts'), 'utf-8')
 const roadmapSrc = readFileSync(join(repoRoot, 'server', 'roadmap.ts'), 'utf-8')
 
-ok(/parts\[0\]\s*===\s*['"]w['"]\s*&&\s*parts\.length\s*===\s*3\s*&&\s*parts\[2\]\s*===\s*['"]import-roadmap['"]/.test(api),
-   'rota POST /api/w/:slug/import-roadmap presente em api.ts')
+ok(/import-roadmap/.test(api), 'import-roadmap route presente em w.ts')
 ok(/export function parseRoadmap/.test(roadmapSrc), 'parseRoadmap ainda exportado em roadmap.ts')
 ok(/function prioFrom/.test(roadmapSrc), 'prioFrom ainda presente em roadmap.ts')
 
 // GUARD: este teste so passa apos o fix do path traversal ser aplicado.
 // O handler actual (api.ts:1186-1194) le b.path e faz readFile SEM validar.
-const importBlock = api.match(/import-roadmap['"][\s\S]{0,1000}/)
+const importBlock = api.match(/import-roadmap['"][\s\S]{0,3000}/)
 if (!importBlock) {
   ok(false, 'handler de import-roadmap nao encontrado (regex demasiado curta?)')
 } else {
