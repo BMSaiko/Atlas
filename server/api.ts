@@ -409,7 +409,7 @@ async function launchHermes(slug: string, card: any) {
     "_sk=os.environ.get('ATLAS_CARD_SKILLS','')",
     "_sa=[('--skills',s) for s in (x.strip() for x in _sk.split(',')) if s]",
     '# ponytail: card h1y3yfsy \xe2\x80\x94 heartbeat daemon (30s) grava lastHeartbeatAt no .status para distinguir wrapper nunca arrancou de hermes travou. Thread daemon morre com o processo (sys.exit). Custo zero.',
-    "import threading as _th,_t",
+    "import threading as _th, time as _t",
     "def _hb():",
     "\x20\x20\x20\x20while True:",
     "\x20\x20\x20\x20\x20\x20\x20try: open(st,'w',encoding='utf-8').write(json.dumps({'state':'running','pane':(os.environ.get('WEZTERM_PANE') or None),'lastHeartbeatAt':_t.time(),'ts':_t.time()}))",
@@ -663,7 +663,7 @@ function _sanitizeText(s: string): string { return s.replace(/[\u0080-\u009F\uFF
 // ponytail: ETag por ficheiro — TODA escrita via writeJ avanca `ver` (1 ponto, nao um guard por escritor).
 // index.json/meta.json nao tem `ver` -> `'ver' in v` cobre-os (nada a fazer).
 function bumpVer(v: any) { if (v && typeof v === 'object' && ('ver' in v)) v.ver = (Number(v.ver) || 0) + 1; return v }
-async function writeJ(p: string, v: any) { await writeFile(p, JSON.stringify(bumpVer(v),null,2), 'utf8'); syncVault() }
+async function writeJ(p: string, v: any) { mkdirSync(dirname(p), { recursive: true }); await writeFile(p, JSON.stringify(bumpVer(v),null,2), 'utf8'); syncVault() }
 interface WD { slug: string; name: string; description: string; createdAt: number; icon?: string; repo?: string }
 async function readIdx(): Promise<WD[]> { return (await readJ(join(DATA, INDEX))) || [] }
 
