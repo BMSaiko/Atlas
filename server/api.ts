@@ -1187,6 +1187,32 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         return
       }
 
+      // ponytail: card h1y3yfsy — POST /api/w/:slug/cards/:cardId/clear-orphan. Apaga a worktree o'rf~a' do card
+      // (worktree em data/.wt/<slug>/<id>/ que sobrou do run que crashou) e limpa c.orphanWorktreePath.
+      // Idempotente: 404 se c.orphanWorktreePath nao esta' setado. Reusa rmJunction + runGit (worktree remove).
+      if (parts[0] === 'w' && parts.length === 5 && parts[2] === 'cards' && parts[4] === 'clear-orphan' && m === 'POST') {
+        const slug = parts[1], cardId = parts[3]
+        if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
+        const repo = await repoDir(slug)
+        const file = join(DATA, slug, 'kanban.json')
+        const board = await readJ(file).catch(() => null)
+        if (!board) { send(404, { error: 'board not found' }); return }
+        const c = (board.cards || []).find((x: any) => x.id === cardId)
+        if (!c) { send(404, { error: 'card not found' }); return }
+        const wt = c.orphanWorktreePath
+        if (!wt) { send(404, { error: 'no orphan worktree on this card' }); return }
+        // ponytail: reusa runGit/rmJunction (cleanupWorktrees ja' faz isto, mas so' para wt's merged).
+        // Aqui o wt e' o'rf~ao (state=running no .status); remove a' mao com --force e apaga o junction.
+        await rmJunction(join(wt, 'node_modules')).catch(() => {})
+        await runGit(['worktree', 'remove', '--force', wt], repo).catch(() => {})
+        await rm(wt, { recursive: true, force: true }).catch(() => {})
+        await runGit(['worktree', 'prune'], repo).catch(() => {})
+        delete c.orphanWorktreePath
+        board.ver = (board.ver || 0) + 1
+        await writeJ(file, board)
+        send(200, { ok: true, cleared: wt })
+        return
+      }
       // /api/w/:slug/output/:cardId -> stream do log do run headless (offset-based, p/ debugging/erros)
       if (parts[0] === 'w' && parts.length === 4 && parts[2] === 'output' && m === 'GET') {
         const slug = parts[1], cardId = parts[3]
