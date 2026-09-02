@@ -22,7 +22,7 @@ function mkCtx(parts, m = "POST") {
   const deps = {
     SLUG: /^[a-z0-9-]+$/,
     cfg: { wezterm: null },
-    body: async () => null,
+    readJsonBody: async () => null,
     repoDir: async () => "",
     wtRoot: () => "",
     readJ: async () => null,
@@ -37,8 +37,10 @@ function mkCtx(parts, m = "POST") {
 }
 
 test("ALL_ROUTES contains the 3 terms handlers", async () => {
-  const names = ALL_ROUTES.map(r => r.name).sort()
-  assert.deepEqual(names, [
+  // ponytail: ALL_ROUTES is the union of all per-domain tables. Other
+  // domains may add entries; we filter to the ones this test owns.
+  const terms = ALL_ROUTES.filter(r => r.name.startsWith("terms:")).map(r => r.name).sort()
+  assert.deepEqual(terms, [
     "terms:kill-all",
     "terms:kill-all-atlas",
     "terms:open",
@@ -73,7 +75,7 @@ test("dispatcher routes terms/open POST to its handler", async () => {
 
 test("terms/open returns 503 when wezterm is not installed", async () => {
   const { ctx, lastCode, lastBody } = mkCtx(["terms", "open"], "POST")
-  ctx.deps.body = async () => ({ slug: "myslug" })
+  ctx.deps.readJsonBody = async () => ({ slug: "myslug" })
   // cfg.wezterm is null in the stub -> 503 path
   assert.equal(await dispatch(ctx), true)
   await new Promise(r => setImmediate(r))

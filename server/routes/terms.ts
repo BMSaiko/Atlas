@@ -21,7 +21,7 @@ export const ROUTES: Route[] = [
     name: "terms:kill-all",
     handler: async (ctx) => {
       const { deps = {} as any, send, req } = ctx
-      const b = (await deps.body(req)) || {}
+      const b = (await deps.readJsonBody(req)) || {}
       const slug = typeof b.slug === "string" ? b.slug : ""
       if (!deps.SLUG.test(slug)) { send(400, { error: "slug required" }); return }
       const r = await deps.killAllPanesForSlug(slug)
@@ -46,7 +46,7 @@ export const ROUTES: Route[] = [
     name: "terms:open",
     handler: async (ctx) => {
       const { deps = {} as any, send, req } = ctx
-      const b = (await deps.body(req)) || {}
+      const b = (await deps.readJsonBody(req)) || {}
       const slug = typeof b.slug === "string" ? b.slug : ""
       if (!deps.SLUG.test(slug)) { send(400, { error: "slug required" }); return }
       if (!deps.cfg.wezterm || !existsSync(deps.cfg.wezterm)) { send(503, { error: "wezterm nao instalado" }); return }

@@ -12,6 +12,8 @@ import { loadPrompt, interpolate } from './prompts/index'
 import { tickAll, tickSnapshot, listSnapshots, getSnapshotFile, restoreSnapshot, writeWipeGuardSnapshot, slotFor } from './snapshots'
 // ponytail: shared HTTP helpers (Phase 1 of the backend refactor). See server/lib/http.ts.
 import { isLoopback, makeSend, readJsonBody } from './lib/http'
+// ponytail: shared domain types (Phase 2C). WD used by workdirs handlers + index.
+import type { WD } from './lib/types'
 // ponytail: route table + dispatcher (Phase 2A of the backend refactor).
 // See server/routes.ts. Empty table for now; the dispatcher is a no-op
 // until routes are added in Phase 2B+ (per-domain files).
@@ -670,7 +672,7 @@ function _sanitizeText(s: string): string { return s.replace(/[\u0080-\u009F\uFF
 // index.json/meta.json nao tem `ver` -> `'ver' in v` cobre-os (nada a fazer).
 function bumpVer(v: any) { if (v && typeof v === 'object' && ('ver' in v)) v.ver = (Number(v.ver) || 0) + 1; return v }
 async function writeJ(p: string, v: any) { mkdirSync(dirname(p), { recursive: true }); await writeFile(p, JSON.stringify(bumpVer(v),null,2), 'utf8'); syncVault() }
-interface WD { slug: string; name: string; description: string; createdAt: number; icon?: string; repo?: string }
+// ponytail: WD type moved to lib/types (Phase 2C of the backend refactor).
 async function readIdx(): Promise<WD[]> { return (await readJ(join(DATA, INDEX))) || [] }
 
 export default function atlasApi(): Plugin {
@@ -733,60 +735,6 @@ export default function atlasApi(): Plugin {
       }
 
 if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { icons: iconCatalog() }); return }
-      // workdirs list / create
-      if (parts[0] === 'workdirs' && parts.length === 1) {
-        if (m === 'GET') { send(200, await readIdx()); return }
-        if (m === 'PUT') {
-          const b = await readJsonBody(req) || {}
-          const order = Array.isArray(b.order) ? b.order.filter((x: any) => typeof x === 'string') : null
-          if (!order) { send(400,{error:'order required'}); return }
-          const idx = await readIdx()
-          const bySlug = new Map(idx.map(w => [w.slug, w]))
-          const next: WD[] = []
-          for (const sl of order) { const w = bySlug.get(sl); if (w && !next.includes(w)) next.push(w) }
-          for (const w of idx) if (!next.includes(w)) next.push(w)
-          await writeJ(join(DATA, INDEX), next)
-          send(200, next); return
-        }
-        if (m === 'POST') {
-          const b = await readJsonBody(req)
-          if (!b || typeof b.name !== 'string' || !b.name.trim()) { send(400,{error:'name required'}); return }
-          const idx = await readIdx()
-          let slug = toSlug(b.name) || 'workdir'; let base = slug, i = 1
-          while (idx.some(w => w.slug === base)) base = `${slug}-${i++}`
-          const wd = { slug: base, name: b.name.trim(), description: (b.description||'').trim(), icon: pickIcon(idx), createdAt: Date.now(), repo: typeof b.repo === 'string' ? (b.repo.trim() || undefined) : undefined } as WD
-          idx.push(wd); await writeJ(join(DATA, INDEX), idx)
-          const d = join(DATA, base); mkdirSync(d, { recursive: true })
-          const meta0: Record<string, any> = { slug: base, name: wd.name, description: wd.description, icon: wd.icon, createdAt: wd.createdAt }
-          if (wd.repo) meta0.repo = wd.repo
-          await writeJ(join(d,'meta.json'), meta0)
-          // ver:0 -> bumpVer na 1a escrita grava ver:1 (shape {ver,items}/{ver,columns,cards})
-          await writeJ(join(d,'notes.json'), { ver: 0, items: [] })
-          await writeJ(join(d,'kanban.json'), { ver: 0, columns:[{id:'todo',name:'To Do'},{id:'doing',name:'Em Curso'},{id:'review',name:'Review/Revisão'},{id:'done',name:'Concluído'}], cards:[] })
-          send(201, wd); return
-        }
-      }
-      // workdirs/:slug patch/delete
-      if (parts[0] === 'workdirs' && parts.length === 2) {
-        const slug = parts[1]; const idx = await readIdx(); const wd = idx.find(w=>w.slug===slug)
-        if (!wd) { send(404,{error:'not found'}); return }
-        const dir = join(DATA, slug)
-        if (m === 'PATCH') {
-          const b = await readJsonBody(req) || {}
-          if (typeof b.name === 'string' && b.name.trim()) wd.name = b.name.trim()
-          if (typeof b.description === 'string') wd.description = b.description.trim()
-          if (typeof b.icon === 'string' && iconCatalog().includes(b.icon)) wd.icon = b.icon
-          if (typeof b.repo === 'string') wd.repo = b.repo.trim() || undefined
-          await writeJ(join(DATA, INDEX), idx)
-          const meta: Record<string, any> = (await readJ(join(dir,'meta.json'))) || {}
-          meta.name = wd.name; meta.description = wd.description
-          if (wd.icon) meta.icon = wd.icon
-          if (wd.repo) meta.repo = wd.repo; else delete meta.repo
-          await writeJ(join(dir,'meta.json'), meta)
-          send(200, wd); return
-        }
-        if (m === 'DELETE') { await rm(dir, { recursive:true, force:true }); await writeJ(join(DATA, INDEX), idx.filter(w=>w.slug!==slug)); send(200,{ok:true}); return }
-      }
       // /api/w/:slug/{notes,kanban,meta}
       // /api/w/:slug/review/approve-agent -> gate sync + spawna hermes headless (prompt 'merge-approve').
       // Decisao R3.Q2: git-op.md fica magro (merge ad-hoc, resolve conflict); este endpoint e' especializado
@@ -1443,7 +1391,7 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         pickIcon, toSlug, runGit, runCmd, runCIGate, checkConflictMarkers,
         resolveMainTip, mergeDevToMain, tickAll, tickSnapshot, listSnapshots,
         getSnapshotFile, restoreSnapshot, writeWipeGuardSnapshot, slotFor,
-        parseRoadmap, loadPrompt, interpolate, body: readJsonBody,
+        parseRoadmap, loadPrompt, interpolate, readJsonBody,
       } })) return
       send(404, { error:'not found' })
     } catch (e:any) { send(500, { error: e.message }) }
