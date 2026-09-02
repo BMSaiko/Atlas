@@ -71,6 +71,13 @@ export const api = {
     get: (slug: string) => j<WorkdirBundle>(`/api/w/${slug}/bundle`),
     put: (slug: string, doc: { meta: WorkdirMeta; notes: { ver: number; items: Nota[] }; kanban: { ver: number; columns: Coluna[]; cards: Card[] } }) => j<{ ok: boolean }>(`/api/w/${slug}/bundle`, 'PUT', doc),
   },
+  // ponytail: snapshots — 4/dia, retenção 7d. UI chama list/run/restore. fileUrl é URL crua (a API serve application/json).
+  snapshots: {
+    list: (slug: string) => j<Array<{ slot: string; ts: number; size: number; files: Record<string, { hash: string; size: number } | null>; preRestoreOf?: string }>>(`/api/w/${slug}/snapshots`),
+    run: (slug: string) => j<{ ok: boolean; slot: string; deduped: boolean; pruned: number }>(`/api/w/${slug}/snapshots`, 'POST'),
+    restore: (slug: string, slot: string) => j<{ ok: boolean; preRestoreSlot: string }>(`/api/w/${slug}/snapshots/${encodeURIComponent(slot)}/restore`, 'POST'),
+    fileUrl: (slug: string, slot: string, name: 'meta' | 'notes' | 'kanban') => `/api/w/${slug}/snapshots/${encodeURIComponent(slot)}/file/${name}`,
+  },
   templates: { get: (slug: string) => j<Template[]>(`/api/w/${slug}/templates`) },
   kanban: {
     get: (slug: string) => j<{ ver: number; columns: Coluna[]; cards: Card[] }>(`/api/w/${slug}/kanban`),

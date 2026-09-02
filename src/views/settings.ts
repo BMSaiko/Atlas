@@ -62,7 +62,15 @@ export async function renderSettings(root: HTMLElement, slug: string) {
         <button class="btn" id="notif-btn" type="button"></button>
       </div>
       <div class="card-block">
-        <h3>Backup</h3>
+        <h3>Snapshots</h3>
+        <p class="muted" style="margin-bottom:12px">Snapshots automáticos do workdir (4 por dia, 7 dias de retenção, dedup por hash). Botão "Restaurar" cria antes um pre-restore — seguro contra undo do undo.</p>
+        <div class="actions-row" style="margin-bottom:12px">
+          <button class="btn btn-primary" id="snap-run" type="button">${icon('archive', 16)} Snapshot agora</button>
+        </div>
+        <div id="snap-list"></div>
+      </div>
+      <div class="card-block">
+        <h3>Backup (bundle)</h3>
         <p class="muted" style="margin-bottom:12px">Descarregar ou carregar o workdir inteiro (meta + notas + kanban) como um único ficheiro JSON. Útil para portabilidade entre instalações e para um snapshot fora do git.</p>
         <div class="actions-row">
           <button class="btn" id="bk-export" type="button">Exportar bundle (.json)</button>
@@ -157,6 +165,9 @@ export async function renderSettings(root: HTMLElement, slug: string) {
     if (!ok) return
     await api.deleteWorkdir(slug); toast('Workdir eliminado'); navigate('/')
   })
+
+  // ponytail: snapshots — ver ui/snapshot-list.ts. Lazy import para o bundle nao paginar o settings no cold start.
+  void import('../ui/snapshot-list').then(m => m.renderSnapshotList(root, slug))
 
   // --- Backup: exportar / importar bundle (meta+notes+kanban) ---
   root.querySelector('#bk-export')!.addEventListener('click', async () => {

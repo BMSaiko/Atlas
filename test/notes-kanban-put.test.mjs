@@ -1,8 +1,9 @@
 // test/notes-kanban-put.test.mjs
 //
 // Cobre GET/PUT /api/w/:slug/notes e /api/w/:slug/kanban — defaults, OT
-// (ver mismatch 409), wipe guard + backup (threshold max(5, before*0.5)),
-// backup pre-PUT + prune 10, sanitize id, ver bump, kill-on-transition.
+// (ver mismatch 409), wipe guard + _wipe-guard/ snapshot (threshold max(5, before*0.5)),
+// sanitize id, ver bump, kill-on-transition. Pre-PUT backup removido — snapshots sao
+// cron-based (4/dia, 7d, dedup) ver server/snapshots.ts + test/snapshots.test.mjs.
 // Estilo: vanilla node:assert. SOURCE EQUALITY (api.ts:1245-1344).
 //
 // Run: node test/notes-kanban-put.test.mjs
@@ -100,11 +101,9 @@ console.log('\n[6] PUT notes — wipe guard: loss > threshold sem X-Atlas-Confir
   ok(r.json?.error?.includes('wipe'), `error wipe (got ${r.json?.error})`)
   ok(r.json?.before === 20 && r.json?.after === 1, `before/after (got ${JSON.stringify({ b: r.json?.before, a: r.json?.after })})`)
   ok(r.json?.loss === 19, `loss=19 (got ${r.json?.loss})`)
-  // backup criado
-  const backupDir = join(a.cwd, 'data', 'nk6', '.backup')
-  ok(existsSync(backupDir), `backup dir criado`)
-  const files = readdirSync(backupDir).filter(f => f.startsWith('notes-'))
-  ok(files.length >= 1, `>=1 backup file (got ${files.length})`)
+  // ponytail: wipe guard agora escreve em _snapshots/<slug>/_wipe-guard/<kind>-<ts>/ (path devolvido na 409).
+  const guardFull = join(a.cwd, 'data', '_snapshots', 'nk6', r.json.guardPath, 'notes.json')
+  ok(existsSync(guardFull), `wipe guard snapshot no disco (${r.json.guardPath})`)
   await a.close()
 }
 
@@ -123,20 +122,6 @@ console.log('\n[7] PUT notes — wipe guard: com X-Atlas-Confirm-Wipe: yes -> pr
   await a.close()
 }
 
-console.log('\n[8] PUT notes — pre-PUT backup prune: 12 PUTs -> <=10 backups')
-{
-  const a = await spinAtlas()
-  await mkWorkdir(a, 'nk8')
-  writeFileSync(join(a.cwd, 'data', 'nk8', 'notes.json'), JSON.stringify({ ver: 0, items: [] }))
-  for (let i = 0; i < 12; i++) {
-    // cada PUT bump ver, por isso atualizamos inVer
-    const cur = JSON.parse(readFileSync(join(a.cwd, 'data', 'nk8', 'notes.json'), 'utf8'))
-    await a.req('PUT', '/api/w/nk8/notes', { ver: cur.ver, items: [] })
-  }
-  const files = readdirSync(join(a.cwd, 'data', 'nk8', '.backup')).filter(f => f.startsWith('notes-'))
-  ok(files.length === 10, `prune a 10 backups (got ${files.length})`)
-  await a.close()
-}
 
 console.log('\n[9] PUT kanban — kill-on-transition: card doing->done com shim noop')
 {
@@ -180,7 +165,6 @@ console.log('\n[11] SOURCE EQUALITY — OT, wipe, sanitize, backup')
   ok(apiSrc.includes("const threshold = Math.max(5, Math.floor(beforeCount * 0.5))"), 'threshold max(5, 0.5*before)')
   ok(apiSrc.includes("'x-atlas-confirm-wipe'"), 'wipe header name')
   ok(apiSrc.includes("it.id = nid()"), 'sanitize id assign')
-  ok(apiSrc.includes("while (files.length > 10)"), 'backup prune to 10')
   ok(apiSrc.includes("if (a.archived || (a.colId && a.colId !== 'doing'))"), 'kill-on-transition trigger')
   ok(apiSrc.includes("void killPaneForCard(slug, a.id)"), 'kill-pane fire-and-forget')
   ok(apiSrc.includes("if (kind === 'notes' && Array.isArray(b.items))"), 'sanitize branch')

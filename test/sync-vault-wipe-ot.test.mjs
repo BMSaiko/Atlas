@@ -189,8 +189,9 @@ assert(src.includes('if (storedVer !== 0 && inVer !== storedVer)'),
   'OT: storedVer !== 0 && inVer !== storedVer presente')
 assert(/send\(409, \{ error: 'conflito de versao[\s\S]*?ver: storedVer \}\)/.test(src),
   'OT: 409 devolve {error: "conflito de versao", ver}')
-assert(src.includes("'.backup'") && src.includes("kind + '-' + ts"),
-  'wipe guard: backup pre-PUT em .backup/<kind>-<ts>.json')
+// ponytail: pre-PUT backup removido. Wipe guard agora escreve em _wipe-guard/ via writeWipeGuardSnapshot.
+assert(src.includes("writeWipeGuardSnapshot"),
+  'wipe guard: usa writeWipeGuardSnapshot de server/snapshots.ts (em vez de .backup/)')
 
 if (failures > 0) {
   console.error(`\nFAIL: ${failures} assercao(oes) falharam`)

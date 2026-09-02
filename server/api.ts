@@ -1,5 +1,5 @@
 import type { Plugin, Connect } from 'vite'
-import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { readFile, writeFile, rm } from 'node:fs/promises'
 import { createWriteStream } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -8,6 +8,8 @@ import { join, dirname, delimiter, normalize, extname, relative, resolve, sep } 
 import { parseRoadmap } from './roadmap'
 import { cfg } from './config'
 import { loadPrompt, interpolate } from './prompts/index'
+// ponytail: snapshots — 4/dia, retenção 7d, dedup por hash, cron via setInterval. Ver server/snapshots.ts.
+import { tickAll, tickSnapshot, listSnapshots, getSnapshotFile, restoreSnapshot, writeWipeGuardSnapshot, slotFor } from './snapshots'
 
 const DATA = join(process.cwd(), 'data')
 const SLUG = /^[a-z0-9-]+$/
@@ -72,6 +74,20 @@ function initIndex() {
   if (!existsSync(f)) writeFile(f, '[]', 'utf8')
 }
 initIndex()
+
+// ponytail: snapshot cron — 1 tick por hora, alinhado ao slot (00/06/12/18 UTC). tickAll é best-effort;
+// falha num slug nao derruba os outros. Sem este interval, snapshots só acontecem com POST manual.
+let _snapLastSlot = slotFor()
+setInterval(async () => {
+  const cur = slotFor()
+  if (cur === _snapLastSlot) return   // já correu este slot, espera o próximo tick
+  _snapLastSlot = cur
+  const idx = await readIdx()
+  void tickAll(idx.map(w => w.slug))
+}, 60 * 60 * 1000)  // 1h — slotFor() deduplica se ainda dentro do mesmo slot
+
+// ponytail: tick no boot para o user nao esperar 1h ate ao primeiro snapshot visivel.
+;(async () => { const idx = await readIdx(); void tickAll(idx.map(w => w.slug)) })()
 
 function inside(root: string, p: string) {
   const rel = relative(root, p)
@@ -1203,6 +1219,29 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
         }
         send(405, { error: 'method not allowed' }); return
       }
+      // ponytail: /api/w/:slug/snapshots[/:slot[/file/:name|/restore]] — listar/ver/restaurar snapshots.
+      // POST = tick manual. 4 slots/dia cron via setInterval (topo do file).
+      if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'snapshots' && (m === 'GET' || m === 'POST')) {
+        const slug = parts[1]
+        if (!SLUG.test(slug)) { send(400, { error: 'bad slug' }); return }
+        if (m === 'GET') { send(200, await listSnapshots(slug)); return }
+        send(200, await tickSnapshot(slug)); return
+      }
+      if (parts[0] === 'w' && parts.length === 5 && parts[2] === 'snapshots' && parts[4] === 'restore' && m === 'POST') {
+        const slug = parts[1], slot = decodeURIComponent(parts[3])
+        if (!SLUG.test(slug)) { send(400, { error: 'bad slug' }); return }
+        const r = await restoreSnapshot(slug, slot)
+        if (!r.ok) { send(404, { error: 'snapshot nao encontrado' }); return }
+        syncVault()  // ponytail: commit do estado restaurado para a vault apanhar.
+        send(200, r); return
+      }
+      if (parts[0] === 'w' && parts.length === 6 && parts[2] === 'snapshots' && parts[4] === 'file' && m === 'GET') {
+        const slug = parts[1], slot = decodeURIComponent(parts[3]), name = parts[5]
+        if (!SLUG.test(slug)) { send(400, { error: 'bad slug' }); return }
+        const buf = await getSnapshotFile(slug, slot, name)
+        if (!buf) { send(404, { error: 'file not found' }); return }
+        res.statusCode = 200; res.setHeader('Content-Type', 'application/json'); res.end(buf); return
+      }
       // /api/w/:slug/export -> exporta notas não-arquivadas para markdown na vault (docs/notas.md)
       if (parts[0] === 'w' && parts.length === 3 && parts[2] === 'export' && m === 'POST') {
         const slug = parts[1]
@@ -1291,33 +1330,17 @@ if (parts[0] === 'icons' && parts.length === 1 && m === 'GET') { send(200, { ico
             if (loss > threshold) {
               const confirm = (req.headers['x-atlas-confirm-wipe'] || '') as string
               if (confirm !== 'yes') {
-                // backup automatico para o utilizador poder fazer rollback sem perder tudo
-                const backupDir = join(DATA, slug, '.backup')
-                try {
-                  mkdirSync(backupDir, { recursive: true })
-                  const ts = new Date().toISOString().replace(/[:.]/g, '-')
-                  await writeFile(join(backupDir, kind + '-' + ts + '.json'), JSON.stringify(cur, null, 2), 'utf8')
-                } catch { /* best-effort */ }
+                // ponytail: snapshot do estado recusado em _wipe-guard/ (isento do prune) para o user
+                // poder inspecionar ou restaurar manualmente. Caminho devolvido na mensagem 409.
+                let guardPath = ''
+                try { guardPath = await writeWipeGuardSnapshot(slug, kind, cur) } catch { /* best-effort */ }
                 send(409, {
-                  error: 'wipe detetado: ' + loss + ' ' + arrKey + ' perdidos (de ' + beforeCount + ' para ' + afterCount + ', threshold ' + threshold + '). Backup feito em .backup/. Confirma com header X-Atlas-Confirm-Wipe: yes para prosseguir.',
-                  before: beforeCount, after: afterCount, loss, threshold, backupDir: '.backup'
+                  error: 'wipe detetado: ' + loss + ' ' + arrKey + ' perdidos (de ' + beforeCount + ' para ' + afterCount + ', threshold ' + threshold + '). Estado anterior guardado em data/_snapshots/' + slug + '/' + guardPath + '. Confirma com header X-Atlas-Confirm-Wipe: yes para prosseguir.',
+                  before: beforeCount, after: afterCount, loss, threshold, guardPath
                 }); return
               }
             }
-            // backup pre-PUT (sempre, mesmo sem wipe) - guarda as ultimas 10 versoes para rollback
-            // manual. Custo: 1 write extra por PUT. Custo aceitavel para imensidao do beneficio.
-            try {
-              const backupDir = join(DATA, slug, '.backup')
-              mkdirSync(backupDir, { recursive: true })
-              const ts = new Date().toISOString().replace(/[:.]/g, '-')
-              await writeFile(join(backupDir, kind + '-' + ts + '.json'), JSON.stringify(cur, null, 2), 'utf8')
-              // prune: manter so as ultimas 10 versoes (ordenadas alfabeticamente por ts ISO).
-              // readdirSync/unlinkSync ja vem do import 'node:fs' no topo.
-              try {
-                const files = readdirSync(backupDir).filter(f => f.startsWith(kind + '-') && f.endsWith('.json')).sort()
-                while (files.length > 10) { try { unlinkSync(join(backupDir, files.shift()!)) } catch {} }
-              } catch { /* best-effort */ }
-            } catch { /* best-effort */ }
+            // ponytail: pre-PUT backup removido. Snapshots sao cron-based (4/dia, retenção 7d, dedup por hash) — ver server/snapshots.ts. Wipe guard continua a fazer o seu one-time snapshot do estado recusado em _wipe-guard/.
           }
           // ponytail: defesa — brainstorm/import/PUT manual pode trazer items sem `id`; sem id os
           // handlers de click/data-id no cliente não resolvem nada. Sanitize em vez de 400.
