@@ -1,0 +1,400 @@
+
+> atlas@0.1.0 test
+> node --experimental-strip-types --test test/*.test.mjs
+
+TAP version 13
+# [1] GET /api/w/:slug/bundle com slug inexistente -> 200 com shape vazio
+# [atlas] write token: e5fd0105...
+#   ok: GET bundle slug vazio -> 200 (got 200)
+#   ok: body.slug presente (got no-such-slug)
+#   ok: body.meta e' object (got object)
+#   ok: body.notes.items e' array (got object)
+#   ok: body.kanban.cards e' array (got object)
+#   ok: body.ts e' number (got number)
+# [2] PUT /api/w/:slug/bundle shape valido -> 200, dados persistem
+#   ok: PUT bundle shape valido -> 200 (got 200)
+#   ok: body.ok=true (got {"ok":true})
+#   ok: nota 'Hello' persistida (got Hello)
+#   ok: card 'card1' persistido (got card1)
+#   ok: meta.name persistido (got Test Bundle)
+# [3] PUT bundle shape invalido -> 400, NAO toca em disco
+#   ok: PUT bundle sem notes/kanban -> 400 (got 400)
+#   ok: body menciona 'bundle invalido' (got bundle invalido: requer meta+notes+kanban)
+#   ok: nota previa intacta apos 400 (got keep)
+#   ok: PUT bundle null -> 400 (got 400)
+#   ok: PUT bundle string -> 400 (got 400)
+# [4] PUT bundle replace: substituir por estado novo apaga tudo
+#   ok: PUT bundle replace (sem OT) -> 200 (got 200)
+#   ok: notes tem 1 item apos replace (got 1)
+#   ok: so' o Z restou (got Z)
+#   ok: kanban vazio (got 0 cards)
+#   ok: meta substituido (got replaced)
+# [5] method not allowed: POST -> 405
+#   ok: POST bundle -> 405 (got 405)
+#   ok: body menciona 'method not allowed' (got method not allowed)
+# [6] slug invalido (com caracteres nao-SLUG) -> 400
+#   ok: GET bundle slug com '..' -> 400/404 (got 400)
+# [7] SOURCE EQUALITY — api.ts:1196-1224 (route + shape check + restore)
+#   ok: guard: bundle route (api.ts:1199)
+#   ok: string do 400 shape invalido (api.ts:1216)
+#   ok: 405 method not allowed (api.ts:1223)
+#   ok: inside() check dos 3 paths (api.ts:1204)
+#   ok: PUT branch sem OT (api.ts:1211)
+# PASS: 0 failures
+# Subtest: test\\bundle-roundtrip.test.mjs
+ok 1 - test\\bundle-roundtrip.test.mjs
+  ---
+  duration_ms: 3393.8915
+  type: 'test'
+  ...
+# CI gate (checkConflictMarkers + runCIGate) regression test
+# SKIP: git nao encontrado (set TEST_GIT)
+# Subtest: test\\ci-gate.test.mjs
+ok 2 - test\\ci-gate.test.mjs
+  ---
+  duration_ms: 246.7742
+  type: 'test'
+  ...
+# [1] mtime > 7d em .log/.status → apagado
+#   ok: card-old.log (>7d) apagado
+#   ok: card-old.status (>7d) apagado
+# [2] mtime < 7d → preservado
+#   ok: card-fresh.log (<7d) preservado
+#   ok: card-fresh.status (<7d) preservado
+# [3] stuck .status running > 6h → apagado
+#   ok: card-stuck.status (running >6h) apagado
+# [4] stuck .status running < 6h → preservado
+#   ok: card-active.status (running <6h) preservado
+# [5] outros files → NAO tocados
+#   ok: metadata.json (>7d) NAO apagado (so .log/.status)
+#   ok: notes.txt (>7d) NAO apagado (so .log/.status)
+# [6] dir slug com files removidos → base dir permanece
+#   ok: runs/<slug> ficou vazio mas NAO foi removido (quirk documentado)
+# [7] slug sem dir → noop silencioso
+#   ok: cleanupRuns(slug) com dir inexistente NAO lanca
+# [8] SOURCE EQUALITY (cleanupRuns inalterado)
+#   ok: ancora presente: /RUN_KEEP_MS = 7 \\* 24 \\* 60 \\* 60 \\* 1000/...
+#   ok: ancora presente: /async function cleanupRuns\\(slug\\?: string\\)/...
+#   ok: ancora presente: /now - statSync\\(fp\\)\\.mtimeMs > RUN_KEEP_MS/...
+#   ok: ancora presente: /\\.status\\$\\/i\\.test\\(f\\)[\\s\\S]{0,80}?6 \\* 60 \\* 60 \\* 1000/...
+#   ok: ancora presente: /st\\?\\.state === 'running'/...
+#   ok: ancora presente: /async function cleanupWorktrees\\(\\)/...
+#   ok: ancora presente: /void cleanupRuns\\(\\)\\.catch\\(\\(\\) => \\{\\}\\)/...
+#   ok: ancora presente: /void cleanupWorktrees\\(\\)\\.catch\\(\\(\\) => \\{\\}\\)/...
+# OK: cleanupRuns regression passed (cleanupWorktrees fora de escopo, ver comentario)
+# Subtest: test\\cleanup-runs.test.mjs
+ok 3 - test\\cleanup-runs.test.mjs
+  ---
+  duration_ms: 287.5331
+  type: 'test'
+  ...
+# [1] defaults only
+#   ok: port = 5173 (default)
+#   ok: git path = default
+#   ok: hermesHome = default
+#   ok: atlasRepo = default
+#   ok: vault = default
+#   ok: wtoken = 64-char hex random (got 'b081cfb4fd416c4e828c9b03d7440e9d834b2f194dcaf7b9c54aaacf6ef0ea57')
+# [2] file only (sem env)
+#   ok: file.port override aplicado
+#   ok: file.vault override aplicado
+#   ok: file.wezterm override aplicado
+#   ok: git NAO no file → cai no default
+# [3] env > file > defaults
+#   ok: env ATLAS_PORT vence file.port
+#   ok: env GIT_BIN vence file.git
+#   ok: env ATLAS_WTOKEN vence file/default
+#   ok: vault NAO em env → file vence default
+# [4] envNum: ATLAS_PORT nao-numerico cai no fallback
+#   ok: ATLAS_PORT="lixo..." → file.port (7000), NAO NaN
+# [5] wtoken: sem env e sem file → 64-char hex random
+#   ok: run1: wtoken random 64-hex
+#   ok: run2: wtoken random 64-hex
+#   ok: wtokens distintos entre boots
+# [6] SOURCE EQUALITY (server/config.ts inalterado)
+#   ok: ancora presente: /ATLAS_PORT.*fromFile\\.port \\?\\? DEFAULTS\\.port/...
+#   ok: ancora presente: /process\\.env\\.GIT_BIN \\|\\| fromFile\\.git \\|\\| DEFAULTS\\.git/...
+#   ok: ancora presente: /HERMES_LIVE_HOME.*fromFile\\.hermesHome/...
+#   ok: ancora presente: /Number\\.isFinite\\(n\\) \\? n : dflt/...
+#   ok: ancora presente: /randomBytes\\(32\\)\\.toString\\('hex'\\)/...
+#   ok: ancora presente: /process\\.env\\.ATLAS_WTOKEN \\|\\| fromFile\\.wtoken \\|\\| randomBytes/...
+# OK: config precedence regression passed (6/6 secoes)
+# Subtest: test\\config.test.mjs
+ok 4 - test\\config.test.mjs
+  ---
+  duration_ms: 2001.8731
+  type: 'test'
+  ...
+# [1] sem notas ativas -> 200 count=0, NAO cria ficheiro
+# [atlas] write token: 2e8f7fd8...
+#   ok: POST export -> 200 (got 200)
+#   ok: count=0 (got 0)
+#   ok: notas.md NAO foi criado (got exists=false)
+# [2] notas ativas -> cria notas.md com front-matter + body
+#   ok: export -> 200 (got 200)
+#   ok: count=2 (got 2)
+#   ok: md tem id: n1
+#   ok: md tem id: n2
+#   ok: md tem \# First
+#   ok: md tem \# Second
+#   ok: body de first
+#   ok: body de second
+# [3] sort por ts asc (ordem cronologica)
+#   ok: Earlier antes de Later (idx: 53 < 123)
+# [4] notas arquivadas sao excluidas
+#   ok: count=1 (so active) (got 1)
+#   ok: Active no md
+#   ok: Archived NAO no md
+# [5] tags: array e quoted quando tem espaco
+#   ok: tags formatados (got: tags: [simple, "with space", other])
+#   ok: n2 sem linha tags
+# [6] front-matter criado: ISO e id
+#   ok: front-matter delimiters ---
+#   ok: id: n-ts
+#   ok: criado: ISO (got: criado: 2023-11-14T22:13:20.000Z)
+# [7] slug invalido -> 400
+#   ok: slug c/ '..' -> 400 (got 400)
+# [8] re-export sobrescreve o ficheiro (idempotente)
+#   ok: re-export substitui (md1 tem A so, md2 tem B)
+# [9] SOURCE EQUALITY — api.ts:1225-1244 (export route + markdown shape)
+#   ok: guard: export POST (api.ts:1226)
+#   ok: filtra archived (api.ts:1230)
+#   ok: sort por ts asc (api.ts:1230)
+#   ok: tag list template (api.ts:1233)
+#   ok: target path (api.ts:1237)
+# PASS: 0 failures
+# Subtest: test\\export-md.test.mjs
+ok 5 - test\\export-md.test.mjs
+  ---
+  duration_ms: 4608.8365
+  type: 'test'
+  ...
+# [1] auth.json ausente -> [] (nao derruba)
+# [atlas] write token: 3652eef4...
+#   ok: GET keys sem auth.json -> 200 (got 200)
+#   ok: body e' [] (got [])
+# [2] auth.json malformado -> [] (try/catch)
+#   ok: GET keys c/ auth.json malformado -> 200 (got 200)
+#   ok: body e' [] (got [])
+# [3] access_token NUNCA aparece no output (security-critical)
+#   ok: output NAO contem 'SUPERSECRET' (got len=378)
+#   ok: output NAO contem 'sk-or-v1' (prefixo do access_token)
+#   ok: output NAO contem a chave 'access_token'
+# [4] secret_fingerprint = sha256(access_token).slice(0,10) (hex)
+#   ok: fingerprint correto: fa3833407e === fa3833407e
+#   ok: has_token=true (got true)
+# [5] status derivation: 429/quota/rate/exhaust -> exhausted
+#   ok: 10 chaves (got 10)
+#   ok:   status[0]: last_error_code=429 reason='rate limit hit' last_status=undefined -> exhausted (got exhausted)
+#   ok:   status[1]: last_error_code=429 reason='null' last_status=undefined -> exhausted (got exhausted)
+#   ok:   status[2]: last_error_code=null reason='quota exhausted' last_status=undefined -> exhausted (got exhausted)
+#   ok:   status[3]: last_error_code=null reason='rate-limit reached' last_status=undefined -> exhausted (got exhausted)
+#   ok:   status[4]: last_error_code=500 reason='internal' last_status=undefined -> error (got error)
+#   ok:   status[5]: last_error_code=401 reason='unauthorized' last_status=undefined -> error (got error)
+#   ok:   status[6]: last_error_code=null reason='null' last_status=200 -> active (got active)
+#   ok:   status[7]: last_error_code=null reason='null' last_status=250 -> active (got active)
+#   ok:   status[8]: last_error_code=null reason='null' last_status=null -> unknown (got unknown)
+#   ok:   status[9]: last_error_code=401 reason='null' last_status=200 -> error (got error)
+# [6] whitelist: so os 18 campos esperados no output (sem extras)
+#   ok: sem campos extra no output (got: none)
+#   ok: sem campos em falta (got: none)
+#   ok: 'notes' nao vazou
+#   ok: 'extra_field' nao vazou
+#   ok: 'created_by' nao vazou
+# [7] sort: provider asc, priority asc
+#   ok: sort (got: a:a1,a:a2,z:z1,z:z2)
+# [8] has_token false quando access_token ausente
+#   ok: has_token=false (got false)
+#   ok: fingerprint=null (got null)
+# [9] SOURCE EQUALITY — api.ts:968-1013 (route + whitelist + fingerprint)
+#   ok: guard: hermes/keys GET (api.ts:972)
+#   ok: campo secret_fingerprint presente (api.ts:1006)
+#   ok: has_token boolean (api.ts:1007)
+#   ok: sha256(tok).slice(0,10) (api.ts:989)
+#   ok: status = exhausted (api.ts:983)
+#   ok: whitelist inclui secret_fingerprint (api.ts:1006)
+# PASS: 0 failures
+# Subtest: test\\hermes-keys-redact.test.mjs
+ok 6 - test\\hermes-keys-redact.test.mjs
+  ---
+  duration_ms: 2914.1126
+  type: 'test'
+  ...
+# [1] usage.jsonl ausente -> resposta vazia (nao 500)
+# [atlas] write token: 4b8bc1d2...
+#   ok: GET usage sem file -> 200 (got 200)
+#   ok: rows vazio (got 0)
+#   ok: totals_by_key e' object
+#   ok: since e' number (startOfToday)
+#   ok: generated_at presente
+# [2] filtro since: so linhas com ts >= since contam
+#   ok: since=250 -> 200
+#   ok: 1 row (got 1)
+#   ok: key_id=new (got new)
+#   ok: 2 rows (got 2)
+# [3] agregacao por key_id: totals somam prompt+completion+cost+requests
+#   ok: kA requests=2 (got 2)
+#   ok: kA prompt=30 (got 30)
+#   ok: kA completion=15 (got 15)
+#   ok: kA cost=0.003 (got 0.003)
+#   ok: kB requests=1 (got 1)
+#   ok: kB prompt=30 (got 30)
+# [4] __unknown__ balde: linhas sem key_id caem num bucket dedicado
+#   ok: k1 has 1 request
+#   ok: __unknown__ has 3 (got 3)
+#   ok: rows.key_id normalizados (got: ["__unknown__","__unknown__","__unknown__","k1"])
+# [5] linhas malformadas ignoradas (sem derrubar)
+#   ok: 2 rows validas (got 2)
+# [6] linhas com campos em falta: defaults (0) em vez de erro
+#   ok: defaults 0 (got: {"ts":1000,"key_id":"__unknown__","prompt_tokens":0,"completion_tokens":0,"cost_usd":0})
+#   ok: key_id fallback __unknown__ (got __unknown__)
+#   ok: balde __unknown__ tem 1
+# [7] last_ts no totals: a entrada mais recente de cada key
+#   ok: last_ts=2000 (got 2000)
+#   ok: model=gpt-4 (got gpt-4)
+# [8] since query parsing: int, NaN-safe
+#   ok: since=garbage -> 200 (got 200)
+#   ok: since=-100 -> 200 (got 200)
+# [9] SOURCE EQUALITY — api.ts:1015-1056 (route + aggregator + __unknown__)
+#   ok: guard: hermes/usage GET (api.ts:1024)
+#   ok: __unknown__ bucket (api.ts:1039)
+#   ok: startOfToday default (api.ts:1026)
+#   ok: try/catch em JSON malformado (api.ts:1036)
+#   ok: totals_by_key output field (api.ts:1054)
+#   ok: totals_by_key tem last_ts (api.ts:1046)
+# PASS: 0 failures
+# Subtest: test\\hermes-usage.test.mjs
+ok 7 - test\\hermes-usage.test.mjs
+  ---
+  duration_ms: 3218.7557
+  type: 'test'
+  ...
+# [1] GET /api/icons — sorted .svg only
+# [atlas] write token: 89736da6...
+#   ok: 200 (got 200)
+#   ok: icons array (got object)
+#   ok: 2 svgs, png filtrado (got 2)
+#   ok: sorted (got ["apple.svg","zebra.svg"])
+# [2] GET /api/icons — dir vazio
+#   ok: 200 (got 200)
+#   ok: empty (got [])
+# [3] GET /api/w/:slug — sem dir -> error not found
+#   ok: 200 (got 200)
+#   ok: error not found (got {"error":"not found"})
+# [4] GET /api/w/:slug — com meta.json devolve conteudo
+#   ok: 200 (got 200)
+#   ok: name (got Proj A)
+#   ok: icon (got a.svg)
+# [5] SOURCE EQUALITY — iconCatalog + meta endpoint
+#   ok: iconCatalog() existe
+#   ok: GET /api/icons dispatch
+#   ok: GET /api/w/:slug dispatch
+#   ok: meta not-found default
+# PASS: 0 failures
+# Subtest: test\\icons-meta.test.mjs
+ok 8 - test\\icons-meta.test.mjs
+  ---
+  duration_ms: 2621.9208
+  type: 'test'
+  ...
+# [1] path dentro do allowedRoot + md com tasks -> 200, adiciona cards+notas
+# [atlas] write token: bc6ee829...
+#   ok: import-roadmap path valido -> 200 (got 200)
+#   ok: ok=true (got [object Object])
+#   ok: 2 cards adicionados (got 2)
+#   ok: 2 notas adicionadas (got 2)
+# [2] path-traversal ../ escapa do projeto -> 400 path outside project
+#   ok: path-traversal -> 400 (got 400)
+#   ok: body menciona 'path outside project' (got path outside project)
+# [3] slug mismatch: path dentro de outro projeto -> 400
+#   ok: slug mismatch -> 400 (got 400)
+#   ok: body explica mismatch (got path outside project)
+# [4] path absoluto FORA do vault -> 400
+#   ok: path absoluto fora do projeto -> 400 (got 400)
+# [5] path vazio / undefined / null -> 400 path required
+#   ok: path="" -> 400 (got 400)
+#   ok: path=undefined -> 400 (got 400)
+#   ok: path=null -> 400 (got 400)
+#   ok: path=42 -> 400 (got 400)
+#   ok: path={} -> 400 (got 400)
+#   ok: sem path field -> 400 (got 400)
+# [6] path nao existe -> 400 ficheiro nao encontrado (sem vazar existencia)
+#   ok: path inexistente -> 400 (got 400)
+#   ok: body explica (got ficheiro nao encontrado: C:\\Users\\bruno\\AppData\\Local\\Temp\\atlas-rt-RuTUQL\\knowledge\\projects\\slug-g\\nao-existe.md)
+# [7] slug invalido (com caracteres nao-SLUG) -> 400 bad request
+#   ok: slug c/ '..' -> 400 (got 400)
+# [8] dedup: re-importar o mesmo md nao duplica (idempotente)
+#   ok: 1a import: 2 cards (got 2)
+#   ok: 2a import (mesmo md): 0 cards (got 0)
+#   ok: 2a import: 2 skipped (got 2)
+# [9] tasks duplicadas no MESMO md: parseRoadmap deduplica (vai 3 linhas -> 2 tasks)
+#   ok: parseRoadmap devolveu 2 tasks (3 linhas - 1 dup) (got total=2)
+#   ok: 2 cards adicionados (got 2)
+#   ok: 0 skipped (skipped so conta contra board pre-existente) (got 0)
+# [10] SOURCE EQUALITY — api.ts:1156-1195 (route + allow-list + resolve)
+#   ok: guard: import-roadmap POST (api.ts:1157)
+#   ok: string 400 path required (api.ts:1163)
+#   ok: string 400 path outside (api.ts:1169)
+#   ok: allowedRoot = VAULT/knowledge/projects/<slug> (api.ts:1167)
+#   ok: resolve() normaliza ../ (api.ts:1168)
+#   ok: inside() check (api.ts:1169)
+# PASS: 0 failures
+# Subtest: test\\import-roadmap-pat.test.mjs
+ok 9 - test\\import-roadmap-pat.test.mjs
+  ---
+  duration_ms: 4304.9543
+  type: 'test'
+  ...
+# [1] GET /api/w/:slug/notes sem ficheiro -> default {ver:0,items:[]}
+# [atlas] write token: cfd102f5...
+#   ok: 200 (got 200)
+#   ok: default (got {"ver":0,"items":[]})
+# [2] GET /api/w/:slug/kanban sem ficheiro -> default {ver:0,columns:[],cards:[]}
+#   ok: 200 (got 200)
+#   ok: default (got {"ver":0,"columns":[],"cards":[]})
+# [3] PUT notes — ver bump (writeJ avanca ver)
+#   ok: 200 (got 200, body={"ok":true,"ver":6})
+#   ok: ver bumped 5->6 (got 6)
+# [4] PUT notes — OT mismatch (inVer != storedVer, storedVer != 0) -> 409
+#   ok: 409 (got 409, body={"error":"conflito de versao — re-faz GET e re-aplica as tuas mudancas","ver":3})
+#   ok: devolve storedVer (got 3)
+#   ok: error (got conflito de versao — re-faz GET e re-aplica as tuas mudancas)
+# [5] PUT notes — sanitize: items sem id recebem nid()
+# [atlas] note sem id — sanitize: nk5 added=2
+#   ok: 200 (got 200)
+#   ok: 3 items (got 3)
+#   ok: item 0 ganhou id (got 2mh25gwb)
+#   ok: item 1 id preservado
+#   ok: item 2 ganhou id novo
+# [6] PUT notes — wipe guard: loss > threshold sem X-Atlas-Confirm-Wipe -> 409 + backup
+#   ok: 409 (got 409, body={"error":"wipe detetado: 19 items perdidos (de 20 para 1, threshold 10). Estado anterior guardado em data/_snapshots/nk6/_wipe-guard/notes-2026-09-02T14-41-07-473Z. Confirma com header X-Atlas-Confirm-Wipe: yes para prosseguir.","before":20,"after":1,"loss":19,"threshold":10,"guardPath":"_wipe-guard/notes-2026-09-02T14-41-07-473Z"})
+#   ok: error wipe (got wipe detetado: 19 items perdidos (de 20 para 1, threshold 10). Estado anterior guardado em data/_snapshots/nk6/_wipe-guard/notes-2026-09-02T14-41-07-473Z. Confirma com header X-Atlas-Confirm-Wipe: yes para prosseguir.)
+#   ok: before/after (got {"b":20,"a":1})
+#   ok: loss=19 (got 19)
+#   ok: wipe guard snapshot no disco (_wipe-guard/notes-2026-09-02T14-41-07-473Z)
+# [7] PUT notes — wipe guard: com X-Atlas-Confirm-Wipe: yes -> proceed
+#   ok: 200 (got 200, body={"ok":true,"ver":1})
+#   ok: 1 item (got 1)
+# [9] PUT kanban — kill-on-transition: card doing->done com shim noop
+#   ok: 200 (got 200, body={"ok":true,"ver":2})
+#   ok: c1 done (got done)
+# [10] PUT notes — SLUG regex: 400 em slug invalido
+#   ok: 400 (got 400)
+# [11] SOURCE EQUALITY — OT, wipe, sanitize, backup
+#   ok: OT 409 guard
+#   ok: OT error message
+#   ok: arrKey notes/cards
+#   ok: threshold max(5, 0.5*before)
+#   ok: wipe header name
+#   ok: sanitize id assign
+#   ok: kill-on-transition trigger
+#   ok: kill-pane fire-and-forget
+#   ok: sanitize branch
+#   ok: ver bump helper
+# PASS: 0 failures
+# Subtest: test\\notes-kanban-put.test.mjs
+ok 10 - test\\notes-kanban-put.test.mjs
+  ---
+  duration_ms: 4615.4443
+  type: 'test'
+  ...
