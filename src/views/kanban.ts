@@ -378,7 +378,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       return `<article class="kcard${c.result ? ' has-output' : ''}${isSel ? ' sel' : ''}${dueState(c).cls === 'over' ? ' overdue' : ''}${dueState(c).cls === 'near' ? ' due-near' : ''}" draggable="true" tabindex="0" data-id="${c.id}">
         <div class="ktitle">${selMode ? `<input type="checkbox" class="kselbox" data-sel="${c.id}" ${isSel ? 'checked' : ''} aria-label="Selecionar ${esc(c.title)}">` : ''}<h5>${esc(c.title)}</h5><span class="kdate" title="Criado em ${fmtDate(c.ts)}">${fmtDate(c.ts)}</span></div>
         ${c.description ? `<div class="kdesc">${esc(previewText(c.description))}</div>` : ''}
-        <div class="kstates">${stateChip(c)}${phaseChip(c)}${c.dp ? `<span class="kbadge kbadge-dp">DP</span>` : ''}${c.result ? `<span class="kbadge kbadge-out">resultado</span>` : ''}${c.recur ? `<span class="kbadge kbadge-recur" title="Recorrente · ${esc(recurLabel(c.recur))}">↻ ${esc(recurLabel(c.recur))}</span>` : ''}</div>
+        <div class="kstates">${stateChip(c)}${phaseChip(c)}${roundsFromResult(c)}${c.dp ? `<span class="kbadge kbadge-dp">DP</span>` : ''}${c.result ? `<span class="kbadge kbadge-out">resultado</span>` : ''}${c.recur ? `<span class="kbadge kbadge-recur" title="Recorrente · ${esc(recurLabel(c.recur))}">↻ ${esc(recurLabel(c.recur))}</span>` : ''}</div>
         <div class="kfoot">
           ${dueBadge(c)}
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
@@ -865,7 +865,7 @@ function runCard(c: Card) {
           ${c.due ? `${dueBadge(c)}` : ''}
           ${c.recur ? `<span class="kbadge kbadge-recur" title="Recorrente">↻ ${esc(recurLabel(c.recur))}</span>` : ''}
         </div>
-        ${stateChip(c) ? `<div class="kmodal-status">${stateChip(c)}${phaseChip(c)}</div>` : ''}
+        ${stateChip(c) || roundsFromResult(c) ? `<div class="kmodal-status">${stateChip(c)}${phaseChip(c)}${roundsFromResult(c)}</div>` : ''}
         ${c.description
           ? `<div class="kdesc md-view">${renderMd(c.description)}</div>`
           : '<div class="muted">Sem descrição</div>'}
@@ -1069,6 +1069,16 @@ function phaseChip(c: Card): string {
   if (p === 'todo') return ''
   const labels: Record<MichiPhase, string> = { todo: '', grill: 'grill', dr: 'dr', dp: 'dp', da: 'a correr', gates: 'gates', review: 'review', reflect: 'reflect', done: '' }
   return `<span class="kbadge kbadge-phase phase-${p}" title="Fase michi: ${p}">${labels[p]}</span>`
+}
+
+// ponytail: timeline read-only — regex sobre c.result, 0 schema change.
+// Se utilizador quiser persistir rounds[] no Card, trocar isto por c.rounds?.length ?? matches.length.
+function roundsFromResult(c: Card): string {
+  if (!c.result) return ''
+  const matches = c.result.match(/Round \d+/g) || []
+  if (!matches.length) return ''
+  const uniq = Array.from(new Set(matches))
+  return `<span class="kbadge-row" title="Rounds no result">${uniq.map(m => `<span class="kbadge kbadge-round">${m}</span>`).join('')}</span>`
 }
 
 function dpHtml(dp: string): string {

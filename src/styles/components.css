@@ -692,3 +692,8 @@ a.link:hover { color:var(--gold-soft); }
 .kbadge-phase.phase-reflect { background: #888; color: #fff }
 .kbadge-phase.phase-review,
 .kbadge-phase.phase-done  { opacity: .4 }
+
+
+/* ponytail: round badges (timeline read-only) */
+.kbadge-row { display:inline-flex; gap:3px; margin-left:4px }
+.kbadge-round { font-size:.65rem; padding:1px 5px; background:var(--bg-2,#2a2a2a); color:var(--text-2,#aaa) }
