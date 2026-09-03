@@ -250,9 +250,10 @@ export const ROUTES: Route[] = [
             const classification = (() => {
               if (st.state === 'merge-failed') return 'CRASH_MERGE_FAILED'
               if (logSize === 0 && lastHeartbeatAt === null) return 'CRASH_WRAPPER_DIED'
-              if (lastHeartbeatAt !== null && (now - lastHeartbeatAt * 1000) > STALE_MS) return 'CRASH_HERMES_STUCK'
+              if (lastHeartbeatAt !== null && (now - lastHeartbeatAt) > STALE_MS) return 'CRASH_HERMES_STUCK'
               if (logSize > 0 && logMtime > 0 && (now - logMtime) > STALE_MS) return 'CRASH_HERMES_STUCK'
-              return 'CRASH_HERMES_STUCK'  // fallback
+              // ponytail: card h1y3yfsy R2/Q5 — log vazio mas heartbeat fresco = wrapper arrancou mas worker nao escreveu. R2/Q5 chama isto CRASH_TRANSIENT.
+              return 'CRASH_TRANSIENT'
             })()
             orphans.push({
               cardId: c.id,
@@ -315,9 +316,10 @@ export const ROUTES: Route[] = [
             const classification = (() => {
               if (st?.state === 'merge-failed') return 'CRASH_MERGE_FAILED'
               if (logSize === 0 && lastHeartbeatAt === null) return 'CRASH_WRAPPER_DIED'
-              if (lastHeartbeatAt !== null && (now - lastHeartbeatAt * 1000) > STALE_MS) return 'CRASH_HERMES_STUCK'
+              if (lastHeartbeatAt !== null && (now - lastHeartbeatAt) > STALE_MS) return 'CRASH_HERMES_STUCK'
               if (logSize > 0 && logMtime > 0 && (now - logMtime) > STALE_MS) return 'CRASH_HERMES_STUCK'
-              return 'CRASH_HERMES_STUCK'
+              // ponytail: card h1y3yfsy R2/Q5 — log vazio mas heartbeat fresco = wrapper arrancou mas worker nao escreveu. R2/Q5 chama isto CRASH_TRANSIENT.
+              return 'CRASH_TRANSIENT'
             })()
             c.colId = 'todo'
             delete c.startedAt

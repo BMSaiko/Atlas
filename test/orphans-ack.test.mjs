@@ -142,7 +142,7 @@ console.log('\n[8] GET /orphans enriquecido: logTail, classification, statusStat
     ageMs: 6*60*1000,
     logContent: 'linha1\nlinha2\nlinha3\nlinha4\nlinha5\nlinha6\n',
     logMtime: 6*60*1000,  // log velho > STALE_MS para ser orphan
-    status: { state: 'running', lastHeartbeatAt: (Date.now()/1000) - 6*60 }  // heartbeat velho em segundos
+    status: { state: 'running', lastHeartbeatAt: Date.now() - 6*60*1000 }  // heartbeat velho em ms (consistente com wrapper Python ms)
   })
   const r = await a.req('GET', '/api/w/enr/orphans')
   const o = r.json?.orphans?.[0]
@@ -199,11 +199,12 @@ console.log('\n[12] SOURCE EQUALITY — wrapper heartbeat + orphans routes')
   ok(apiSrc.includes("import threading as _th,_t"), 'wrapper importa threading (api.ts wrapper)')
   ok(apiSrc.includes("_hb()"), 'wrapper define _hb (heartbeat daemon)')
   ok(apiSrc.includes("_th.Thread(target=_hb,daemon=True).start()"), 'wrapper arranca thread daemon')
-  ok(apiSrc.includes("'lastHeartbeatAt':_t.time()"), 'wrapper escreve lastHeartbeatAt no .status')
+  ok(apiSrc.includes("'lastHeartbeatAt':int(_t.time()*1000)"), 'wrapper escreve lastHeartbeatAt (ms) no .status')
   ok(apiSrc.includes("parts[3] === 'ack'"), 'POST /orphans/ack route guard')
   ok(apiSrc.includes("CRASH_WRAPPER_DIED"), 'classification CRASH_WRAPPER_DIED')
   ok(apiSrc.includes("CRASH_HERMES_STUCK"), 'classification CRASH_HERMES_STUCK')
   ok(apiSrc.includes("CRASH_MERGE_FAILED"), 'classification CRASH_MERGE_FAILED')
+  ok(apiSrc.includes("CRASH_TRANSIENT"), 'classification CRASH_TRANSIENT (R2/Q5 fallback)')
   ok(apiSrc.includes("logTail"), 'logTail field no GET /orphans')
   ok(apiSrc.includes("orphanWorktreePath"), 'orphanWorktreePath field no GET /orphans')
   ok(apiSrc.includes("classification = (() => {"), 'classification IIFE pattern')
