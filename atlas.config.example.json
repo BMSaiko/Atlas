@@ -4,5 +4,6 @@
   "hermesPy": "C:\\hermes-agent\\.venv\\Scripts\\python.exe",
   "hermesHome": "C:\\Users\\<user>\\AppData\\Local\\hermes",
   "atlasRepo": "C:\\path\\to\\atlas\\code",
-  "vault": "C:\\path\\to\\Second-Brain"
+  "vault": "C:\\path\\to\\Second-Brain",
+  "wezterm": "C:\\Program Files\\WezTerm\\wezterm-gui.exe"
 }
