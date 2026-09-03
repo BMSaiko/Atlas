@@ -635,7 +635,8 @@ async function launchDp(slug: string, card: any) {
 // Usado por launchGitOp (prompt 'git-op') e pelo handler /review/approve-agent (prompt 'merge-approve').
 async function spawnHeadless(repo: string, logPath: string, stPath: string, banner: string, prompt: string) {
   if (process.env.ATLAS_TEST_NO_SPAWN) return
-  await writeFile(logPath, '◆ ' + banner + '\n', 'utf8')
+  // ponytail: sanitize banner (card t02krhls) — banner pode ter bytes C1 vindos do card.title; sem sanitize saem crus no .log
+  await writeFile(logPath, _sanitizeText('◆ ' + banner + '\n'), 'utf8')
   const ws = createWriteStream(logPath, { flags: 'a' })
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
   const wrapper = [

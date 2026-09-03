@@ -42,5 +42,11 @@ ok(apiSrc.includes('function _sanitizeText('), '_sanitizeText helper exists')
 ok((apiSrc.split("_sanitizeText(await readFile(logPath, 'utf8'))").length - 1) === 3, '3 _sanitizeText reads (2 /orphans + 1 /output/:cardId)')
 ok(apiSrc.includes('full = _sanitizeText(await readFile(logPath, \'utf8\'))'), '_sanitizeText in /output/:cardId read')
 
+
+// ponytail: card t02krhls — banner writeFile (spawnHeadless L638) tambem passa por _sanitizeText
+// (card.title pode trazer bytes C1 do user paste, ex: copy-paste de um PDF com formatação)
+ok(apiSrc.includes("_sanitizeText('◆ ' + banner"), 'banner writeFile sanitized')
+ok(apiSrc.match(/sanitize\(d\)/g)?.length === 8, 'still 8 pipe-sanitize call sites (4 launch* x 2 stdio)')
+
 console.log('\n' + (failures === 0 ? 'PASS' : 'FAIL') + ': ' + failures + ' failures')
 process.exit(failures === 0 ? 0 : 1)

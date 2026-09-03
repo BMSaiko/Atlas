@@ -107,7 +107,7 @@ console.log('\n[7] SOURCE EQUALITY — approve-agent handler exists + uses spawn
   ok(wSrc.includes("loadPrompt('merge-approve')"), 'prompt merge-approve carregado')
   ok(wSrc.includes("'agent'"), "mode: 'agent' no response")
   ok(apiSrc.includes("if (process.env.ATLAS_TEST_NO_SPAWN) return"), 'spawnHeadless respeita NO_SPAWN')
-  ok(apiSrc.includes("writeFile(logPath, '◆ ' + banner"), 'banner gravado antes do spawn')
+  ok(apiSrc.includes("_sanitizeText('◆ ' + banner") || apiSrc.includes("writeFile(logPath, '◆ ' + banner"), 'banner gravado antes do spawn')
 }
 
 console.log(`\n${failures === 0 ? 'PASS' : 'FAIL'}: ${failures} failures`)
