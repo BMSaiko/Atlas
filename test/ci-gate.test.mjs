@@ -6,7 +6,7 @@
 //   2. runCIGate: para no 1o passo que falhe (conflict-markers -> typecheck -> build),
 //      devolve {ok, step, out} com a trace do passo que falhou
 //
-// Como runCIGate chama 'npm.cmd' hardcoded, o test faz MIRROR EXATO com runCmd
+// Como runCIGate chama 'tsc.cmd'/'vite.cmd' directamente (fix f0e0e39), o test faz MIRROR EXATO com runCmd
 // injectable (mesmo padrao de wipe-guard.test.mjs) e SOURCE EQUALITY no fim:
 // se alguem editar o handler sem actualizar o mirror, isto falha.
 //
@@ -23,7 +23,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const apiPath = join(here, '..', 'server', 'api.ts')
 
 // ---- MIRROR do server/api.ts L140-153 ----
-// runCmd fake: corre o comando real (git, npm.cmd stub, etc.) e devolve {ok, out}
+// runCmd fake: corre o comando real (git, tsc/vite stub, etc.) e devolve {ok, out}
 // ponytail: TEST_GIT allows the test to run in envs where 'git' nao esta no PATH do Node spawn
 // (ex: MSYS/WSL ou Windows services). O source real (api.ts L132) faz o mesmo: ctrlPath explicito.
 const TEST_BIN = process.env.TEST_GIT || 'git'
@@ -51,9 +51,9 @@ async function checkConflictMarkers(repo, runCmd) {
 // runCIGate mirror: cheap->expensive, para no 1o que falhe
 async function runCIGate(repo, runCmd) {
   if (await checkConflictMarkers(repo, runCmd)) return { ok: false, step: 'conflict-markers', out: 'marcadores de conflito presentes em dev' }
-  const tc = await runCmd('npm.cmd', ['run', 'typecheck'], repo)
+  const tc = await runCmd('tsc.cmd', ['--noEmit'], repo)
   if (!tc.ok) return { ok: false, step: 'typecheck', out: tc.out.slice(-2000) }
-  const bd = await runCmd('npm.cmd', ['run', 'build'], repo)
+  const bd = await runCmd('vite.cmd', ['build'], repo)
   if (!bd.ok) return { ok: false, step: 'build', out: bd.out.slice(-2000) }
   return { ok: true, step: 'ok', out: '' }
 }
@@ -123,13 +123,13 @@ console.log('\n[2] checkConflictMarkers: repo com markers -> true')
 }
 
 // ============================================================
-// [3] runCIGate: mocks in-memory (sem npm.cmd real)
+// [3] runCIGate: mocks in-memory (sem tsc/vite real)
 // ============================================================
 console.log('\n[3] runCIGate: runCmd mockado (sem npm real)')
 
 // Mock factory: cada step tem o seu rc/out
 function mockRunCmd(map) {
-  // map: { 'git:grep:dev': {ok, out}, 'npm.cmd:run:typecheck': {ok, out}, ... }
+  // map: { 'git:grep:dev': {ok, out}, 'tsc.cmd:--noEmit': {ok, out}, ... }
   return (cmd, args, cwd) => {
     const key = cmd + ':' + args.join(':')
     if (map[key]) return Promise.resolve(map[key])
@@ -142,8 +142,8 @@ function mockRunCmd(map) {
   // 3a: tudo OK
   const r = await runCIGate('/fake/repo', mockRunCmd({
     'git:grep:-n:-E:^(<<<<<<<|=======|>>>>>>>):dev:--':  { ok: true, out: '' },
-    'npm.cmd:run:typecheck':                                  { ok: true, out: 'tsc OK' },
-    'npm.cmd:run:build':                                      { ok: true, out: 'vite OK' },
+    'tsc.cmd:--noEmit':                                  { ok: true, out: 'tsc OK' },
+    'vite.cmd:build':                                      { ok: true, out: 'vite OK' },
   }))
   eq(r.ok, true, 'tudo OK -> ok=true')
   eq(r.step, 'ok', 'step=ok')
@@ -163,7 +163,7 @@ function mockRunCmd(map) {
   // 3c: typecheck falha (apos conflict-markers OK)
   const r = await runCIGate('/fake/repo', mockRunCmd({
     'git:grep:-n:-E:^(<<<<<<<|=======|>>>>>>>):dev:--':  { ok: true, out: '' },
-    'npm.cmd:run:typecheck':                                  { ok: false, out: 'TS2304: cannot find name foo' },
+    'tsc.cmd:--noEmit':                                  { ok: false, out: 'TS2304: cannot find name foo' },
   }))
   eq(r.ok, false, 'typecheck falha -> ok=false')
   eq(r.step, 'typecheck', 'step=typecheck')
@@ -175,8 +175,8 @@ function mockRunCmd(map) {
   // 3d: build falha (apos typecheck OK)
   const r = await runCIGate('/fake/repo', mockRunCmd({
     'git:grep:-n:-E:^(<<<<<<<|=======|>>>>>>>):dev:--':  { ok: true, out: '' },
-    'npm.cmd:run:typecheck':                                  { ok: true, out: 'tsc OK' },
-    'npm.cmd:run:build':                                      { ok: false, out: 'rollup failed' },
+    'tsc.cmd:--noEmit':                                  { ok: true, out: 'tsc OK' },
+    'vite.cmd:build':                                      { ok: false, out: 'rollup failed' },
   }))
   eq(r.ok, false, 'build falha -> ok=false')
   eq(r.step, 'build', 'step=build')
@@ -188,7 +188,7 @@ function mockRunCmd(map) {
   // Mesmo com typecheck OK no mock, se markers existirem, para antes
   let typecheckCalled = false
   const runCmdTracking = (cmd, args, cwd) => {
-    if (cmd === 'npm.cmd' && args[1] === 'typecheck') typecheckCalled = true
+    if (cmd === 'tsc.cmd' && args[1] === '--noEmit') typecheckCalled = true
     if (cmd === 'git') return Promise.resolve({ ok: true, out: 'app.ts:1:<<<<<<<' })
     return Promise.resolve({ ok: true, out: 'never reached' })
   }
@@ -212,8 +212,8 @@ const anchors = [
     "g.out.includes('fatal')",  // L142: fallback condition
     "return g.out.trim().length > 0",  // L143: check
     "step: 'conflict-markers'",  // L147
-    "runCmd('npm.cmd', ['run', 'typecheck']",  // L148
-    "runCmd('npm.cmd', ['run', 'build']",  // L150
+    "runCmd('tsc.cmd', ['--noEmit']",  // L148
+    "runCmd('vite.cmd', ['build']",  // L150
     "step: 'ok', out: ''",  // L152
   ]
   for (const a of anchors) {

@@ -172,9 +172,12 @@ async function checkConflictMarkers(repo: string): Promise<boolean> {
 async function runCIGate(repo: string): Promise<{ ok: boolean; step: string; out: string }> {
   if (process.env.ATLAS_TEST_CI_OK) return { ok: true, step: 'ok', out: '' }
   if (await checkConflictMarkers(repo)) return { ok: false, step: 'conflict-markers', out: 'marcadores de conflito presentes em dev' }
-  const tc = await runCmd('npm.cmd', ['run', 'typecheck'], repo)
+  // ponytail: invoca tsc/vite directamente via node_modules/.bin (ctrlPath de runCmd ja' expoe essa dir).
+  // npm.cmd nao e' confiavel ??? vive ao lado de node.exe que pode estar via nvm/launcher, fora do PATH que
+  // construimos. Os binarios do .bin sao deps reais, instaladas pelo npm install, e resolvem em qualquer maquina.
+  const tc = await runCmd('tsc.cmd', ['--noEmit'], repo)
   if (!tc.ok) return { ok: false, step: 'typecheck', out: tc.out.slice(-2000) }
-  const bd = await runCmd('npm.cmd', ['run', 'build'], repo)
+  const bd = await runCmd('vite.cmd', ['build'], repo)
   if (!bd.ok) return { ok: false, step: 'build', out: bd.out.slice(-2000) }
   return { ok: true, step: 'ok', out: '' }
 }
