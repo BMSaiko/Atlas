@@ -680,3 +680,15 @@ a.link:hover { color:var(--gold-soft); }
 .keys-table code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.82rem; color:var(--text-dim); }
 .keys-pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:.72rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--bg-0); background:var(--pill, var(--text-dim)); }
 .keys-empty { margin-top:var(--s4); padding:var(--s5); background:var(--bg-2); border:1px dashed var(--line); border-radius:var(--r2); color:var(--text-dim); display:flex; align-items:center; gap:var(--s2); }
+
+
+/* ponytail: phase michi chip — derivado de colId. Cores suaves para nao competir com state. */
+.kbadge-phase { font-size: .7rem; padding: 1px 6px; opacity: .85 }
+.kbadge-phase.phase-grill { background: var(--accent, #5b8) }
+.kbadge-phase.phase-dr    { background: var(--accent2, #85b) }
+.kbadge-phase.phase-dp    { background: var(--accent3, #b85) }
+.kbadge-phase.phase-da    { background: var(--gold, #fa3); color: #000 }
+.kbadge-phase.phase-gates { background: #c55 }
+.kbadge-phase.phase-reflect { background: #888; color: #fff }
+.kbadge-phase.phase-review,
+.kbadge-phase.phase-done  { opacity: .4 }

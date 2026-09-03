@@ -1,4 +1,4 @@
-import { api, Board, Card, Coluna, Prioridade, uid, BoardDoc } from '../api'
+import { api, Board, Card, Coluna, MichiPhase, Prioridade, uid, BoardDoc } from '../api'
 import { icon } from '../ui/icons'
 import { openModal, readForm } from '../ui/modal'
 import { refreshTabCounts } from '../ui/counts'
@@ -378,7 +378,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       return `<article class="kcard${c.result ? ' has-output' : ''}${isSel ? ' sel' : ''}${dueState(c).cls === 'over' ? ' overdue' : ''}${dueState(c).cls === 'near' ? ' due-near' : ''}" draggable="true" tabindex="0" data-id="${c.id}">
         <div class="ktitle">${selMode ? `<input type="checkbox" class="kselbox" data-sel="${c.id}" ${isSel ? 'checked' : ''} aria-label="Selecionar ${esc(c.title)}">` : ''}<h5>${esc(c.title)}</h5><span class="kdate" title="Criado em ${fmtDate(c.ts)}">${fmtDate(c.ts)}</span></div>
         ${c.description ? `<div class="kdesc">${esc(previewText(c.description))}</div>` : ''}
-        <div class="kstates">${stateChip(c)}${c.dp ? `<span class="kbadge kbadge-dp">DP</span>` : ''}${c.result ? `<span class="kbadge kbadge-out">resultado</span>` : ''}${c.recur ? `<span class="kbadge kbadge-recur" title="Recorrente · ${esc(recurLabel(c.recur))}">↻ ${esc(recurLabel(c.recur))}</span>` : ''}</div>
+        <div class="kstates">${stateChip(c)}${phaseChip(c)}${c.dp ? `<span class="kbadge kbadge-dp">DP</span>` : ''}${c.result ? `<span class="kbadge kbadge-out">resultado</span>` : ''}${c.recur ? `<span class="kbadge kbadge-recur" title="Recorrente · ${esc(recurLabel(c.recur))}">↻ ${esc(recurLabel(c.recur))}</span>` : ''}</div>
         <div class="kfoot">
           ${dueBadge(c)}
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
@@ -865,7 +865,7 @@ function runCard(c: Card) {
           ${c.due ? `${dueBadge(c)}` : ''}
           ${c.recur ? `<span class="kbadge kbadge-recur" title="Recorrente">↻ ${esc(recurLabel(c.recur))}</span>` : ''}
         </div>
-        ${stateChip(c) ? `<div class="kmodal-status">${stateChip(c)}</div>` : ''}
+        ${stateChip(c) ? `<div class="kmodal-status">${stateChip(c)}${phaseChip(c)}</div>` : ''}
         ${c.description
           ? `<div class="kdesc md-view">${renderMd(c.description)}</div>`
           : '<div class="muted">Sem descrição</div>'}
@@ -1047,6 +1047,28 @@ function stateChip(c: Card): string {
   if (c.colId === 'review') return `<span class="kbadge kbadge-review">REVISAO</span>`
   if (c.colId === 'done') return `<span class="kbadge kbadge-out"><span class="dot" style="background:var(--gold)"></span>Concluido</span>`
   return ''
+}
+
+// ponytail: phase michi workflow — derivado de colId + skills no MVP. Persistir em phase 3.
+// Mapeamento: todo=todo, doing=da (running worker), review=review, done=done.
+// skills contem grill-me -> grill. dp preenchido -> dp. crashRetry -> reflect.
+function colIdToPhase(c: Card): MichiPhase {
+  if (c.colId === 'done') return 'done'
+  if (c.colId === 'review') return 'review'
+  if (c.colId === 'doing') return 'da'
+  if (c.colId === 'todo') {
+    if (c.crashRetry) return 'reflect'
+    if (Array.isArray(c.skills) && c.skills.some(s => /grill/i.test(s))) return 'grill'
+    if (c.dp) return 'dp'
+    return 'todo'
+  }
+  return 'todo'
+}
+function phaseChip(c: Card): string {
+  const p = colIdToPhase(c)
+  if (p === 'todo') return ''
+  const labels: Record<MichiPhase, string> = { todo: '', grill: 'grill', dr: 'dr', dp: 'dp', da: 'a correr', gates: 'gates', review: 'review', reflect: 'reflect', done: '' }
+  return `<span class="kbadge kbadge-phase phase-${p}" title="Fase michi: ${p}">${labels[p]}</span>`
 }
 
 function dpHtml(dp: string): string {
