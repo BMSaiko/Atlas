@@ -13,6 +13,7 @@ import { ROUTES as hermesRoutes } from "./hermes"
 import { ROUTES as wRoutes } from "./w"
 import { ROUTES as iconsRoutes } from "./icons"
 import { ROUTES as orchestratorRoutes } from "./orchestrator"
+import { ROUTES as chatRoutes } from "./chat"
 
 export const ALL_ROUTES: Route[] = [
   ...termsRoutes,
@@ -21,4 +22,5 @@ export const ALL_ROUTES: Route[] = [
   ...wRoutes,
   ...iconsRoutes,
   ...orchestratorRoutes,
+  ...chatRoutes,
 ]

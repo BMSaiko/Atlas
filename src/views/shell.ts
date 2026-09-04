@@ -8,6 +8,7 @@ import { openPalette } from '../ui/palette'
 import { parseTags, bindTagAutocomplete, openNewNoteModal } from './notes'
 import { openNewCardModal } from './kanban'
 import { renderDashboard } from './dashboard'
+import { renderMainChat } from './main-chat'
 import { startClockWidget } from '../ui/clock'
 import { fetchWeather, openWeatherWeekModal } from '../ui/weather'
 import { getTheme, setManual, setSeason, setAuto, setSeasonMode, autoShift, autoSeason, Shift, Season, SEASON_NAMES } from '../ui/theme'
@@ -25,7 +26,7 @@ async function counts(slug: string) {
   } catch { return { notes: 0, open: 0 } }
 }
 
-export async function renderShell(root: HTMLElement, slug: string | null, isSettings: boolean) {
+export async function renderShell(root: HTMLElement, slug: string | null, isSettings: boolean, isChat = false) {
   const workdirs = await api.workdirs()
   let activeSlug = slug && workdirs.some(w => w.slug === slug) ? slug : null
   const catalog = await api.icons().catch(() => [] as string[])
@@ -37,7 +38,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
     <div class="shell" id="shell">
       <aside class="side" id="side">
         <div class="side-head"><a class="logo logo-sm" href="/" data-nav="/">ATLAS</a><span class="shift-ind" id="shift-ind" title="Luminosidade do dia"></span><span class="shift-ind" id="season-ind" title="Estação do ano"></span></div>
-        <nav class="side-nav" aria-label="Workdirs"></nav>
+        <a class="side-item chat-link" href="/c" data-nav="/c" id="chat-link" aria-label="Main chat cross-mundo">${icon('chat', 16)} <span class="side-label">Chat</span></a><nav class="side-nav" aria-label="Workdirs"></nav>
         <div class="side-clock" id="clock">
           <div class="clock-time" data-clock="time">--:--:--</div>
           <div class="clock-sub"><span class="clock-date" data-clock="date"></span> · <span class="clock-tz" data-clock="tz" id="clock-tz" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-label="Fuso horário">PT</span> · <span class="clock-wx" data-clock="wx" role="button" tabindex="0" aria-label="Previsão meteorológica — 7 dias" title="Meteorologia — Open-Meteo"><span class="wx-icon" data-clock="wx-icon"></span><span class="wx-temp" data-clock="wx-temp">--°</span></span></div>
@@ -86,10 +87,15 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
   }
   renderNav()
   const panel = root.querySelector('#panel') as HTMLElement
-  if (activeSlug) { setActive(activeSlug); await renderWorkspace(panel, activeSlug, isSettings) }
+  // ponytail: /c -> main chat (cross-mundo). override do dispatch normal.
+  if (isChat) { await renderMainChat(panel) }
+  else if (activeSlug) { setActive(activeSlug); await renderWorkspace(panel, activeSlug, isSettings) }
   else if (items.length) await renderDashboard(panel, items)
   else renderEmpty(panel, items, root)
 
+  // ponytail: chat-link active state quando /c
+  const chatLink = root.querySelector<HTMLElement>('#chat-link')
+  if (chatLink) chatLink.classList.toggle('active', isChat)
   root.querySelector('#hamb')!.addEventListener('click', () => shell.classList.toggle('side-open'))
   root.querySelectorAll('[data-nav]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); navigate(el.getAttribute('data-nav')!) }))
   root.querySelector('#side-new')!.addEventListener('click', () => newWorkdir())

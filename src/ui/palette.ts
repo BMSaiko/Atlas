@@ -40,6 +40,7 @@ export function openPalette(slug: string | null) {
 
   // Ações base — disponíveis mesmo sem workdir ativo (dashboard)
   push('Ações', 'sphere', 'Dashboard', 'dashboard inicio', () => { close(); navigate('/') })
+  push('Ações', 'chat', 'Chat (cross-mundo)', 'chat agente mundo cross', () => { close(); navigate('/c') })
   push('Ações', 'plus', 'Novo mundo', 'novo mundo criar', () => { close(); newWorkdir() })
   // ponytail: card FAQ-and-how-to — atalhos de ajuda no common palette. Sem slug (visiveis no
   // dashboard). Reusa openModal (rung 2) + renderMd (rung 2 — markdown sem dep nova). Conteudo

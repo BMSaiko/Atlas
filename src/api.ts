@@ -111,11 +111,19 @@ export const api = {
     // ponytail: card h1y3yfsy — limpa manualmente a worktree orfa' (POST). 404 se nao ha orphanWorktreePath.
     clearOrphan: (slug: string, cardId: string) => j<{ ok: boolean; cleared?: string }>(`/api/w/${slug}/cards/${cardId}/clear-orphan`, 'POST'),
   },
+  chat: {
+    history: () => j<{ messages: ChatMsg[] }>('/api/chat/history'),
+    send: (text: string) => j<{ ok: boolean; runId: string; ts: number }>('/api/chat/send', 'POST', { text }),
+    output: (runId: string, offset = 0) => j<{ ok: boolean; started: boolean; done: boolean; code: number | null; chunk: string; offset: number; size: number }>(`/api/chat/output/${runId}?offset=${offset}`),
+    clear: () => j<{ ok: boolean }>('/api/chat/history', 'DELETE'),
+  },
   hermes: {
     keys: () => j<HermesKey[]>('/api/hermes/keys'),
     usage: () => j<HermesUsage>('/api/hermes/usage'),
   },
 }
+// ponytail: chat history messages. role = 'user' (mandei) | 'agent' (hermes respondeu). text cru sem markdown parsed.
+export interface ChatMsg { role: 'user' | 'agent'; text: string; ts: number; runId?: string; actions?: any[] }
 // hermes/keys -> lista de API keys configuradas no Hermes (censor: NUNCA traz access_token do server).
 export type HermesKeyStatus = 'active' | 'exhausted' | 'error' | 'unknown'
 export interface HermesKey {

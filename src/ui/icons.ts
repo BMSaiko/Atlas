@@ -2,6 +2,8 @@
 const I = {
   sphere: '<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.5"/><ellipse cx="12" cy="12" rx="8" ry="3.2" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".5"/>',
   play: '<path d="M9 6l9 6-9 6z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+  // ponytail: bubble icon for the main chat sidebar link. 24x24, 1.5 stroke, currentColor.
+  chat: '<path d="M4 5h16v11H8l-4 4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="9" cy="10.5" r="0.9" fill="currentColor"/><circle cx="12" cy="10.5" r="0.9" fill="currentColor"/><circle cx="15" cy="10.5" r="0.9" fill="currentColor"/>',
   plus: '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
   note: '<path d="M5 4h11l3 3v13H5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
   doc: '<path d="M6 2h9l4 4v16H6z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M15 2v4h4" fill="none" stroke="currentColor" stroke-width="1.5"/>',

@@ -17,3 +17,6 @@ vite_run.log
 
 # python bytecache (fixtures de test)
 __pycache__/
+
+# ponytail: transient logs from local michi build gates
+build.log
