@@ -171,16 +171,33 @@ async function checkConflictMarkers(repo: string): Promise<boolean> {
   return g.out.trim().length > 0
 }
 // runCIGate: barato->caro; para no 1o que falhe. build escreve dist/ (gitignored) -> nao suja git status.
-async function runCIGate(repo: string): Promise<{ ok: boolean; step: string; out: string }> {
+// runCIGate: barrier pre-merge em dev->main. Aceita wtDir opcional para BC: se ausente, corre no repo base
+// (comportamento original — preservado para callers que nao sabem de worktrees). Com wtDir, corre o
+// typecheck + build no worktree isolado, deixando o repo base (onde corre `npm run dev`) intocado.
+// ponytail: `vite build --outDir .ci-gate/<ts>` isola o output para nao colidir com o dist/ que o dev
+// server tem aberto. Limpa no fim (best-effort) senao fica lixo. Sem npm install por run — o junction
+// partilhado garante que .bin resolve.
+async function runCIGate(repo: string, wtDir?: string): Promise<{ ok: boolean; step: string; out: string }> {
   if (process.env.ATLAS_TEST_CI_OK) return { ok: true, step: 'ok', out: '' }
+  const ciRoot = wtDir || repo  // BC: wtDir ausente = repo (comportamento original)
   if (await checkConflictMarkers(repo)) return { ok: false, step: 'conflict-markers', out: 'marcadores de conflito presentes em dev' }
-  // ponytail: invoca tsc/vite directamente via node_modules/.bin (ctrlPath de runCmd ja' expoe essa dir).
-  // npm.cmd nao e' confiavel ??? vive ao lado de node.exe que pode estar via nvm/launcher, fora do PATH que
-  // construimos. Os binarios do .bin sao deps reais, instaladas pelo npm install, e resolvem em qualquer maquina.
-  const tc = await runCmd('tsc.cmd', ['--noEmit'], repo)
+  const tc = await runCmd('tsc.cmd', ['--noEmit'], ciRoot)
   if (!tc.ok) return { ok: false, step: 'typecheck', out: tc.out.slice(-2000) }
-  const bd = await runCmd('vite.cmd', ['build'], repo)
-  if (!bd.ok) return { ok: false, step: 'build', out: bd.out.slice(-2000) }
+  // vite build escreve dist/ — em wtDir podemos usar o nome default (isolado). No repo base usamos
+  // .ci-gate/<ts> para nao colidir com o dist/ do vite dev.
+  let outDir: string | null = null
+  if (!wtDir) {
+    outDir = join(repo, '.ci-gate', String(Date.now()))
+    const bd = await runCmd('vite.cmd', ['build', '--outDir', outDir], repo)
+    if (!bd.ok) return { ok: false, step: 'build', out: bd.out.slice(-2000) }
+  } else {
+    const bd = await runCmd('vite.cmd', ['build'], ciRoot)
+    if (!bd.ok) return { ok: false, step: 'build', out: bd.out.slice(-2000) }
+  }
+  // cleanup best-effort
+  if (outDir) {
+    try { await rm(outDir, { recursive: true, force: true }) } catch {}
+  }
   return { ok: true, step: 'ok', out: '' }
 }
 

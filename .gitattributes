@@ -1,4 +1,4 @@
-* text=auto eol=lf
-*.ts text eol=lf
-*.css text eol=lf
-*.mjs text eol=lf
+* text=auto eol=crlf
+*.ts text eol=crlf
+*.css text eol=crlf
+*.mjs text eol=crlf
