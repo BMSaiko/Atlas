@@ -6,6 +6,7 @@ import { quickAdd, newWorkdir } from '../views/shell'
 import { confirmDialog } from './confirm'
 import { toast } from './toast'
 import { openModal, readForm } from './modal'
+import { renderMd } from './text'
 
 // ponytail: palette keyboard-first (Ctrl+K). Overlay proprio (nao reusa openModal — obriga <form>
 // + submit). Reutiliza: navigate (deep-link de workspace.ts p/ reabrir nota/cartao), quickAdd,
@@ -40,6 +41,12 @@ export function openPalette(slug: string | null) {
   // Ações base — disponíveis mesmo sem workdir ativo (dashboard)
   push('Ações', 'sphere', 'Dashboard', 'dashboard inicio', () => { close(); navigate('/') })
   push('Ações', 'plus', 'Novo mundo', 'novo mundo criar', () => { close(); newWorkdir() })
+  // ponytail: card FAQ-and-how-to — atalhos de ajuda no common palette. Sem slug (visiveis no
+  // dashboard). Reusa openModal (rung 2) + renderMd (rung 2 — markdown sem dep nova). Conteudo
+  // curto e honesto, alinhado com o que o software realmente faz (palette Ctrl+K, modal kanban,
+  // notes, settings, terminais, git). Atualizar quando fluxos novos entrarem.
+  push('Ajuda', 'note', 'FAQ', 'faq perguntas duvidas ajuda help', () => { close(); showHelpModal('FAQ — perguntas frequentes', FAQ_MD) })
+  push('Ajuda', 'doc', 'How to use', 'how to use como usar tutorial ajuda manual', () => { close(); showHelpModal('How to use — guia rápido', HOWTO_MD) })
   if (slug) {
     push('Ações', 'note', 'Novo nota ou cartão', 'novo nota cartao criar', () => { close(); quickAdd(slug) })
     push('Ações', 'gear', 'Definições', 'definicoes settings config', () => { close(); navigate('/w/' + slug + '/settings') })
@@ -256,6 +263,87 @@ async function runSkillCard(slug: string, skill: string, promptTemplate: string)
     return false
   }
 }
+
+// ponytail: card FAQ-and-how-to — abre modal com markdown renderizado. openModal ja tem scroll
+// interno (.modal-body overflow-y:auto) + Esc/Ctrl+Enter — nao precisamos de chrome proprio.
+function showHelpModal(title: string, md: string) {
+  openModal({
+    title,
+    body: () => `<div class="md-view help-doc">${renderMd(md)}</div>`,
+    submitText: 'Fechar',
+    cancelText: 'Fechar',
+  })
+}
+
+// FAQ — 6 Q&A curtas, sem rodeios. Texto honesto, alinhado com o codebase (palette, kanban, notes).
+const FAQ_MD = [
+  '## FAQ — perguntas frequentes',
+  '',
+  '**1. O que é o ATLAS?**',
+  'Atlas é um dashboard para gerir **mundos** (workdirs). Cada mundo tem kanban + notas + terminais + git isolados.',
+  '',
+  '**2. Como abro o common palette?**',
+  'Ctrl+K em qualquer vista. Pesquisa workdirs, notas, cartões ou ações.',
+  '',
+  '**3. Como crio um cartão novo?**',
+  'Ctrl+K → "Novo nota ou cartão" (ou no palette, escreve "novo"). Funciona dentro de um mundo.',
+  '',
+  '**4. Onde ficam guardados os dados?**',
+  'Em `data/atlas/<slug>/` dentro deste repo: `kanban.json` + `notes/`. Tudo em git, versionado.',
+  '',
+  '**5. Como corro um agente (DR/DP/DA) num cartão?**',
+  'Botão ▶ no cartão ou Ctrl+K → "Correr: <título>". Abre WezTerm headless e stream do log fica no card.',
+  '',
+  '**6. E se um cartão fica preso em "doing"?**',
+  'Ctrl+K → "Matar terminais deste mundo". Limpa WezTerm órfão. Cartão passa a `todo` na próxima ação.',
+  '',
+  '**7. Como vejo o histórico de runs?**',
+  'Cartão aberto → secção `kresult` (resultado). Cada run fica como bloco com output markdown.',
+  '',
+  '**8. Posso ter vários mundos ao mesmo tempo?**',
+  'Sim. Sidebar esquerda lista todos. Cada um com o seu kanban/notas/git independentes.',
+  '',
+].join('\n')
+
+// HOWTO — passos numerados, fluxo real: criar mundo -> cartão -> correr -> review -> done.
+const HOWTO_MD = [
+  '## How to use — guia rápido',
+  '',
+  '### 1. Criar um mundo novo',
+  '- Sidebar esquerda → **+ Novo mundo** (ou Ctrl+K → "Novo mundo").',
+  '- Dá um nome + descrição curta. Aparece na sidebar com a sua orb.',
+  '',
+  '### 2. Adicionar um cartão',
+  '- Abre o mundo → separador **Kanban**.',
+  '- Ctrl+K → "Novo nota ou cartão" (ou clica no header).',
+  '- Escreve título + descrição (markdown é renderizado).',
+  '',
+  '### 3. Correr o cartão (DR / DP / DA)',
+  '- Cartão em `todo` → botão ▶ / Ctrl+K → "Correr: …".',
+  '- Cartão passa para `doing` automaticamente.',
+  '- Output chega como blocos `kresult` no próprio cartão (markdown).',
+  '',
+  '### 4. Rever e aprovar',
+  '- Quando o run termina, cartão vai para **Revisão**.',
+  '- Abre o cartão → botões **Aprovar** / **Refinar**.',
+  '- Aprovar → `done`. Refinar → volta a `doing` com o teu feedback.',
+  '',
+  '### 5. Notas',
+  '- Separador **Notas** dentro do mundo.',
+  '- Markdown livre, links `[[wiki]]` entre notas (ver 4.5).',
+  '- Atalhos: Ctrl+K → "Notas" filtra e abre.',
+  '',
+  '### 6. Git',
+  '- Ctrl+K → "Merge to main" (merge dev → main headless).',
+  '- Ctrl+K → "Resolve conflito" se o merge falhar.',
+  '- Output abre em modal com stream do log.',
+  '',
+  '### 7. Atalhos úteis',
+  '- **Ctrl+K** — common palette',
+  '- **Esc** — fechar modal/palette',
+  '- **Ctrl+Enter** — submeter modal',
+  '',
+].join('\n')
 
 const SKILL_PROMPT_GRILL_ME = [
   '# Atlas world: ${{wdm.name}}',
