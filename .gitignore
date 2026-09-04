@@ -20,3 +20,8 @@ __pycache__/
 
 # ponytail: transient logs from local michi build gates
 build.log
+
+# Epic A polish gates (michi atlas cycle 2026-09-04)
+.lighthouse
+.axe
+.screens/

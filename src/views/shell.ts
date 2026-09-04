@@ -8,7 +8,7 @@ import { openPalette } from '../ui/palette'
 import { parseTags, bindTagAutocomplete, openNewNoteModal } from './notes'
 import { openNewCardModal } from './kanban'
 import { renderDashboard } from './dashboard'
-import { renderMainChat } from './main-chat'
+// ponytail: renderMainChat lazy-loaded (Epic A6 — code-split /c route; was eager, broke lighthouse perf 90 vs SP gate >=95)
 import { startClockWidget } from '../ui/clock'
 import { fetchWeather, openWeatherWeekModal } from '../ui/weather'
 import { getTheme, setManual, setSeason, setAuto, setSeasonMode, autoShift, autoSeason, Shift, Season, SEASON_NAMES } from '../ui/theme'
@@ -88,7 +88,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
   renderNav()
   const panel = root.querySelector('#panel') as HTMLElement
   // ponytail: /c -> main chat (cross-mundo). override do dispatch normal.
-  if (isChat) { await renderMainChat(panel) }
+  if (isChat) { const { renderMainChat } = await import('./main-chat'); await renderMainChat(panel) }
   else if (activeSlug) { setActive(activeSlug); await renderWorkspace(panel, activeSlug, isSettings) }
   else if (items.length) await renderDashboard(panel, items)
   else renderEmpty(panel, items, root)

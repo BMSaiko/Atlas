@@ -1,4 +1,34 @@
+/* ============================================================
+   atlas/components.css — sectioned navigation (Epic A foundations)
+   03 LAYOUT     .btn .side .pan-head .ws .hamb .empty
+   04 HUB        dashboard + .shift-ind + .season-ind + .pipe + .proj-* + .stat-*
+   05 KANBAN     .kanban + .kcard + drag + bulk + .term-* + .kbadge-*
+   06 NOTES      .notes-* + .note-* + .tag-* + .md-*
+   07 MODALS     .modal + .field + .kmodal-* + .md-view
+   08 CHAT       .chat-* (cross-mundo /c)
+   09 MISC       (everything else: .toast, .kbdhint, .icon-grid, .glob-*,
+                  .palette-*, .keys-table, .sess-*, .focus-*, .foco-*,
+                  .kfilter-*, .dash-none, .stat-*, .weather-*, .pipe, ...)
+   ponytail: single-file split — same cascade order, navigability via banners.
+   Each banner is the entry point for that section; Ctrl+F the class name
+   to land near it. No @import, no file-count churn.
+   ============================================================ */
+
 /* --- Buttons --- */
+
+
+.wd-card, .note-card, .kcard, .card-block {
+  /* ponytail: single source of truth for card surface (Epic A). Each card rule below
+     overrides padding/transition/background/radius only where it actually differs. */
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r2);
+}
+/* ============================================================
+   SECTION 03 — LAYOUT
+   Shell + button + workspace frame (.btn, .side, .pan-head, .ws, .hamb, .empty)
+   ============================================================ */
+
 .btn { display:inline-flex; align-items:center; gap:8px; padding:10px 16px; border-radius:var(--r1); background:var(--bg-3); color:var(--text); border:1px solid var(--line); font-weight:500; transition:background .15s, transform .15s, border-color .15s; min-height:44px; }
 .btn:hover { background:var(--bg-2); }
 .btn:active { transform:scale(.98); }
@@ -31,6 +61,14 @@
 
 /* --- Shift indicator (day/dusk/night) --- */
 .side-head { display:flex; align-items:center; justify-content:space-between; gap:var(--s2); }
+
+
+/* ============================================================
+   SECTION 04 — HUB (dashboard + indicators)
+   .hub, .shift-ind, .season-ind, .dash-*, .orb-rings, .pipe, .proj-*, .pleg,
+   .focus-*, .stat-*, .weather-*
+   ============================================================ */
+
 .shift-ind { position:relative; display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border-radius:999px; cursor:pointer;
   border:1px solid var(--line); background:var(--bg-2); color:var(--text-dim); font-size:.72rem; font-weight:600;
   text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; transition:color .3s, border-color .3s; }
@@ -159,6 +197,13 @@
 .ws-tab.active { color:var(--gold); border-bottom-color:var(--gold); }
 
 /* --- Notes --- */
+
+
+/* ============================================================
+   SECTION 06 — NOTES
+   .notes-*, .note-*, .tag-*, .md-*
+   ============================================================ */
+
 .notes-toolbar { display:flex; gap:var(--s3); align-items:center; margin-bottom:var(--s4); flex-wrap:wrap; }
 .notes-search { flex:1; min-width:200px; padding:10px 14px; border-radius:var(--r1); background:var(--bg-2); border:1px solid var(--line); color:var(--text); }
 .notes-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:var(--s4); }
@@ -192,6 +237,15 @@
 .note-view-text { color:var(--text); font-size:1rem; line-height:1.55; white-space:pre-wrap; word-break:break-word; }
 
 /* --- Kanban --- */
+
+
+/* ============================================================
+   SECTION 05 — KANBAN
+   .kanban, .kcol, .kcard, .kfilter, .kreview, .kword, .kfade, .kdp,
+   .ktimer, .kbadge-*, .kselbox, .kdue, .prio, .kmodal-actions,
+   .term-*, .bulkbar
+   ============================================================ */
+
 .kanban { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:var(--s3); align-items:start; }
 .kanban-toolbar { display:flex; gap:var(--s2); align-items:center; margin-bottom:var(--s3); flex-wrap:wrap; }
 .kanban-toolbar .kt-sec { display:flex; align-items:center; gap:2px; margin-left:4px; }
@@ -273,6 +327,13 @@
 .kcard.overdue:hover { border-color:var(--prio-urgent); }
 
 /* --- Modal --- */
+
+
+/* ============================================================
+   SECTION 07 — MODALS + FORMS
+   .modal, .field, .kmodal-status, .kmodal-sec-*, .kcopy, .md-view
+   ============================================================ */
+
 .modal-backdrop { position:fixed; inset:0; background:rgba(3,5,10,.65); display:flex; align-items:center; justify-content:center; z-index:1800; padding:var(--s4); }
 .modal { width:100%; max-width:640px; background:var(--bg-2); border:1px solid var(--line); border-radius:var(--r3); padding:var(--s5); }
 .modal h3 { font-size:1.4rem; margin-bottom:var(--s4); }
@@ -701,6 +762,13 @@ a.link:hover { color:var(--gold-soft); }
 
 /* ponytail: main chat (/c). reusa tokens (--bg-*, --s*, --r*, --gold, --text). zero dep nova. */
 .chat { display:flex; flex-direction:column; height:calc(100dvh - 0px); padding:var(--s4); gap:var(--s3); }
+
+
+/* ============================================================
+   SECTION 08 — CHAT (cross-mundo /c)
+   .chat-* (composer, thread, typing, pending)
+   ============================================================ */
+
 .chat-head { display:flex; align-items:baseline; gap:var(--s3); flex-wrap:wrap; }
 .chat-head h1 { margin:0; font:600 1.4rem var(--font-disp); color:var(--text); display:inline-flex; gap:var(--s2); align-items:center; }
 .chat-sub { margin:0; color:var(--text-dim); font-size:.88rem; }
@@ -731,3 +799,11 @@ a.link:hover { color:var(--gold-soft); }
 .side-item.chat-link { color:var(--gold); border-top:1px solid var(--line); margin-top:var(--s2); padding-top:var(--s3); }
 .side-item.chat-link.active { color:var(--gold-soft); }
 @media (prefers-reduced-motion: reduce) { .chat-typing .dot { animation:none; opacity:.7; } }
+/* ============================================================
+   SECTION 09 — MISC (catch-all)
+   .toast, .kbdhint, .icon-grid, .glob-*, .palette-*, .keys-table,
+   .sess-*, .focus-*, .foco-*, .kfilter-*, .dash-none, .stat-*,
+   .weather-*, .pipe, .term-* (some), anything not in 03-08
+   ponytail: MISC is the tail bucket — if a class grows here, lift it
+   to its own SECTION in a later polish cycle. Don't expand 09 forever.
+   ============================================================ */

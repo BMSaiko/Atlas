@@ -28,6 +28,23 @@
   --pipe-doing: #f0a63a; /* em curso — ouro aceso */
   --pipe-review: #a97ff0; /* em review — violeta cósmico */
   --pipe-done: #3ecf8f;   /* concluido — jade aurora */
+
+  /* ponytail: Epic A — shadow/z/motion scales (Epic C will wire them up).
+     --space-* and --radius-* skipped: alias of --s1..7 / --r1..3 + esbuild CSS minifier
+     trips on names with inner dashes. YAGNI. */
+  --shadow-1: 0 1px 2px rgba(0,0,0,.18);
+  --shadow-2: 0 4px 12px rgba(0,0,0,.28);
+  --shadow-3: 0 10px 28px rgba(0,0,0,.42);
+  --z-side: 100;     /* sticky sidebar */
+  --z-panel: 200;    /* panel headers / sticky in-panel UI */
+  --z-modal: 1500;   /* existing .foco-ov z-index */
+  --z-toast: 1800;   /* above modal so toasts remain visible while modal open */
+  --z-palette: 2200; /* existing .tag-sugg z-index */
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 360ms;
+  --ease-standard: cubic-bezier(.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(.3, 0, 0, 1);
 }
 [data-shift="day"] {
   --bg-0: #101a30; --bg-1: #141f3b; --bg-2: #1c2b4c; --bg-3: #25355a;

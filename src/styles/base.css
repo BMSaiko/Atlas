@@ -13,6 +13,7 @@ a:hover { text-decoration: underline; }
 button { font: inherit; color: inherit; cursor: pointer; background: none; border: none; padding: 0; }
 input, textarea, select { font: inherit; color: var(--text); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
+:focus:not(:focus-visible) { outline: none; }  /* ponytail: Epic A — suppress mouse-only focus ring; keyboard still shows via :focus-visible */
 ::placeholder { color: var(--text-dim); opacity: .7; }
 .skip-link { position:absolute; left:-9999px; top:0; }
 .skip-link:focus { left: 8px; top:8px; z-index:1000; background: var(--bg-2); padding:8px 12px; border-radius:8px; }
