@@ -8,7 +8,7 @@
 // covers './roadmap', './prompts/index', './routes/terms',
 // './routes/index', './lib/http', etc.
 export async function resolve(specifier, context, nextResolve) {
-  if (context.parentURL && /\/server\/.+\.ts$/.test(context.parentURL) && /^\.\//.test(specifier) && !/\.ts$/.test(specifier)) {
+  if (context.parentURL && /\/server\/.+\.ts$/.test(context.parentURL) && /^\.\//.test(specifier) && !/\.ts$/.test(specifier) && !/\.mjs$/.test(specifier)) {
     return nextResolve(specifier + '.ts', context)
   }
   return nextResolve(specifier, context)

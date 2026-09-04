@@ -14,6 +14,8 @@ import { tickAll, tickSnapshot, listSnapshots, getSnapshotFile, restoreSnapshot,
 import { isLoopback, makeSend, readJsonBody } from './lib/http'
 // ponytail: shared domain types (Phase 2C). WD used by workdirs handlers + index.
 import type { WD } from './lib/types'
+// ponytail: refactor — runCard/runHermesHeadless substituem os 5 wrappers Python inline
+import { runCard, runHermesHeadless } from './lib/run-card.mjs'
 // ponytail: route table + dispatcher (Phase 2A of the backend refactor).
 // See server/routes.ts. Empty table for now; the dispatcher is a no-op
 // until routes are added in Phase 2B+ (per-domain files).
@@ -406,129 +408,51 @@ async function launchHermes(slug: string, card: any) {
     cardDp,
     logPath,
   })
-  // ponytail: terminal em modo headless — NAO abre janela WezTerm. O wrapper python corre direto
-  // como processo de fundo (detached, windowsHide) e a saida (stdout+stderr) e capturada para um log
-  // por card. "Ver o terminal" na UI faz stream desse log (offset-based) — debugging/erros incluidos.
-  // Em sucesso (rc==0): merge branch->dev + push dev (a partir do repo base, sem conflito de checkout),
-  // remove a junction node_modules (rmdir NAO segue), remove a worktree e a branch -> auto-cleanup do card.
-  // Em falha: log fica gravado em disco p/ o BMS ver; worktree mantida p/ resolver.
-  const wrapper = [
-    'import subprocess,sys,os,shutil,json,time',
-    // ponytail: python -c faz sys.argv[0]='-c' (nao python path), argv[1]=stPath..argv[6]=baseBranch. Spawn: ['-c', wrapperWithPane, stPath, wt, branch, repo, prompt, baseBranch]
-    "st=sys.argv[1]; wt=sys.argv[2]; branch=sys.argv[3]; repo=sys.argv[4]; prompt=sys.argv[5]; bb=sys.argv[6]",
-    '# ponytail: card grill-me-palette — ATLAS_CARD_SKILLS="grill-me,grilling" injectado pelo spawn -> passa --skills ao hermes_cli.main',
-    "_sk=os.environ.get('ATLAS_CARD_SKILLS','')",
-    "_sa=[('--skills',s) for s in (x.strip() for x in _sk.split(',')) if s]",
-    '# ponytail: card h1y3yfsy \xe2\x80\x94 heartbeat daemon (30s) grava lastHeartbeatAt no .status para distinguir wrapper nunca arrancou de hermes travou. Thread daemon morre com o processo (sys.exit). Custo zero. Units: ms (consistente com Date.now() no resto do codebase).',
-    "import threading as _th, time as _t",
-    "def _hb():",
-    "\x20\x20\x20\x20while True:",
-    "\x20\x20\x20\x20\x20\x20\x20try: open(st,'w',encoding='utf-8').write(json.dumps({'state':'running','pane':(os.environ.get('WEZTERM_PANE') or None),'lastHeartbeatAt':int(_t.time()*1000),'ts':int(_t.time()*1000)}))",
-    "\x20\x20\x20\x20\x20\x20\x20except: pass",
-    "\x20\x20\x20\x20\x20\x20\x20_t.sleep(30)",
-    "_th.Thread(target=_hb,daemon=True).start()",
-    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",prompt]+[a for p in _sa for a in p])',
-    'if rc==0:',
-    '\x20\x20\x20\x20try:',
-    '\x20\x20\x20\x20\x20\x20\x20\x20os.chdir(repo)',
-    // ponytail: merge SEMPRE em dev — nunca na branch atual do base. Se o repo estiver em main o 'git merge' iria p/ main sem approve.
-    '\x20\x20\x20\x20\x20\x20\x20\x20co=subprocess.run([r"GITBIN","checkout",bb],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20if co.returncode!=0:',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20print("NAO consigo ir para o branch base - aborta merge p/ nao tocar em main. Worktree mantida.")',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20sys.exit(0)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","fetch","origin",bb],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20co2=subprocess.run([r"GITBIN","merge","origin/"+bb,"--no-edit"],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20mg=subprocess.run([r"GITBIN","merge",branch,"--no-edit"],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20if mg.returncode==0:',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20ps=subprocess.run([r"GITBIN","push","origin",bb],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20if ps.returncode!=0:',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","fetch","origin",bb],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","merge","origin/"+bb,"--no-edit"],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","merge",branch,"--no-edit"],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20ps=subprocess.run([r"GITBIN","push","origin",bb],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20if ps.returncode==0:',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20nj=os.path.join(wt,"node_modules")',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20try: os.rmdir(nj)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20except OSError: shutil.rmtree(nj,ignore_errors=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","worktree","remove","--force",wt],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20subprocess.run([r"GITBIN","branch","-D",branch],capture_output=True)',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20else:',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20try: open(st,"w",encoding="utf-8").write(json.dumps({"state":"merge-failed","branch":branch,"log":(mg.stderr or b"").decode("utf-8","replace"),"ts":time.time()}))',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20except: pass',
-    '\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20print("MERGE dev<-"+branch+" FALHOU apos retry (conflito real?) - worktree mantido, verifica.")',
-    '    except Exception as e:',
-    '\x20\x20\x20\x20\x20\x20\x20\x20print("AUTO-CLEANUP FALHOU: %r - push/merge incompleto. Worktree e branch mantidas p/ inspecao." % (e,))',
-    // ponytail: kill-pane o wrapper para o wezterm-gui sair -> p.on('close) do Node corre ->
-    // promotion doing->review + .status=done. Sem isto a pane fica aberta e o card preso em doing.
-    'try:',
-    '\x20\x20\x20\x20import os',
-    '\x20\x20\x20\x20p=os.environ.get("WEZTERM_PANE")',
-    '\x20\x20\x20\x20if p and p!="-1": os.system("wezterm cli kill-pane --pane-id "+p+" 2>nul")',
-    'except: pass',
-    'sys.exit(rc)',
-  ].join('\n').replaceAll('GITBIN', GIT)
+  // ponytail: refactor — spawn = `VENV_PY -m hermes_cli.main -z <prompt> [--skills X]...` directo,
+  // sem wrapper Python inline. runCard faz heartbeat 60s, spawn detached do auto-merge em
+  // rc==0, kill-pane no fim, e stream do .log com C1 sanitise. close handler e' o .then().
   const stPath = join(runsDir, card.id + '.status')
   const ws = createWriteStream(logPath, { flags: 'w' })
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
-  // ponytail: card terminal-control — spawn via `wezterm start --` para abrir pane visivel
-  // (assim o user ve o hermes a trabalhar). A env WEZTERM_PANE e' injetada pelo WezTerm na pane
-  // filha; o wrapper python grava-a no .status (stPath = argv[1]) antes de chamar o hermes, para
-  // o kill-on-transition saber qual pane fechar. Fallback headless: se cfg.wezterm nao existir
-  // (sem WezTerm instalado) spawna o python direto, p.on('error') cai no fail() antigo.
-  // argv do wrapper: [stPath, wt, branch, repo, prompt, baseBranch] (igual ao wrapper antigo +
-  // stPath como 1o argv). Wrapper prepende 2 linhas (captura pane + re-escreve .status) sem
-  // tocar no resto (auto-merge/cleanup identico ao commit de12033).
-  const wrapperWithPane = [
-    'import os,json,time,sys',
-    'st=sys.argv[1]',
-    'try:',
-    '\x20\x20\x20\x20pane=int(os.environ.get("WEZTERM_PANE","-1"))',
-    '\x20\x20\x20\x20open(st,"w",encoding="utf-8").write(json.dumps({"state":"running","pane":pane,"ts":time.time()}))',
-    'except: pass',
-    wrapper,
-  ].join('\n')
   const headless = !cfg.wezterm || !existsSync(cfg.wezterm)
-  const exe: string = headless ? VENV_PY : cfg.wezterm
-  const args: string[] = headless
-    ? ['-c', wrapperWithPane, stPath, wt, branch, repo, prompt, baseBranch]
-    : ['start', '--', VENV_PY, '-c', wrapperWithPane, stPath, wt, branch, repo, prompt, baseBranch]
-  // ponytail: card grill-me-palette — propaga card.skills ao wrapper Python via env (sem mudar argv indices)',
   const _skillsEnv = Array.isArray(card.skills) ? card.skills.filter((s:any)=>typeof s==='string'&&s.trim()).map((s:string)=>s.trim()).join(',') : ''
-  const p = spawn(exe, args, { cwd: repo, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME, ...(_skillsEnv ? { ATLAS_CARD_SKILLS: _skillsEnv } : {}) } })
-  // ponytail: termwiz drop C1 (sanitize em readJ)
-  p.stdout?.on('data', d => ws.write(sanitize(d)))
-  p.stderr?.on('data', d => ws.write(sanitize(d)))
-  p.on('error', e => { ws.end(); void fail((headless ? 'spawn headless' : 'spawn wezterm') + ' falhou: ' + e.message) })
-  p.on('close', async (code) => {
+  const _skillsArgs = _skillsEnv ? _skillsEnv.split(',').filter(Boolean).flatMap((s: string) => ['--skills', s.trim()]) : []
+  const paneRaw = process.env.WEZTERM_PANE
+  const pane = paneRaw && paneRaw !== '-1' ? Number(paneRaw) : null
+  void headless
+  void baseBranch
+  runCard({
+    stPath, wt, branch, repo, prompt, baseBranch,
+    exe: VENV_PY,
+    args: ['-m', 'hermes_cli.main', '-z', prompt, ..._skillsArgs],
+    env: { ...process.env, HERMES_HOME, ...(_skillsEnv ? { ATLAS_CARD_SKILLS: _skillsEnv } : {}) },
+    logWs: ws, pane,
+  }).then(async (code: number) => {
     ws.end()
-      // ponytail: BUG 3e — se o wrapper sinalizou merge-failed no .status, NAO promover doing->review (worktree mantida para inspecao)
-      const stRun = await readJ(stPath).catch(() => null)
-      const mergeFailed = stRun?.state === 'merge-failed'
+    const stRun = await readJ(stPath).catch(() => null)
+    const mergeFailed = stRun?.state === 'merge-failed'
     await writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {})
     const ff = join(DATA, slug, 'kanban.json')
-    // ponytail: em falha deixa um marcador ERRO no card p/ a UI saber que terminou com erro (debug facil)
     if (code !== 0) {
       const board = await readJ(ff).catch(() => null)
       const c = board?.cards?.find((x: any) => x.id === card.id)
       if (c && !c.result) { c.result = 'ERRO: processo terminou com código ' + code + ' — abre o terminal/card para ver o log.'; await writeJ(ff, board).catch(() => {}) }
     }
-    // ponytail: promove doing->review quando o run terminou OK e deixou result (worker's last report);
-    // idempotente — se o user ja mexeu no card (review/done) o guard salta. code!=0 ou sem result ficam em doing
-    // p/ o user ler o log e decidir refazer/refinar. writeJ e fire-and-forget (race com PUT do front: 409
-    // no PUT apanha a inconsistencia; em ultimo caso o pollTimer/watchReviewTransitions resolvem).
     const board2 = await readJ(ff).catch(() => null)
     const c2 = board2?.cards?.find((x: any) => x.id === card.id)
-      if (mergeFailed && c2 && !c2.result) {
+    if (mergeFailed && c2 && !c2.result) {
       c2.result = 'MERGE FALHOU apos retry (conflito real ou divergencia). Abre o log do card para inspecao — worktree mantida.'
       await writeJ(ff, board2).catch(() => {})
-      }
+    }
     if (c2 && !c2.archived && c2.colId === 'doing' && code === 0 && !mergeFailed && c2.result) {
-      void killPaneForCard(slug, card.id)  // card terminal-control: fecha pane do run antes de promover
+      void killPaneForCard(slug, card.id)
       c2.colId = 'review'
       await writeJ(ff, board2).catch(() => {})
     }
+  }).catch((e: unknown) => {
+    ws.end()
+    void fail('runCard crashed: ' + (e instanceof Error ? e.message : String(e)))
   })
-  p.unref()
 }
 async function launchBrainstorm(slug: string) {
   if (process.env.ATLAS_TEST_NO_SPAWN) return
@@ -552,21 +476,11 @@ async function launchBrainstorm(slug: string) {
   })
   const ws = createWriteStream(logPath, { flags: 'w' })
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
-  // ponytail: wrapper minimo (sem git) — hermes oneshot grava notas via API, sai com rc do processo
-  const wrapper = [
-    'import subprocess,sys',
-    '# ponytail: sem cwd embutido (herda o cwd do spawn=ATLAS_REPO) -> evita SyntaxError \\U no literal Python em Windows',
-    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[1]])',
-    'sys.exit(rc)',
-  ].join('\n')
-  const p = spawn(VENV_PY, ['-c', wrapper, prompt],
-    { cwd: repo, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
-  // ponytail: termwiz drop C1 (sanitize em readJ)
-  p.stdout?.on('data', (d: Buffer) => ws.write(sanitize(d)))
-  p.stderr?.on('data', (d: Buffer) => ws.write(sanitize(d)))
-  p.on('error', () => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code: 1, ts: Date.now() }), 'utf8').catch(() => {}) })
-  p.on('close', (code: number) => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {}) })
-  p.unref()
+  void runHermesHeadless({
+    exe: VENV_PY, args: ['-m', 'hermes_cli.main', '-z', prompt],
+    env: { ...process.env, HERMES_HOME }, logWs: ws,
+  }).then((code: number) => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {}) })
+    .catch(() => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code: 1, ts: Date.now() }), 'utf8').catch(() => {}) })
 }
 // launchDp: gera um DP (design plan) para um card SEM tocar em codigo nem worktree.
 // ponytail: espelha o launchBrainstorm — uma sessao hermes headless recebe title+desc do card,
@@ -599,23 +513,12 @@ async function launchDp(slug: string, card: any) {
   })
   const ws = createWriteStream(logPath, { flags: 'w' })
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
-  const wrapper = [
-    'import subprocess,sys',
-    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[1]])',
-    'sys.exit(rc)',
-  ].join('\n')
-  const p = spawn(VENV_PY, ['-c', wrapper, prompt],
-    { cwd: repo, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
-  // ponytail: termwiz drop C1 (sanitize em readJ)
-  p.stdout?.on('data', (d: Buffer) => ws.write(sanitize(d)))
-  p.stderr?.on('data', (d: Buffer) => ws.write(sanitize(d)))
-  p.on('error', () => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code: 1, ts: Date.now() }), 'utf8').catch(() => {}); void fail('spawn DP falhou') })
-  p.on('close', async (code: number) => {
+  void runHermesHeadless({
+    exe: VENV_PY, args: ['-m', 'hermes_cli.main', '-z', prompt],
+    env: { ...process.env, HERMES_HOME }, logWs: ws,
+  }).then(async (code: number) => {
     ws.end()
     await writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {})
-    // ponytail: DP termina com code=0 e grava card.dp -> promove para review. O DP arranca com o card
-    // em todo (handler /dp nao move) ou em doing (ciclo de orquestracao ja' moveu); promover se nao
-    // esta' arquivado nem em done. Idempotente: se o user ja moveu para review/done, salta.
     const ff = join(DATA, slug, 'kanban.json')
     const board = await readJ(ff).catch(() => null)
     const c = board?.cards?.find((x: any) => x.id === card.id)
@@ -623,8 +526,7 @@ async function launchDp(slug: string, card: any) {
       c.colId = 'review'
       await writeJ(ff, board).catch(() => {})
     }
-  })
-  p.unref()
+  }).catch(() => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code: 1, ts: Date.now() }), 'utf8').catch(() => {}); void fail('spawn DP falhou') })
 }
 // launchGitOp: operacoes git de TOPO de repo (merge dev->main, resolver conflito) via hermes
 // headless — mesmo padrao do launchDp (sessao oneshot hermes_cli.main -z, cwd=ATLAS_REPO, detached,
@@ -639,19 +541,11 @@ async function spawnHeadless(repo: string, logPath: string, stPath: string, bann
   await writeFile(logPath, _sanitizeText('◆ ' + banner + '\n'), 'utf8')
   const ws = createWriteStream(logPath, { flags: 'a' })
   writeFile(stPath, JSON.stringify({ state: 'running', ts: Date.now() }), 'utf8').catch(() => {})
-  const wrapper = [
-    'import subprocess,sys',
-    'rc=subprocess.call([sys.executable,"-m","hermes_cli.main","-z",sys.argv[1]])',
-    'sys.exit(rc)',
-  ].join('\n')
-  const p = spawn(VENV_PY, ['-c', wrapper, prompt],
-    { cwd: repo, detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, HERMES_HOME } })
-  // ponytail: termwiz drop C1 (sanitize em readJ)
-  p.stdout?.on('data', (d: Buffer) => ws.write(sanitize(d)))
-  p.stderr?.on('data', (d: Buffer) => ws.write(sanitize(d)))
-  p.on('error', () => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code: 1, ts: Date.now() }), 'utf8').catch(() => {}) })
-  p.on('close', (code: number) => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {}) })
-  p.unref()
+  void runHermesHeadless({
+    exe: VENV_PY, args: ['-m', 'hermes_cli.main', '-z', prompt],
+    env: { ...process.env, HERMES_HOME }, logWs: ws,
+  }).then((code: number) => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code, ts: Date.now() }), 'utf8').catch(() => {}) })
+    .catch((_e: unknown) => { ws.end(); writeFile(stPath, JSON.stringify({ state: 'done', code: 1, ts: Date.now() }), 'utf8').catch(() => {}) })
 }
 
 async function launchGitOp(slug: string, op: string, title: string, task: string) {

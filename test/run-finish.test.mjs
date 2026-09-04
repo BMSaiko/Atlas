@@ -182,7 +182,7 @@ console.log('\n[7] colId!=doing (user moveu) -> NAO sobrescreve (mas grava ERRO 
 console.log('\n[s1] SOURCE EQUALITY — handler nao derivou')
 {
   // marcadores exatos do handler em producao. Se algum sumir, este teste falha.
-  ok(apiSrc.includes("p.on('close', async (code) => {"), 'close handler presente')
+  ok(apiSrc.includes('.then(async (code: number) => {') || apiSrc.includes('.then(async (code) => {'), 'close handler presente (refactor: .then no runCard)')
   ok(apiSrc.includes("const stRun = await readJ(stPath).catch(() => null)"), 'lê stPath para mergeFailed')
   ok(apiSrc.includes("const mergeFailed = stRun?.state === 'merge-failed'"), 'mergeFailed check')
   ok(apiSrc.includes("if (code !== 0) {"), 'branch code!==0')

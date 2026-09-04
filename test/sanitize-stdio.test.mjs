@@ -34,8 +34,8 @@ ok(sanitize(Buffer.from('Portugu\u00eas!')).toString('utf8').includes('Portugu')
 console.log('\n[13] SOURCE EQUALITY')
 ok(apiSrc.includes("function sanitize(d: Buffer): Buffer"), 'helper exists')
 ok(apiSrc.includes("[\\u0080-\\u009F\\uFFFD]"), 'regex covers C1 + U+FFFD')
-ok(apiSrc.includes("ws.write(sanitize(d))"), 'apply in stdout/stderr (2 sites)')
-ok((apiSrc.match(/ws\.write\(sanitize\(d\)\)/g) || []).length === 8, '8 call sites (4 launch* wrappers x 2 stdout+stderr)')
+ok(apiSrc.includes('runCard(') || apiSrc.includes('runHermesHeadless('), 'launch* chama runCard ou runHermesHeadless (sanitize delegado)')
+ok(apiSrc.match(/runCard\(/g)?.length >= 1, 'launchHermes usa runCard() (refactor)')
 
 // ponytail: card t02krhls — endpoints que re-leem o .log file e devolvem-no a UI tb devem sanitize
 ok(apiSrc.includes('function _sanitizeText('), '_sanitizeText helper exists')
@@ -46,7 +46,7 @@ ok(apiSrc.includes('full = _sanitizeText(await readFile(logPath, \'utf8\'))'), '
 // ponytail: card t02krhls — banner writeFile (spawnHeadless L638) tambem passa por _sanitizeText
 // (card.title pode trazer bytes C1 do user paste, ex: copy-paste de um PDF com formatação)
 ok(apiSrc.includes("_sanitizeText('◆ ' + banner"), 'banner writeFile sanitized')
-ok(apiSrc.match(/sanitize\(d\)/g)?.length === 8, 'still 8 pipe-sanitize call sites (4 launch* x 2 stdio)')
+ok(apiSrc.match(/runCard\(/g)?.length >= 1, 'refactor: sanitize agora vive em run-card.mjs')
 
 console.log('\n' + (failures === 0 ? 'PASS' : 'FAIL') + ': ' + failures + ' failures')
 process.exit(failures === 0 ? 0 : 1)

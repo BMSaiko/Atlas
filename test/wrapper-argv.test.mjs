@@ -1,192 +1,137 @@
 // test/wrapper-argv.test.mjs
 //
-// Regressao: argv off-by-1 do wrapper python em server/api.ts. Cobre 3 wrappers:
-//   A. launchHermes headless (L406-441) — 6-arg set [stPath,wt,branch,repo,prompt,baseBranch]
-//   B. launchHermes with-pane (L453-461) — prepended pane-capture, mesmo 6-arg set
-//   C. launchDp (L529-534) — wrapper minimo, 1-arg set [prompt] (sem git/merge)
+// Regressao: runCard() deve
+//   1. propagar rc do child (sem auto-merge se baseBranch undefined)
+//   2. NAO tentar auto-merge em rc!=0
+//   3. spawn auto-merge.mjs detached em rc==0 + baseBranch
+//   4. chamar killPane so se pane != -1 e != null
+//   5. heartbeat em ms (60s interval), pane default null
+//   6. sanitise C1 (0x80-0x9F + U+FFFD) no .log stream
+//   7. auto-merge.mjs: chdir(repo), git flow com retry on push fail
 //
-// Bug historico: python -c faz sys.argv[0]='-c' (NAO o python path). Confirma:
-//   1. wrapperWithPane grava .status com pane=WEZTERM_PANE e argv[1]=stPath
-//   2. wrapper principal le sys.argv[1..6] corretamente (stPath..baseBranch)
-//   3. os.chdir(repo) corre OK (NUNCA os.chdir(base) que crashava com NameError)
-//   4. launchDp le sys.argv[1]=prompt corretamente (1-arg set, sem git)
-//
-// Reproduzido em 2026-08-30 nos cards bao35dg0/phqqhn10/q49x3w24.
-//
-// Executar: node test/wrapper-argv.test.mjs
-// Sem dependencia externa. Requer python 3 no PATH.
+// Substitui o antigo wrapper-argv.test.mjs (que testava o python -c SCRIPT).
+// Stdlib only. Sem hermes real (child = `node -e "process.exit(0)"`).
 
-import { execFileSync } from 'child_process'
-import { mkdtempSync, readFileSync, unlinkSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+import { join, dirname } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
+const libDir = join(here, '..', 'server', 'lib')
+const runCard = (await import(pathToFileURL(join(libDir, 'run-card.mjs')).href)).runCard
+const autoMergeSrc = readFileSync(join(libDir, 'auto-merge.mjs'), 'utf8')
+const runCardSrc = readFileSync(join(libDir, 'run-card.mjs'), 'utf8')
 
-const havePython = (() => {
-  try { execFileSync('python', ['-V'], { stdio: 'ignore' }); return true } catch { return false }
-})()
-if (!havePython) {
-  console.error('SKIP: python nao encontrado no PATH')
-  process.exit(0)
-}
+let passed = 0, failed = 0
+function ok(m) { passed++; console.log(`  ok: ${m}`) }
+function fail(m) { failed++; console.log(`  NOT OK: ${m}`) }
+function assert(c, m) { c ? ok(m) : fail(m) }
 
-const tmp     = mkdtempSync(join(tmpdir(), 'atlas-argvfix-'))
-const repoDir = mkdtempSync(join(tmpdir(), 'atlas-repo-'))
-const stPath  = join(tmp, 'card.status')
-
-// wrapper EXATO do server/api.ts L453-461 + L406-441.
-// Mantem a sequencia: st=sys.argv[1] + chdir(repo).
-// Substituimos o subprocess.call(hermes) por gravacao em .status para provar
-// que os indices chegam corretos.
-const wrapperWithPane = [
-  'import os,json,time,sys',
-  'st=sys.argv[1]',
-  'try:',
-  '    pane=int(os.environ.get("WEZTERM_PANE","-1"))',
-  '    open(st,"w",encoding="utf-8").write(json.dumps({"state":"running","pane":pane,"ts":time.time()}))',
-  'except: pass',
-  // ---- wrapper principal (server/api.ts L406-441) ----
-  'import subprocess,sys,os,shutil',
-  'st=sys.argv[1]; wt=sys.argv[2]; branch=sys.argv[3]; repo=sys.argv[4]; prompt=sys.argv[5]; bb=sys.argv[6]',
-  // dump indices para .status (sem spawn hermes real)
-  'open(st,"a",encoding="utf-8").write("DUMP|argv0="+sys.argv[0]+"|argv1="+sys.argv[1]+"|argv2="+sys.argv[2]+"|argv3="+sys.argv[3]+"|argv4="+sys.argv[4]+"|argv5="+sys.argv[5]+"|argv6="+sys.argv[6]+"|END")',
-  // rc==0 path: chdir(repo)
-  'try:',
-  '    os.chdir(repo)',
-  '    open(st,"a",encoding="utf-8").write("|chdir=ok|"+os.getcwd()+"|END")',
-  'except Exception as e:',
-  '    open(st,"a",encoding="utf-8").write("|chdir=fail|"+repr(e)+"|END")',
-].join('\n')
-
-// Spawn pattern do server/api.ts L465 (headless mode):
-// python -c <wrapperWithPane> stPath wt branch repo prompt baseBranch
-const wtArg     = 'C:\\fake\\worktree\\q49x3w24'
-const branchArg = 'feature/atlas-q49x3w24'
-const repoArg   = repoDir
-const promptArg = 'Implementa feature logs no Atlas'
-const bbArg     = 'dev'
-
-try {
-  execFileSync('python',
-    ['-c', wrapperWithPane, stPath, wtArg, branchArg, repoArg, promptArg, bbArg],
-    { env: { ...process.env, WEZTERM_PANE: '4242' }, stdio: ['ignore', 'pipe', 'pipe'] }
-  )
-} catch (e) {
-  console.error('FAIL: spawn python:', e.message)
-  process.exit(1)
-}
-
-// ---- ASSERCOES ----
-let failures = 0
-const assert = (cond, msg) => {
-  if (cond) { console.log('  ok:', msg) }
-  else { console.error('  FAIL:', msg); failures++ }
-}
-
-console.log('Wrapper argv layout regression test')
-const status = readFileSync(stPath, 'utf-8')
-console.log('--- .status ---')
-console.log(status)
-console.log('--------------')
-
-// 1. wrapperWithPane gravou state=running + pane=4242 (nao -1)
-assert(status.includes('"state": "running"'), 'wrapperWithPane grava state=running')
-assert(status.includes('"pane": 4242'),       'wrapperWithPane le WEZTERM_PANE=4242')
-
-// 2. argv indices estao alinhados (DUMP|argvN=...|END)
-const dump = status.match(/DUMP\|(.+?)\|END/)
-assert(dump, 'DUMP argv presente no .status')
-
-if (dump) {
-  const parts = dump[1].split('|').map(s => s.split('=',2))
-  const get = (n) => parts.find(([k]) => k === `argv${n}`)?.[1]
-  assert(get(0) === '-c',     `argv[0]='-c' (got '${get(0)}')`)
-  assert(get(1) === stPath,  `argv[1]=stPath (got '${get(1)}')`)
-  assert(get(2) === wtArg,   `argv[2]=wt (got '${get(2)}')`)
-  assert(get(3) === branchArg, `argv[3]=branch (got '${get(3)}')`)
-  assert(get(4) === repoArg, `argv[4]=repo (got '${get(4)}')`)
-  assert(get(5) === promptArg, `argv[5]=prompt (got '${get(5)}')`)
-  assert(get(6) === bbArg,   `argv[6]=baseBranch (got '${get(6)}')`)
-}
-
-// 3. chdir(repo) correu OK
-assert(status.includes('|chdir=ok|' + repoDir), 'os.chdir(repo) funcionou (nao foi chdir(base) que crashava)')
-
-// 4. Bug-class: NAO deve haver off-by-1 residual
-assert(!status.includes('argv1=' + wtArg),    'NAO ha off-by-1 (argv[1] NAO deve ser wt)')
-assert(!status.includes('argv5=' + wtArg),    'NAO ha off-by-1 (argv[5]/prompt NAO deve ser wt)')
-assert(!status.includes('argv4=' + promptArg),'NAO ha off-by-1 (argv[4]/repo NAO deve ser prompt)')
-
-// ============================================================
-// [5] launchDp wrapper (1-arg set, sem git/merge) — server/api.ts L529-534
-// ============================================================
-console.log('\n[5] launchDp: wrapper minimo 1-arg set')
-{
-  const dpStPath = join(tmp, 'dp-card.status')
-  const dpPrompt = 'Gera DP para o card q49x3w24'
-  // Stub: dump argv (sem chamar hermes real) e sys.exit(0)
-  const dumpWrapper = [
-    'import sys',
-    'open("' + dpStPath.replace(/\\/g, '\\\\') + '","w").write("argv0="+sys.argv[0]+"|argv1="+sys.argv[1]+"|argc="+str(len(sys.argv)))',
-  ].join('\n')
-  execFileSync('python',
-    ['-c', dumpWrapper, dpPrompt],
-    { stdio: ['ignore', 'pipe', 'pipe'] }
-  )
-  const dpStatus = readFileSync(dpStPath, 'utf-8')
-  assert(dpStatus.includes('argv0=-c'),         'launchDp: argv[0]=-c (python -c)')
-  assert(dpStatus.includes('argv1=' + dpPrompt),'launchDp: argv[1]=prompt')
-  assert(dpStatus.includes('argc=2'),           'launchDp: argc=2 (script + 1 arg)')
-
-  unlinkSync(dpStPath)
-}
-
-// ============================================================
-// [6] SOURCE EQUALITY — server/api.ts L406-441 + L453-461 + L529-534 inalterados
-// ============================================================
-console.log('\n[6] SOURCE EQUALITY (wrappers inalterados)')
-{
-  const apiSrc = readFileSync(join(here.replace(/test.*$/, ''), 'server', 'api.ts'), 'utf-8')
-  const anchors = [
-    // L408: argv map do wrapper principal
-    /st=sys\.argv\[1\]; wt=sys\.argv\[2\]; branch=sys\.argv\[3\]; repo=sys\.argv\[4\]; prompt=sys\.argv\[5\]; bb=sys\.argv\[6\]/,
-    // L413: chdir(repo) NOT chdir(base) — old-bug regression
-    /os\.chdir\(repo\)/,
-    // L416: checkout bb abort
-    /if co\.returncode!=0/,
-    // L421: merge branch --no-edit
-    /subprocess\.run\(\[r"GITBIN","merge",branch,"--no-edit"\],capture_output=True\)/,
-    // L423: push origin bb (NUNCA push com retry — ainda NAO implementado, BUG 3e)
-    /subprocess\.run\(\[r"GITBIN","push","origin",bb\],capture_output=True\)/,
-    // L430: merge-failed so imprime, NAO signal .status.state (BUG 3e fix por fazer)
-    /print\("MERGE dev<-"\+branch\+" FALHOU/,
-    // L455: wrapperWithPane st=sys.argv[1]
-    /'st=sys\.argv\[1\]'/,
-    // L457: pane=WEZTERM_PANE
-    /pane=int\(os\.environ\.get/,
-    // L462-465: headless dispatch
-    /const headless = !cfg\.wezterm \|\| !existsSync\(cfg\.wezterm\)/,
-    /\['-c', wrapperWithPane, stPath, wt, branch, repo, prompt, baseBranch\]/,
-    // L529-532: launchDp wrapper minimo (1 arg)
-    /'rc=subprocess\.call\(\[sys\.executable,"-m","hermes_cli\.main","-z",sys\.argv\[1\]\]\)'/,
-  ]
-  for (const a of anchors) {
-    assert(a.test(apiSrc), `ancora presente: ${a.toString().slice(0,70)}...`)
+function fakeHermes(rc, stderrText = '') {
+  return {
+    exe: process.execPath,
+    args: ['-e', `process.stderr.write(${JSON.stringify(stderrText)}); process.exit(${rc})`],
+    env: process.env,
   }
-  // Confirmar o BUG 3e fix ESTA implementado (regression contract)
-  assert(/json\.dumps\(\{\"state\":\"merge-failed\"/.test(apiSrc),  'BUG 3e fix: wrapper sinaliza merge-failed em .status')
-  assert((apiSrc.match(/fetch.*origin.*bb.*capture_output=True/g) || []).length >= 2, 'BUG 3e fix: fetch origin bb >= 2x (retry apos push falhar)')
+}
+function makeLogWs() {
+  let buf = ''
+  return { write(c) { buf += c.toString('utf8') }, end() {}, get buf() { return buf } }
 }
 
-// Cleanup
-unlinkSync(stPath)
-rmSync(tmp, { recursive: true, force: true })
-rmSync(repoDir, { recursive: true, force: true })
+console.log('runCard argv contract test')
 
-if (failures > 0) {
-  console.error(`\nFAIL: ${failures} assercao(oes) falharam`)
-  process.exit(1)
+// 1. rc==0 propagado, heartbeat escreveu .status
+{
+  const tmp = mkdtempSync(join(tmpdir(), 'rc0-'))
+  const st = join(tmp, 's.status')
+  const r = await runCard({
+    stPath: st, wt: tmp, branch: 'feature/x', repo: tmp, prompt: 'p',
+    baseBranch: undefined, ...fakeHermes(0), logWs: makeLogWs(),
+  })
+  assert(r === 0, 'rc==0 propagado pelo runCard')
+  const status = JSON.parse(readFileSync(st, 'utf8'))
+  assert(status.state === 'running' || status.lastHeartbeatAt, 'heartbeat escreveu .status')
+  rmSync(tmp, { recursive: true, force: true })
 }
-console.log('\nOK: argv fix regression passed (3 wrappers, todas as assercoes)')
+
+// 2. rc!=0 propagado, NAO tenta auto-merge
+{
+  const tmp = mkdtempSync(join(tmpdir(), 'rc1-'))
+  const st = join(tmp, 's.status')
+  const logWs = makeLogWs()
+  const r = await runCard({
+    stPath: st, wt: tmp, branch: 'feature/x', repo: tmp, prompt: 'p',
+    baseBranch: 'dev', ...fakeHermes(1, 'fake err'), logWs,
+  })
+  assert(r === 1, 'rc!=0 propagado pelo runCard')
+  assert(!logWs.buf.includes('NAO consigo ir para o branch base'), 'NAO tentou auto-merge em rc!=0')
+  rmSync(tmp, { recursive: true, force: true })
+}
+
+// 3. pane guard
+{
+  assert(/pane == null \|\| pane === -1 \|\| pane === '-1'/.test(runCardSrc),
+    'killPane guard: pane null/-1/"-1" salta cedo')
+}
+
+// 4. heartbeat shape: ms + pane=null
+{
+  const tmp = mkdtempSync(join(tmpdir(), 'hb-'))
+  const st = join(tmp, 's.status')
+  const child = { exe: process.execPath, args: ['-e', 'setTimeout(()=>{}, 200)'], env: process.env }
+  await runCard({
+    stPath: st, wt: tmp, branch: 'feature/x', repo: tmp, prompt: 'p',
+    baseBranch: undefined, ...child, logWs: makeLogWs(),
+  })
+  const status = JSON.parse(readFileSync(st, 'utf8'))
+  assert(typeof status.lastHeartbeatAt === 'number', 'lastHeartbeatAt is number')
+  assert(status.lastHeartbeatAt > 1.7e12, 'lastHeartbeatAt is ms (>= 2024 epoch)')
+  assert(status.pane === null, 'pane default null')
+  rmSync(tmp, { recursive: true, force: true })
+}
+
+// 5. C1 sanitise
+{
+  const tmp = mkdtempSync(join(tmpdir(), 'c1-'))
+  const st = join(tmp, 's.status')
+  const logWs = makeLogWs()
+  const c1Payload = 'A\x80B\x9fC�D\n'
+  const child = {
+    exe: process.execPath,
+    args: ['-e', `process.stdout.write(${JSON.stringify(c1Payload)}); process.exit(0)`],
+    env: process.env,
+  }
+  await runCard({
+    stPath: st, wt: tmp, branch: 'feature/x', repo: tmp, prompt: 'p',
+    baseBranch: undefined, ...child, logWs,
+  })
+  assert(!logWs.buf.includes('\x80'), 'C1 0x80 dropped')
+  assert(!logWs.buf.includes('\x9f'), 'C1 0x9f dropped')
+  assert(!logWs.buf.includes('�'), 'U+FFFD dropped')
+  assert(logWs.buf.includes('A') && logWs.buf.includes('B') && logWs.buf.includes('C') && logWs.buf.includes('D'),
+    'bytes validos preservados')
+  rmSync(tmp, { recursive: true, force: true })
+}
+
+// 6. auto-merge detached spawn (source-only)
+{
+  assert(/spawnAutoMerge\(/.test(runCardSrc), 'runCard chama spawnAutoMerge no rc==0 path')
+  assert(/spawn\(process\.execPath/.test(runCardSrc), 'auto-merge spawn usa process.execPath (node)')
+  assert(/detached: true/.test(runCardSrc), 'auto-merge spawn detached')
+  assert(/\.unref\(\)/.test(runCardSrc), 'auto-merge spawn unref')
+  // auto-merge.mjs shape
+  assert(/wt, branch, repo, baseBranch, stPath/.test(autoMergeSrc), 'auto-merge.mjs argv matches runCard')
+  assert(/chdir\(repo\)/.test(autoMergeSrc), 'auto-merge: chdir(repo)')
+  assert(/checkout.*baseBranch/.test(autoMergeSrc), 'auto-merge: checkout baseBranch')
+  assert(/merge.*branch.*--no-edit/.test(autoMergeSrc), 'auto-merge: merge feature branch')
+  assert(/push.*origin.*baseBranch/.test(autoMergeSrc), 'auto-merge: push origin baseBranch')
+  assert(/state.*merge-failed/.test(autoMergeSrc), 'auto-merge: merge-failed em .status')
+  assert(/worktree.*remove.*--force/.test(autoMergeSrc), 'auto-merge: cleanup worktree')
+  assert(/branch.*-D.*branch/.test(autoMergeSrc), 'auto-merge: cleanup branch')
+  assert(/ps\.status !== 0[\s\S]{0,400}ps = spawnSync.*push/.test(autoMergeSrc), 'BUG 3e: retry push')
+}
+
+console.log(`\n${failed === 0 ? 'PASS' : 'FAIL'}: wrapper-argv (${passed} ok, ${failed} not ok)`)
+process.exit(failed === 0 ? 0 : 1)
