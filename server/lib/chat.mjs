@@ -1,7 +1,9 @@
 // server/lib/chat.mjs
-// ponytail: history store + chat-runner para o main chat cross-mundo (`/c`).
+// ponytail: multi-conversation history store + chat-runner para o main chat (/c).
 // Reusa runHermesHeadless de run-card.mjs. NAO toca em syncVault (cross-mundo
-// nao vai para a vault do atlas). paths: data/_chat/history.json + runs/<runId>.{log,status}.
+// nao vai para a vault do atlas).
+// storage: data/_chat/history.json = { current: <id>, conversations: [{id,title,createdAt,updatedAt,messages:[]}] }
+// runs: data/_chat/runs/<runId>.{log,status} (partilhado por todas as conversas; lookup por .log filename).
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createWriteStream } from 'node:fs'
@@ -12,37 +14,147 @@ import { loadPrompt, interpolate } from '../prompts/index.ts'
 const CHAT_DIR = '_chat'
 const RUNS_DIR = '_chat/runs'
 const HISTORY_FILE = '_chat/history.json'
-export const CAP = 200  // ponytail: teto de mensagens; FIFO削 quando passa
+export const CAP = 200  // ponytail: teto de mensagens POR CONVERSA; FIFO削 quando passa
+const CONV_CAP = 50    // ponytail: teto de conversas mantidas; quando passa, a mais antiga (sem updatedAt recente) sai
 
-// ponytail: readHistory devolve {messages:[]} se o ficheiro nao existe (default honesto,
-// nao 404 nem inventa nada).
-export async function readHistory(dataDir) {
+// ponytail: schema novo. Migra do schema antigo {messages:[]} se encontrar. Sem migra = default vazio.
+async function readStore(dataDir) {
   try {
     const raw = await readFile(join(dataDir, HISTORY_FILE), 'utf8')
     const j = JSON.parse(raw)
-    if (Array.isArray(j?.messages)) return { messages: j.messages.slice(-CAP) }
-    return { messages: [] }
-  } catch {
-    return { messages: [] }
-  }
+    // migrate: old shape {messages:[]}
+    if (Array.isArray(j?.messages)) {
+      const id = 'c-' + Date.now().toString(36)
+      const now = Date.now()
+      return {
+        current: id,
+        conversations: [{ id, title: j.messages[0]?.text?.slice(0, 60) || 'conversa', createdAt: now, updatedAt: now, messages: j.messages.slice(-CAP) }],
+      }
+    }
+    if (Array.isArray(j?.conversations)) {
+      return {
+        current: typeof j.current === 'string' ? j.current : (j.conversations[0]?.id ?? ''),
+        conversations: j.conversations,
+      }
+    }
+  } catch { /* file missing or malformed — start fresh */ }
+  return { current: '', conversations: [] }
 }
 
-// ponytail: appendHistory escreve com 2 writeFile (tmp + final). Sem rename atomico (Windows
-// fs.rename pode falhar cross-device), mas como o unico writer e este server, a janela de
-// inconsistencia e zero. Cap FIFO削 messages[0] quando length > CAP.
-export async function appendHistory(dataDir, msg) {
-  const cur = await readHistory(dataDir)
-  const messages = [...cur.messages, msg]
-  while (messages.length > CAP) messages.shift()
+async function writeStore(dataDir, store) {
   await mkdir(join(dataDir, CHAT_DIR), { recursive: true })
-  const file = join(dataDir, HISTORY_FILE)
-  await writeFile(file, JSON.stringify({ messages }, null, 2), 'utf8')
-  return { messages }
+  await writeFile(join(dataDir, HISTORY_FILE), JSON.stringify(store, null, 2), 'utf8')
+}
+
+// ponytail: devolve a conversation atual com messages cap-FIFO. Se nao existir, cria 1 com titulo gerado.
+export async function readHistory(dataDir) {
+  const store = await readStore(dataDir)
+  let conv = store.conversations.find((c) => c.id === store.current)
+  if (!conv && store.conversations.length === 0) {
+    // start fresh: cria 1 conversation vazia
+    const id = 'c-' + Date.now().toString(36)
+    const now = Date.now()
+    conv = { id, title: 'Nova conversa', createdAt: now, updatedAt: now, messages: [] }
+    store.conversations.push(conv)
+    store.current = id
+    await writeStore(dataDir, store)
+  } else if (!conv) {
+    conv = store.conversations[0]
+    store.current = conv.id
+    await writeStore(dataDir, store)
+  }
+  return { conversation: conv, messages: conv.messages.slice(-CAP), conversations: store.conversations, current: store.current }
+}
+
+// ponytail: appendHistory append à conversa ATUAL + bumpa updatedAt. Idempotencia do agent msg via runId ja e' checked no routes/chat.ts.
+export async function appendHistory(dataDir, msg) {
+  const store = await readStore(dataDir)
+  let conv = store.conversations.find((c) => c.id === store.current)
+  if (!conv) {
+    const id = 'c-' + Date.now().toString(36)
+    const now = Date.now()
+    conv = { id, title: msg.text?.slice(0, 60) || 'conversa', createdAt: now, updatedAt: now, messages: [] }
+    store.conversations.push(conv)
+    store.current = id
+  }
+  conv.messages.push(msg)
+  while (conv.messages.length > CAP) conv.messages.shift()
+  conv.updatedAt = Date.now()
+  // se a 1a msg do user acaba de entrar, o titulo e' o texto (max 60ch)
+  if (msg.role === 'user' && (conv.title === 'Nova conversa' || !conv.title)) {
+    conv.title = msg.text.slice(0, 60)
+  }
+  await writeStore(dataDir, store)
+  return { conversation: conv, messages: conv.messages, conversations: store.conversations, current: store.current }
+}
+
+// ponytail: criar nova conversa (vazia). Retorna a store atualizada.
+// Se a store estiver vazia, cria 1 default primeiro (mesmo contrato de readHistory).
+export async function newConversation(dataDir) {
+  let store = await readStore(dataDir)
+  if (store.conversations.length === 0) {
+    const did = 'c-' + Date.now().toString(36)
+    const now = Date.now()
+    store.conversations.push({ id: did, title: 'Nova conversa', createdAt: now, updatedAt: now, messages: [] })
+    store.current = did
+  }
+  const id = 'c-' + Date.now().toString(36)
+  const now = Date.now()
+  store.conversations.unshift({ id, title: 'Nova conversa', createdAt: now, updatedAt: now, messages: [] })
+  // cap conversations: descarta as mais antigas alem de CONV_CAP
+  if (store.conversations.length > CONV_CAP) {
+    store.conversations = store.conversations.slice(0, CONV_CAP)
+  }
+  store.current = id
+  await writeStore(dataDir, store)
+  return { conversation: store.conversations[0], messages: [], conversations: store.conversations, current: id }
+}
+
+// ponytail: switch conversa atual.
+export async function switchConversation(dataDir, id) {
+  const store = await readStore(dataDir)
+  const conv = store.conversations.find((c) => c.id === id)
+  if (!conv) return null
+  store.current = id
+  await writeStore(dataDir, store)
+  return { conversation: conv, messages: conv.messages, conversations: store.conversations, current: id }
+}
+
+// ponytail: listar conversas (sidebar). Nao toca em messages.
+export async function listConversations(dataDir) {
+  const store = await readStore(dataDir)
+  return store.conversations.map((c) => ({ id: c.id, title: c.title, createdAt: c.createdAt, updatedAt: c.updatedAt, msgCount: c.messages.length }))
+}
+
+// ponytail: apagar 1 conversa. Se era a current, switch para a prox (ou cria nova).
+export async function deleteConversation(dataDir, id) {
+  const store = await readStore(dataDir)
+  const idx = store.conversations.findIndex((c) => c.id === id)
+  if (idx < 0) return null
+  store.conversations.splice(idx, 1)
+  if (store.current === id) {
+    store.current = store.conversations[0]?.id || ''
+    if (!store.current) {
+      // start fresh
+      const nid = 'c-' + Date.now().toString(36)
+      const now = Date.now()
+      store.conversations.push({ id: nid, title: 'Nova conversa', createdAt: now, updatedAt: now, messages: [] })
+      store.current = nid
+    }
+  }
+  await writeStore(dataDir, store)
+  return { current: store.current, conversations: store.conversations }
 }
 
 export async function clearHistory(dataDir) {
-  await mkdir(join(dataDir, CHAT_DIR), { recursive: true })
-  await writeFile(join(dataDir, HISTORY_FILE), JSON.stringify({ messages: [] }, null, 2), 'utf8')
+  // ponytail: manter o conceito de "limpar thread" como soft-delete da conversa atual (mantem titulo).
+  const store = await readStore(dataDir)
+  const conv = store.conversations.find((c) => c.id === store.current)
+  if (conv) {
+    conv.messages = []
+    conv.updatedAt = Date.now()
+    await writeStore(dataDir, store)
+  }
 }
 
 // ponytail: launchChat dispara 1 sessao hermes headless com o prompt cross-mundo montado

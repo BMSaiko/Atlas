@@ -1,5 +1,5 @@
 // server/lib/chat.d.mts
-// Type declarations for server/lib/chat.mjs (cross-mundo main chat store + runner).
+// Type declarations for server/lib/chat.mjs (multi-conversation chat store + runner).
 export const CAP: number
 
 export interface ChatMsg {
@@ -10,9 +10,41 @@ export interface ChatMsg {
   actions?: any[]
 }
 
-export function readHistory(dataDir: string): Promise<{ messages: ChatMsg[] }>
-export function appendHistory(dataDir: string, msg: ChatMsg): Promise<{ messages: ChatMsg[] }>
+export interface Conversation {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  messages: ChatMsg[]
+}
+
+export interface ConversationSummary {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  msgCount: number
+}
+
+export interface ChatState {
+  conversation: Conversation
+  messages: ChatMsg[]
+  conversations: Conversation[]
+  current: string
+}
+
+export interface ChatConversationsList {
+  current: string
+  conversations: ConversationSummary[]
+}
+
+export function readHistory(dataDir: string): Promise<ChatState>
+export function appendHistory(dataDir: string, msg: ChatMsg): Promise<ChatState>
 export function clearHistory(dataDir: string): Promise<void>
+export function newConversation(dataDir: string): Promise<ChatState>
+export function switchConversation(dataDir: string, id: string): Promise<ChatState | null>
+export function listConversations(dataDir: string): Promise<ConversationSummary[]>
+export function deleteConversation(dataDir: string, id: string): Promise<ChatConversationsList | null>
 
 export interface LaunchChatOpts {
   dataDir: string

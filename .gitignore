@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .ci-gate/
+.wt/
 
 dev.log
 data
@@ -20,6 +21,8 @@ __pycache__/
 
 # ponytail: transient logs from local michi build gates
 build.log
+build2.log
+build3.log
 
 # Epic A polish gates (michi atlas cycle 2026-09-04)
 .lighthouse
