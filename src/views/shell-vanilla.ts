@@ -3,11 +3,11 @@ import { icon } from '../ui/icons'
 import { openModal } from '../ui/modal'
 import { toast } from '../ui/toast'
 import { navigate } from '../router'
-import { renderWorkspace } from './workspace'
+// renderWorkspace imported only when !skipDispatch (now removed since React owns dispatch)
 import { openPalette } from '../ui/palette'
-import { parseTags, bindTagAutocomplete, openNewNoteModal } from './notes'
-import { openNewCardModal } from './kanban'
-import { renderDashboard } from './dashboard'
+import { parseTags, bindTagAutocomplete, openNewNoteModal } from './notes-vanilla'
+import { openNewCardModal } from './kanban-vanilla'
+import { renderDashboard } from './dashboard-vanilla'
 // ponytail: renderMainChat lazy-loaded (Epic A6 — code-split /c route; was eager, broke lighthouse perf 90 vs SP gate >=95)
 import { startClockWidget } from '../ui/clock'
 import { fetchWeather, openWeatherWeekModal } from '../ui/weather'
@@ -26,7 +26,7 @@ async function counts(slug: string) {
   } catch { return { notes: 0, open: 0 } }
 }
 
-export async function renderShell(root: HTMLElement, slug: string | null, isSettings: boolean, isChat = false) {
+export async function renderShell(root: HTMLElement, slug: string | null, isSettings: boolean, isChat = false, skipDispatch = false) {
   const workdirs = await api.workdirs()
   let activeSlug = slug && workdirs.some(w => w.slug === slug) ? slug : null
   const catalog = await api.icons().catch(() => [] as string[])
@@ -88,10 +88,13 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
   renderNav()
   const panel = root.querySelector('#panel') as HTMLElement
   // ponytail: /c -> main chat (cross-mundo). override do dispatch normal.
-  if (isChat) { const { renderMainChat } = await import('./main-chat'); await renderMainChat(panel) }
-  else if (activeSlug) { setActive(activeSlug); await renderWorkspace(panel, activeSlug, isSettings) }
-  else if (items.length) await renderDashboard(panel, items)
-  else renderEmpty(panel, items, root)
+  // When called from the React shell, dispatch is owned by react-router (<Outlet/> into #panel).
+  if (!skipDispatch) {
+    if (isChat) { const { renderMainChat } = await import('./main-chat'); await renderMainChat(panel) }
+    else if (activeSlug) { setActive(activeSlug); const { renderWorkspace } = await import('./workspace-vanilla'); await renderWorkspace(panel, activeSlug, isSettings) }
+    else if (items.length) await renderDashboard(panel, items)
+    else renderEmpty(panel, items, root)
+  }
 
   // ponytail: chat-link active state quando /c
   const chatLink = root.querySelector<HTMLElement>('#chat-link')
@@ -289,3 +292,81 @@ async function bindClockWeather(shell: HTMLElement) {
 }
 
 function esc(s: unknown) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
+
+
+// ponytail: SP §7 step 8 — renderShellChrome is the sidebar portion of the old renderShell.
+// Renders logo, shift/season indicators, chat link, world nav, clock, focus pill, footer.
+// Called by React <Shell/>; vanilla never touches the main <Outlet/>.
+export async function renderShellChrome(host: HTMLElement, slug: string | null, _isSettings: boolean, isChat = false) {
+  // Clear any previous chrome
+  while (host.firstChild) host.removeChild(host.firstChild)
+
+  const workdirs = await api.workdirs().catch(() => [] as Array<{ slug: string; name: string; icon?: string }>)
+  let activeSlug = slug && workdirs.some(w => w.slug === slug) ? slug : null
+  const catalog = await api.icons().catch(() => [] as string[])
+  const items = await Promise.all(workdirs.map(async (w, i) => ({ ...w, icon: w.icon || catalog[i % Math.max(catalog.length, 1)], open: (await counts(w.slug)).open })))
+  state.slug = activeSlug; state.items = items
+
+  host.innerHTML = `
+    <div class="side-head"><a class="logo logo-sm" href="/" data-nav="/">ATLAS</a><span class="shift-ind" id="shift-ind" title="Luminosidade do dia"></span><span class="shift-ind" id="season-ind" title="Estação do ano"></span></div>
+    <a class="side-item chat-link" href="/c" data-nav="/c" id="chat-link" aria-label="Main chat cross-mundo">${icon('chat', 16)} <span class="side-label">Chat</span></a><nav class="side-nav" aria-label="Workdirs"></nav>
+    <div class="side-clock" id="clock">
+      <div class="clock-time" data-clock="time">--:--:--</div>
+      <div class="clock-sub"><span class="clock-date" data-clock="date"></span> · <span class="clock-tz" data-clock="tz" id="clock-tz" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-label="Fuso horário">PT</span> · <span class="clock-wx" data-clock="wx" role="button" tabindex="0" aria-label="Previsão meteorológica — 7 dias" title="Meteorologia — Open-Meteo"><span class="wx-icon" data-clock="wx-icon"></span><span class="wx-temp" data-clock="wx-temp">--°</span></span></div>
+      <div class="tz-pop" id="tz-pop" hidden><label for="tz-select">Fuso horário</label><select id="tz-select" aria-label="Escolher fuso horário"></select></div>
+    </div>
+    <div class="side-focus" id="foco"></div>
+    <div class="side-foot"><button class="btn btn-primary btn-block" id="side-new">${icon('plus', 16)} Novo mundo</button></div>
+  `
+
+  // The vanilla renderShell attached everything to the shell root element. Now we attach
+  // to the chrome host. Re-bind the behaviors.
+  const shell = host.closest('#shell') as HTMLElement | null
+  const nav = host.querySelector('.side-nav') as HTMLElement
+  let dragSlug: string | null = null
+  const renderNav = () => {
+    nav.innerHTML = items.map(w => `<a class="side-item${w.slug === activeSlug ? ' active' : ''}" data-slug="${w.slug}" draggable="true" href="/w/${w.slug}">
+      <img class="side-orb" src="/icons/${w.icon}" alt="" aria-hidden="true" ${w.icon ? '' : 'hidden'}>
+      <span class="side-label">${esc(w.name)}</span>
+      ${w.open ? `<span class="side-count">${w.open}</span>` : ''}</a>`).join('')
+    nav.querySelectorAll<HTMLElement>('.side-item').forEach(el => el.addEventListener('click', e => {
+      e.preventDefault(); setActive(el.getAttribute('data-slug')!); shell?.classList.remove('side-open'); navigate('/w/' + el.getAttribute('data-slug'))
+    }))
+    nav.querySelectorAll<HTMLElement>('.side-item').forEach(el => el.addEventListener('dragstart', (e: DragEvent) => {
+      dragSlug = el.getAttribute('data-slug'); el.classList.add('dragging')
+      try { e.dataTransfer?.setData('text/plain', dragSlug || '') } catch {}
+    }))
+    nav.querySelectorAll<HTMLElement>('.side-item').forEach(el => {
+      el.addEventListener('dragend', () => { el.classList.remove('dragging'); nav.querySelectorAll<HTMLElement>('.side-item').forEach(x => x.classList.remove('dragover')); dragSlug = null })
+      el.addEventListener('dragover', e => { if (dragSlug && el.getAttribute('data-slug') !== dragSlug) { e.preventDefault(); el.classList.add('dragover') } })
+      el.addEventListener('dragleave', () => el.classList.remove('dragover'))
+      el.addEventListener('drop', e => {
+        e.preventDefault(); el.classList.remove('dragover')
+        if (!dragSlug) return
+        const from = items.findIndex(w => w.slug === dragSlug)
+        const to = items.findIndex(w => w.slug === el.getAttribute('data-slug'))
+        if (from < 0 || to < 0 || from === to) { dragSlug = null; return }
+        const [moved] = items.splice(from, 1)
+        items.splice(to, 0, moved)
+        dragSlug = null
+        state.items = [...items]
+        renderNav()
+        api.reorderWorkdirs(items.map(w => w.slug)).catch(() => toast('Erro ao guardar ordem'))
+      })
+    })
+  }
+  renderNav()
+
+  const chatLink = host.querySelector<HTMLElement>('#chat-link')
+  if (chatLink) chatLink.classList.toggle('active', isChat)
+  host.querySelectorAll('[data-nav]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); navigate(el.getAttribute('data-nav')!) }))
+  host.querySelector('#side-new')!.addEventListener('click', () => newWorkdir())
+  bindKeydown()
+  watchShift()
+  watchSeason()
+  if (shell) startClockWidget(shell)
+  if (shell) bindClockTz(shell)
+  if (shell) bindClockWeather(shell)
+  const focoEl = host.querySelector('#foco') as HTMLElement | null
+  if (focoEl) mountFocus(focoEl)
+}

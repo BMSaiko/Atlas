@@ -6,7 +6,7 @@ import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
 import { renderMd } from '../ui/text'
 import { navigate } from '../router'
-import { openReplyModal } from './kanban'
+import { openReplyModal } from './kanban-vanilla'
 
 export const parseTags = (v: string) => Array.from(new Set(v.split(/[,\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean)))
 const existingTags = (notes: Nota[]) => Array.from(new Set(notes.flatMap(n => n.tags || []))).sort()
@@ -344,7 +344,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       const src = b.cards.find(x => x.id === cardId)
       if (!src) { toast('Card ' + cardId + ' nao encontrado'); return }
       // importa launchRun sob demanda para evitar ciclo de imports
-      const { launchRun } = await import('./kanban')
+      const { launchRun } = await import('./kanban-vanilla')
       openReplyModal(src, { onSubmit: async (reply: string) => {
         // ponytail: clona o card, anexa reply, lança worker. SEM re-spawn no mesmo card.
         const newCard = {

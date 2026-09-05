@@ -2,10 +2,10 @@ import { api, WorkdirMeta } from '../api'
 import { icon } from '../ui/icons'
 
 import { refreshTabCounts } from '../ui/counts'
-import { renderNotes } from './notes'
-import { renderKanban } from './kanban'
-import { renderSettings } from './settings'
-import { renderWorldDashboard } from './dashboard'
+import { renderNotes } from './notes-vanilla'
+import { renderKanban } from './kanban-vanilla'
+import { renderSettings } from './settings-vanilla'
+import { renderWorldDashboard } from './dashboard-vanilla'
 import { linkify } from '../ui/text'
 
 class NotFound extends Error {}

@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const kanbanPath = join(here, '..', 'src', 'views', 'kanban.ts')
+const kanbanPath = join(here, '..', 'src', 'views', 'kanban-vanilla.ts')
 
 // ---- Implementacoes MIRROR de src/views/kanban.ts ----
 // Se mudar la, mudar aqui tambem — a SOURCE EQUALITY no fim apanha a fuga.

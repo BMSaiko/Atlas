@@ -1,0 +1,171 @@
+@import "tailwindcss";
+@import "./styles/components.css";
+
+/* ponytail: Atlas tokens migrated from tokens.css. Tailwind v4 @theme generates utility classes.
+   [data-shift] / [data-season] selectors are kept as-is — Tailwind v4 supports custom selectors natively. */
+@theme {
+  /* type */
+  --font-ui: 'Space Grotesk', system-ui, sans-serif;
+  --font-disp: 'Fraunces', Georgia, serif;
+  /* colors — night default */
+  --color-bg-0: #050403;
+  --color-bg-1: #0a0806;
+  --color-bg-2: #0f0c09;
+  --color-bg-3: #16100a;
+  --color-line: rgba(230,180,120,.20);
+  --color-text: #f1e9dc;
+  --color-text-dim: #aca291;
+  --color-gold: #d6a83f;
+  --color-gold-soft: #eacf96;
+  --color-marble: #d8cfc0;
+  --color-prio-low: #d6a83f;
+  --color-prio-med: #e0892e;
+  --color-prio-high: #e05252;
+  --color-prio-urgent: #ff4d6d;
+  --color-sky: #e0a860;
+  --color-focus: #e8c97a;
+  --color-danger: #e05252;
+  --color-pipe-todo: #62a1fa;
+  --color-pipe-doing: #f0a63a;
+  --color-pipe-review: #a97ff0;
+  --color-pipe-done: #3ecf8f;
+  /* legacy CSS aliases (Epic A scaled tokens) — kept for backwards compat with vanilla views still in src/styles/components.css */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
+  --r1: 8px; --r2: 12px; --r3: 16px;
+  /* Epic A motion / shadow / z scales */
+  --shadow-1: 0 1px 2px rgba(0,0,0,.18);
+  --shadow-2: 0 4px 12px rgba(0,0,0,.28);
+  --shadow-3: 0 10px 28px rgba(0,0,0,.42);
+  --z-side: 100;
+  --z-panel: 200;
+  --z-modal: 1500;
+  --z-toast: 1800;
+  --z-palette: 2200;
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 360ms;
+  --ease-standard: cubic-bezier(.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(.3, 0, 0, 1);
+}
+
+@layer base {
+:root, :host {
+  /* space */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
+  /* radius */
+  --r1: 8px; --r2: 12px; --r3: 16px;
+  /* type */
+  --font-ui: 'Space Grotesk', system-ui, sans-serif;
+  --font-disp: 'Fraunces', Georgia, serif;
+  /* NOITE (default) — cosmos acolhedor, quente, menos azul (DR) */
+  --bg-0: #050403;
+  --bg-1: #0a0806;
+  --bg-2: #0f0c09;
+  --bg-3: #16100a;
+  --line: rgba(230,180,120,.20);
+  --text: #f1e9dc;
+  --text-dim: #aca291;
+  --gold: #d6a83f;
+  --gold-soft: #eacf96;
+  --marble: #d8cfc0;
+  --prio-low: #d6a83f;
+  --prio-med: #e0892e;
+  --prio-high: #e05252;
+  --prio-urgent: #ff4d6d;
+  --sky: #e0a860;
+  --focus: #e8c97a;
+  --danger: #e05252;
+  --pipe-todo: #62a1fa;   /* aguardando — azul sereno */
+  --pipe-doing: #f0a63a; /* em curso — ouro aceso */
+  --pipe-review: #a97ff0; /* em review — violeta cósmico */
+  --pipe-done: #3ecf8f;   /* concluido — jade aurora */
+
+  /* ponytail: Epic A — shadow/z/motion scales (Epic C will wire them up).
+     --space-* and --radius-* skipped: alias of --s1..7 / --r1..3 + esbuild CSS minifier
+     trips on names with inner dashes. YAGNI. */
+  --shadow-1: 0 1px 2px rgba(0,0,0,.18);
+  --shadow-2: 0 4px 12px rgba(0,0,0,.28);
+  --shadow-3: 0 10px 28px rgba(0,0,0,.42);
+  --z-side: 100;     /* sticky sidebar */
+  --z-panel: 200;    /* panel headers / sticky in-panel UI */
+  --z-modal: 1500;   /* existing .foco-ov z-index */
+  --z-toast: 1800;   /* above modal so toasts remain visible while modal open */
+  --z-palette: 2200; /* existing .tag-sugg z-index */
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 360ms;
+  --ease-standard: cubic-bezier(.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(.3, 0, 0, 1);
+}
+[data-shift="day"] {
+  --bg-0: #101a30; --bg-1: #141f3b; --bg-2: #1c2b4c; --bg-3: #25355a;
+  --line: rgba(150,178,230,.30);
+  --text: #f3f6fc; --text-dim: #a9badb;
+  --gold: #cfb87a; --gold-soft: #f0e6c2; --marble: #e2dcc9;
+  --sky: #5b8def; --focus: #9dbcff;
+    --pipe-todo:#5f8def; --pipe-doing:#f2b452; --pipe-review:#9c7ae8; --pipe-done:#38c08a;
+}
+[data-shift="dusk"] {
+  --bg-0: #1a1320; --bg-1: #201831; --bg-2: #281f38; --bg-3: #322844;
+  --line: rgba(235,186,120,.26);
+  --text: #f7efdd; --text-dim: #c4b2a4;
+  --gold: #efc477; --gold-soft: #f5deb0; --marble: #e6d7bd;
+  --sky: #d89a6a; --focus: #f0cf9a;
+  --pipe-todo:#6fa8ff; --pipe-doing:#f0c477; --pipe-review:#b07bde; --pipe-done:#4bcb8e;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+}
+
+/* ÉPOCA DO ANO (estação) — tint sazonal sobre a paleta de shift ativa.
+   Depois dos [data-shift]: tingem SÓ accentos (gold/sky/focus/marble); NÃO tocam
+   em --bg-* nem nas cores funcionais. A estrutura da hora do dia (dia/entardecer/
+   noite) mora no shift e mantém-se visível; a estação dá o toque sazonal em cima.
+   Desta forma o auto-shift diário continua a ter mudança e destaque. */
+[data-season="winter"] {
+  --gold: #9fb4d8; --gold-soft: #c6d6ef; --marble: #c9cfe0;
+  --sky: #7fa3e8; --focus: #aecbff;
+}
+[data-season="spring"] {
+  --gold: #bfd88f; --gold-soft: #e2eec2; --marble: #d3dec2;
+  --sky: #7fd0b0; --focus: #a8e8c8;
+}
+[data-season="summer"] {
+  --gold: #f0c05a; --gold-soft: #f7dd9a; --marble: #ead8b4;
+  --sky: #efab55; --focus: #ffd88a;
+}
+[data-season="autumn"] {
+  --gold: #e8a04a; --gold-soft: #f2c98a; --marble: #e3c6a8;
+  --sky: #e8864a; --focus: #f5b06a;
+}
+
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font-ui); font-size: 16px; line-height: 1.5; color: var(--text);
+  background: var(--bg-0);
+  min-height: 100dvh;
+}
+h1,h2,h3 { font-family: var(--font-disp); margin: 0; }
+p { margin: 0; }
+a { color: var(--gold); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button { font: inherit; color: inherit; cursor: pointer; background: none; border: none; padding: 0; }
+input, textarea, select { font: inherit; color: var(--text); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
+:focus:not(:focus-visible) { outline: none; }  /* ponytail: Epic A — suppress mouse-only focus ring; keyboard still shows via :focus-visible */
+::placeholder { color: var(--text-dim); opacity: .7; }
+.skip-link { position:absolute; left:-9999px; top:0; }
+.skip-link:focus { left: 8px; top:8px; z-index:1000; background: var(--bg-2); padding:8px 12px; border-radius:8px; }
+
+/* --------- Scrollbars: themed, native --------- */
+html { scrollbar-width: thin; scrollbar-color: var(--gold) var(--bg-2); }
+* { scrollbar-width: thin; scrollbar-color: var(--gold) var(--bg-2); }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: var(--bg-1); }
+::-webkit-scrollbar-thumb { background: var(--bg-3); border: 3px solid var(--bg-1); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gold); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+}

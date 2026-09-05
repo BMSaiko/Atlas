@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path'
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = join(here, '..')
 const apiSrc = readFileSync(join(repoRoot, 'src', 'api.ts'), 'utf8')
-const viewSrc = readFileSync(join(repoRoot, 'src', 'views', 'kanban.ts'), 'utf8')
+const viewSrc = readFileSync(join(repoRoot, 'src', 'views', 'kanban-vanilla.ts'), 'utf8')
 
 let failures = 0
 const ok = (cond, msg) => {

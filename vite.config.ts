@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite'
+import tailwindcss from '@tailwindcss/vite'
 import atlasApi from './server/api'
 import { cfg } from './server/config'
 
 export default defineConfig({
-  plugins: [atlasApi()],
+  plugins: [atlasApi(), tailwindcss()],
   server: { port: cfg.port, strictPort: true, watch: { ignored: ['**/data/**'] } },
   preview: { port: cfg.port, strictPort: true },
 })
