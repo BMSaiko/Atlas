@@ -182,7 +182,7 @@ export function openPalette(slug: string | null) {
   backdrop.setAttribute('aria-label', 'Palette de comandos')
   backdrop.innerHTML = `
     <div class="palette">
-      <input class="palette-input" type="text" placeholder="Procurar workdir, nota, cartão ou ação…   (↑↓ navegar · Enter abrir · Esc fechar · ? atalhos · ; letra)" aria-label="Filtro da palette" autocomplete="off">
+      <input class="palette-input" type="text" placeholder="Procurar workdir, nota, cartão ou ação…   (↑↓ navegar · Enter abrir · Esc fechar · ? atalhos · ; letra · ç também)" aria-label="Filtro da palette" autocomplete="off">
       <div class="palette-list"><div class="palette-empty">A carregar…</div></div>
     </div>`
   document.body.appendChild(backdrop)
@@ -308,11 +308,15 @@ export function openPalette(slug: string | null) {
     // SP §4 + §5 (ajustes 2026-09-05):
     // Bare-letter shortcuts colidem com PT-PT no filtro ("cartao", "criar", "git", "tema").
     // Ctrl+Alt + letra colide com OS (AltGr=@ em PT, Ctrl+Alt+M=Win+M, etc.).
-    // Leader escolhido: `;` (acento til / cedilha no teclado PT-PT) + 1 letra.
-    //   - `;` nunca aparece no início de uma palavra portuguesa comum
-    //   - é a convention Spacemacs (Space) / Spacelite, ergonómico (mindinho esq descansa em ;)
-    //   - quando palette está FECHADA, `;` digita-se normalmente; quando ABERTA, `;` vira leader
-    if (e.key === ';' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    // Leader escolhido: tecla física Semicolon (à direita do L no QWERTY) — independente
+    // do layout do user:
+    //   - PT-PT: ';'/':' (semicolon key) — e.key === ';' ou ':'
+    //   - US:    ';'/':' (mesma tecla) — e.key === ';' ou ':'
+    //   - Outras: caem no e.code === 'Semicolon'
+    // Match por physical code (e.code) cobre todos. e.key como fallback para PT-PT onde
+    // a tecla pode produzir ç mas o user quer leader.
+    if ((e.code === 'Semicolon' || e.key === ';' || e.key === ':')
+        && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault()
       const next = (e2: KeyboardEvent) => {
         input.removeEventListener('keydown', next as any)
