@@ -35,7 +35,7 @@ export const ROUTES: Route[] = [
     name: "w:review:approve-agent",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1]
           if (!SLUG.test(slug)) { send(400, { error: 'bad slug' }); return }
           const b = (await deps.readJsonBody(req)) || {}
@@ -70,7 +70,7 @@ export const ROUTES: Route[] = [
     name: "w:review",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1], action = parts[3]
           if (action !== 'approve' && action !== 'reject') { send(400,{error:'bad action'}); return }
           const b = (await deps.readJsonBody(req)) || {}
@@ -128,7 +128,7 @@ export const ROUTES: Route[] = [
     name: "w:run",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1]
           const b = (await deps.readJsonBody(req)) || {}
           const id = typeof b.cardId === 'string' ? b.cardId : ''
@@ -150,13 +150,134 @@ export const ROUTES: Route[] = [
     },
   },
   {
+    method: "GET",
+    length: 5,
+    match: ["w", null, "runs", null, "pid"],
+    name: "w:runs:pid",
+    handler: async (ctx) => {
+      const { deps = {} as any, send, parts, req } = ctx
+        const { DATA, SLUG, existsSync, readFileSync, repoDir, statSync, wtRoot } = deps
+          const slug = parts[1], cardId = parts[3]
+          if (!SLUG.test(slug) || !cardId) { send(400, { error: 'bad slug or cardId' }); return }
+          try {
+            const repo = await repoDir(slug)
+            const pidPath = join(wtRoot(repo), 'runs', slug, cardId + '.pid')
+            // ponytail: card super-prompt-loop — devolve {pid, mtime} para o chip 'agent: running (pid NNNN)'.
+            // 404 = card sem worker (chip some). pid=null + mtime > 0 = file existe mas vazio/corrompido.
+            if (!existsSync(pidPath)) { send(404, { error: 'no pid file' }); return }
+            const rawText = readFileSync(pidPath, 'utf8').trim()
+            const pid = parseInt(rawText, 10)
+            const mtime = statSync(pidPath).mtimeMs
+            send(200, { pid: Number.isFinite(pid) && pid > 0 ? pid : null, mtime })
+            return
+          } catch (e) { send(500, { error: e instanceof Error ? e.message : String(e) }); return }
+    },
+  },
+  {
+    method: "POST",
+    length: 4,
+    match: ["w", null, "kanban", "sp"],
+    name: "w:kanban:sp",
+    handler: async (ctx) => {
+      const { deps = {} as any, send, parts, req } = ctx
+        const { DATA, SLUG, inside, readJ, writeJ } = deps
+          const slug = parts[1]
+          if (!SLUG.test(slug)) { send(400, { error: 'bad slug' }); return }
+          const b = (await deps.readJsonBody(req)) || {}
+          const id = typeof b.cardId === 'string' ? b.cardId : ''
+          const body = typeof b.body === 'string' ? b.body : ''
+          const ref = typeof b.ref === 'string' ? b.ref.trim() : ''
+          if (!id || !body || !ref) { send(400, { error: 'cardId, body, ref obrigatorios' }); return }
+          // ponytail: SP body sanity (card super-prompt-loop) — body >=50 chars for non-trivial
+          // contract, <=200KB hard cap (defesa contra payloads acidentalmente grandes).
+          if (body.length < 50) { send(400, { error: 'SP too short (min 50 chars)' }); return }
+          if (body.length > 200_000) { send(400, { error: 'SP too large' }); return }
+          // ponytail: ref tem de ser path RELATIVE sob knowledge/infra/super-prompts/ — bloqueia
+          // /etc/passwd, C:\Windows\... e path-traversal. Sem normalizacao magica.
+          if (!/^knowledge\/infra\/super-prompts\/[A-Za-z0-9_.\-\/ ]+\.md$/.test(ref)) {
+            send(400, { error: 'ref invalido — esperado knowledge/infra/super-prompts/<slug>-<YYYY-MM-DD>.md' }); return
+          }
+          const file = join(DATA, slug, 'kanban.json')
+          if (!inside(DATA, file)) { send(400, { error: 'bad path' }); return }
+          const board = await readJ(file)
+          if (!board) { send(404, { error: 'board not found' }); return }
+          const card = board.cards?.find((c: any) => c.id === id)
+          if (!card) { send(404, { error: 'card not found' }); return }
+          if (card.archived) { send(409, { error: 'card archived' }); return }
+          // ponytail: ver check (optimistic concurrency) — senao worker headless a gravar dp
+          // ao mesmo tempo que user submete SP -> lost-update.
+          const inVer = Number(b.ver) || 0
+          const storedVer = board.ver ?? 0
+          if (storedVer !== 0 && inVer !== storedVer) {
+            send(409, { error: 'conflito de versao — re-faz GET e re-aplica', ver: storedVer }); return
+          }
+          card.superPromptBody = body
+          card.superPromptRef = ref
+          board.ver = (board.ver ?? 0) + 1
+          await writeJ(file, board)
+          send(200, { ok: true, ver: board.ver })
+          return
+    },
+  },
+  {
+    method: "POST",
+    length: 4,
+    match: ["w", null, "kanban", "refine"],
+    name: "w:kanban:refine",
+    handler: async (ctx) => {
+      const { deps = {} as any, send, parts, req } = ctx
+        const { DATA, SLUG, inside, killWorkerForCard, launchHermes, readJ, writeJ } = deps
+          const slug = parts[1]
+          if (!SLUG.test(slug)) { send(400, { error: 'bad slug' }); return }
+          const b = (await deps.readJsonBody(req)) || {}
+          const id = typeof b.cardId === 'string' ? b.cardId : ''
+          const body = typeof b.body === 'string' ? b.body : ''
+          const ref = typeof b.ref === 'string' ? b.ref.trim() : ''
+          if (!id || !body || !ref) { send(400, { error: 'cardId, body, ref obrigatorios' }); return }
+          if (body.length < 50) { send(400, { error: 'SP too short (min 50 chars)' }); return }
+          if (body.length > 200_000) { send(400, { error: 'SP too large' }); return }
+          if (!/^knowledge\/infra\/super-prompts\/[A-Za-z0-9_.\-\/ ]+\.md$/.test(ref)) {
+            send(400, { error: 'ref invalido' }); return
+          }
+          const file = join(DATA, slug, 'kanban.json')
+          if (!inside(DATA, file)) { send(400, { error: 'bad path' }); return }
+          const board = await readJ(file)
+          if (!board) { send(404, { error: 'board not found' }); return }
+          const card = board.cards?.find((c: any) => c.id === id)
+          if (!card) { send(404, { error: 'card not found' }); return }
+          if (card.archived) { send(409, { error: 'card archived' }); return }
+          // ponytail: refine so' funciona em review (card foi corrido, worker escreveu result, user aprova/refina).
+          // Em todo o user ainda nao submeteu SP — gate 409 com mensagem clara.
+          if (card.colId !== 'review') { send(409, { error: 'card not in review — refine so apos run' }); return }
+          const inVer = Number(b.ver) || 0
+          const storedVer = board.ver ?? 0
+          if (storedVer !== 0 && inVer !== storedVer) {
+            send(409, { error: 'conflito de versao — re-faz GET e re-aplica', ver: storedVer }); return
+          }
+          // ponytail: mata o worker anterior ANTES de persistir (best-effort, idempotente).
+          // Se o PID file nao existe, noop. Se o PID e stale (processo ja morreu), taskkill falha
+          // e seguimos (warn log). NUNCA falhamos o refine por causa do kill.
+          void killWorkerForCard(slug, id).catch((e: unknown) => console.error('[refine] killWorker falhou (nao-fatal):', e instanceof Error ? e.message : String(e)))
+          // Atualiza SP fields + ver bump. colId fica em review (NUNCA bumped to done).
+          card.superPromptBody = body
+          card.superPromptRef = ref
+          board.ver = (board.ver ?? 0) + 1
+          await writeJ(file, board)
+          // ponytail: re-spawn no MESMO wt (launchHermes ja trata do rebuild+retry do worktree).
+          // Sem branch nova — o worker faz commit no branch existente (feature/<slug>-<cardId>).
+          await launchHermes(slug, card)
+          send(200, { ok: true, ver: board.ver })
+          return
+    },
+  },
+  {
     method: "POST",
     length: 3,
     match: ["w", null, "brainstorm"],
     name: "w:brainstorm",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1]
           if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
           void launchBrainstorm(slug).catch((e: any) => console.error('[brainstorm] ' + slug + ': ' + e.message))
@@ -170,7 +291,7 @@ export const ROUTES: Route[] = [
     name: "w:dp",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1]
           if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
           const b = (await deps.readJsonBody(req)) || {}
@@ -193,7 +314,7 @@ export const ROUTES: Route[] = [
     name: "w:cleanup",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1]
           if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
           await cleanupRuns(slug); await cleanupWorktrees()
@@ -207,7 +328,7 @@ export const ROUTES: Route[] = [
     name: "w:orphans",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1]
           if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
           const STALE_MS = 5 * 60 * 1000  // ponytail: 5min (era 90s) â workers lentos OK, o que para e nao escreve log no .log e crash real
@@ -281,7 +402,7 @@ export const ROUTES: Route[] = [
     name: "w:orphans:ack",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1]
           if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
           const b = await deps.readJsonBody(req)
@@ -342,7 +463,7 @@ export const ROUTES: Route[] = [
     name: "w:cards:clear-orphan",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1], cardId = parts[3]
           if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
           const repo = await repoDir(slug)
@@ -373,7 +494,7 @@ export const ROUTES: Route[] = [
     name: "w:output",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const url = new URL(req.url || '/', 'http://localhost')
           const slug = parts[1], cardId = parts[3]
           const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0)
@@ -403,7 +524,7 @@ export const ROUTES: Route[] = [
     name: "w:git:merge-main",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1]
           if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
           const task = [
@@ -426,7 +547,7 @@ export const ROUTES: Route[] = [
     name: "w:git:resolve",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1]
           if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
           const task = [
@@ -450,7 +571,7 @@ export const ROUTES: Route[] = [
     name: "w:import-roadmap",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1]
           const file = join(DATA, slug, 'kanban.json')
           if (!SLUG.test(slug) || !inside(DATA, file)) { send(400, { error: 'bad request' }); return }
@@ -497,7 +618,7 @@ export const ROUTES: Route[] = [
     name: "w:bundle",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1]
           if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
           const dir = join(DATA, slug)
@@ -531,7 +652,7 @@ export const ROUTES: Route[] = [
     name: "w:snapshots",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1]
           if (!SLUG.test(slug)) { send(400, { error: 'bad slug' }); return }
           if (m === 'GET') { send(200, await listSnapshots(slug)); return }
@@ -545,7 +666,7 @@ export const ROUTES: Route[] = [
     name: "w:snapshots:restore",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1], slot = decodeURIComponent(parts[3])
           if (!SLUG.test(slug)) { send(400, { error: 'bad slug' }); return }
           const r = await restoreSnapshot(slug, slot)
@@ -561,7 +682,7 @@ export const ROUTES: Route[] = [
     name: "w:snapshots:file",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1], slot = decodeURIComponent(parts[3]), name = parts[5]
           if (!SLUG.test(slug)) { send(400, { error: 'bad slug' }); return }
           const buf = await getSnapshotFile(slug, slot, name)
@@ -576,7 +697,7 @@ export const ROUTES: Route[] = [
     name: "w:export",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1]
           if (!SLUG.test(slug)) { send(400, { error: 'bad request' }); return }
           const doc = (await readJ(join(DATA, slug, 'notes.json'))) || { items: [] }
@@ -603,7 +724,7 @@ export const ROUTES: Route[] = [
     name: "w:notes-kanban-bundle",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1], kind = parts[2]
           if (!SLUG.test(slug)) { send(400,{error:'bad request'}); return }
         // templates: read-only — merge global (data/templates.json) + workdir (data/<slug>/templates.json);
@@ -653,6 +774,7 @@ export const ROUTES: Route[] = [
                   if (!b4 || b4.colId !== 'doing') continue
                   if (a.archived || (a.colId && a.colId !== 'doing')) {
                     void killPaneForCard(slug, a.id)
+                    void killWorkerForCard(slug, a.id)  // ponytail: card super-prompt-loop — kill the python worker too (narrow PID)
                   }
                 }
               }
@@ -704,7 +826,7 @@ export const ROUTES: Route[] = [
     name: "w:meta",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
-        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
+        const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, killPaneForCard, killWorkerForCard, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1]; send(200, (await readJ(join(DATA, slug, 'meta.json'))) || { error:'not found' }); return
     },
   },

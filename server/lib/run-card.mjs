@@ -35,12 +35,16 @@ async function killPane(pane) {
   } catch {}
 }
 
-function runHermes({ exe, args, env, logWs }) {
+function runHermes({ exe, args, env, logWs, pidPath }) {
   return new Promise((resolve) => {
     const child = spawn(exe, args, {
       detached: true, windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'], env,
     })
+    // ponytail: card super-prompt-loop — opt-in PID write (killWorkerForCard usa isto).
+    // Sem pidPath (= os 2 callers historicos), zero side-effect — BC-safe. Write async;
+    // race de ~5ms entre spawn e write ’ aceitavel (kill-on-transition so dispara em user PUT).
+    if (pidPath) writeFile(pidPath, String(child.pid), 'utf8').catch(() => {})
     child.stdout?.on('data', (d) => logWs.write(sanitizeBuf(d)))
     child.stderr?.on('data', (d) => logWs.write(sanitizeBuf(d)))
     child.on('error', (e) => {
@@ -73,7 +77,7 @@ export async function runCard(opts) {
   const hb = startHeartbeat(stPath, pane)
   let rc
   try {
-    rc = (await runHermes({ exe, args, env, logWs })).code
+    rc = (await runHermes({ exe, args, env, logWs, pidPath: opts.pidPath })).code
   } finally {
     clearInterval(hb)
   }

@@ -7,7 +7,7 @@ export type MichiPhase = 'todo'|'grill'|'dr'|'dp'|'da'|'gates'|'review'|'reflect
 
 
 // ponytail: phase on Card persisted; derived client-side via colIdToPhase (src/views/kanban.ts).
-export interface Card { id: string; colId: string; title: string; description: string; priority: Prioridade; due?: number; ts: number; archived: boolean; result?: string; dp?: string; reviewed?: boolean; startedAt?: number; recur?: 'daily' | 'weekly' | 'monthly'; occurrenceOf?: string; timerMs?: number; timerStartedAt?: number; skills?: string[]; crashRetry?: boolean; crashAt?: number; orphanWorktreePath?: string; phase?: MichiPhase }
+export interface Card { id: string; colId: string; title: string; description: string; priority: Prioridade; due?: number; ts: number; archived: boolean; result?: string; dp?: string; reviewed?: boolean; startedAt?: number; recur?: 'daily' | 'weekly' | 'monthly'; occurrenceOf?: string; timerMs?: number; timerStartedAt?: number; skills?: string[]; crashRetry?: boolean; crashAt?: number; orphanWorktreePath?: string; phase?: MichiPhase; superPromptBody?: string; superPromptRef?: string }
 export interface Coluna { id: string; name: string }
 export interface Board { columns: Coluna[]; cards: Card[] }
 // ponytail: write-token fence (card iykn11lg) — header global em TODOS os PUTs (j<T> é o unico helper
@@ -89,6 +89,15 @@ export const api = {
   kanban: {
     get: (slug: string) => j<{ ver: number; columns: Coluna[]; cards: Card[] }>(`/api/w/${slug}/kanban`),
     put: (slug: string, doc: { ver: number; columns: Coluna[]; cards: Card[] }) => j<{ ok: boolean; ver?: number }>(`/api/w/${slug}/kanban`, 'PUT', doc),
+    // ponytail: card super-prompt-loop — persist SP body+ref + bump ver (optimistic concurrency).
+    sp: (slug: string, body: { cardId: string; body: string; ref: string; ver?: number }) => j<{ ok: boolean; ver?: number }>(`/api/w/${slug}/kanban/sp`, 'POST', body),
+    // refine re-spawn no mesmo wt (kill PID anterior + launchHermes). colId fica em review.
+    refine: (slug: string, body: { cardId: string; body: string; ref: string; ver?: number }) => j<{ ok: boolean; ver?: number }>(`/api/w/${slug}/kanban/refine`, 'POST', body),
+  },
+  // ponytail: live PID lookup p/ o chip 'agent: running (pid NNNN)'. Server le
+  // <wtRoot>/runs/<slug>/<cardId>.pid e devolve o PID + mtime (poll 5s no cliente, sem SSE).
+  runs: {
+    pid: (slug: string, cardId: string) => j<{ pid: number | null; mtime: number } | null>(`/api/w/${slug}/runs/${encodeURIComponent(cardId)}/pid`),
   },
   logs: {
     get: (slug: string) => j<{ ver: number; items: LogEntry[] }>(`/api/w/${slug}/logs`),

@@ -1,5 +1,5 @@
 import type { Plugin, Connect } from 'vite'
-import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync } from 'node:fs'
 import { readFile, writeFile, rm } from 'node:fs/promises'
 import { createWriteStream } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -323,6 +323,29 @@ async function killPaneForCard(slug: string, cardId: string): Promise<void> {
   } catch { /* best-effort */ }
 }
 
+async function killWorkerForCard(slug: string, cardId: string): Promise<void> {
+  if (process.env.ATLAS_TEST_NO_SPAWN) return  // ponytail: em test mode, .pid e' mock-auxiliar — skip kill
+  try {
+    const repo = await repoDir(slug)
+    const pidPath = join(wtRoot(repo), 'runs', slug, cardId + '.pid')
+    if (!existsSync(pidPath)) return  // ponytail: idempotente — sem file, nada a matar
+    const pidRaw = readFileSync(pidPath, 'utf8').trim()
+    const pid = parseInt(pidRaw, 10)
+    if (!Number.isFinite(pid) || pid <= 0) {
+      console.warn('[killWorker] pid file corrompido:', pidPath, '=', pidRaw)
+      try { unlinkSync(pidPath) } catch {}
+      return
+    }
+    // ponytail: narrow kill — taskkill /F /PID <pid>. NAO /IM node.exe (broad-kill classico).
+    // PowerShell wrapper para ter o mesmo shape do killWtLockers (L223). Erro ESRCH (process
+    // ja morto) e' tolerado — file e' removido no fim.
+    const ps = `try { taskkill /F /PID ${pid} /T 2>$null; exit 0 } catch { exit 0 }`
+    const c = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true, stdio: 'ignore' })
+    await new Promise<void>((res) => { c.on('close', () => res()); c.on('error', () => res()) })
+    try { unlinkSync(pidPath) } catch {}
+  } catch (e) { console.error('[killWorker] erro inesperado:', e instanceof Error ? e.message : String(e)) }
+}
+
 async function killAllPanesForSlug(slug: string): Promise<{ killed: number; checked: number }> {
   let killed = 0, checked = 0
   try {
@@ -411,6 +434,12 @@ async function launchHermes(slug: string, card: any) {
   if (!addOut.ok) { await fail('git worktree add falhou: ' + addOut.out); return }
   const linked = await addJunction(join(wt, 'node_modules'), join(repo, 'node_modules'))
   if (!linked) { await fail('nao consegui ligar node_modules partilhado (mklink)'); return }
+  // ponytail: card super-prompt-loop — SP (super prompt) tem prioridade sobre DP. Se existe,
+  // o worker le-o PRIMEIRO (cabecalho 'PRIORITY-READ, source of truth') e usa-o como contrato.
+  // Quando ausente, sentinel explicito para o worker nao inventar intent.
+  const cardSP = card.superPromptBody
+    ? 'SUPER PROMPT (priority-read, source of truth) — este contrato sobrepoe-se a qualquer DP:\n\n' + card.superPromptBody + '\n'
+    : 'SEM SUPER PROMPT — deriva o intent do titulo + descricao + dp abaixo. Se nenhum dos 3 der objetivo claro, pede ao utilizador antes de implementar.'
   const cardDp = card.dp
     ? 'DP (Design Plan) ja gerado p/ este card — LE-O ANTES de implementar e segue-o:\n\n' + card.dp + '\n'
     : 'SEM DP — escreve um breve plano (objetivo, abordagem, ficheiros afetados) antes de implementar.'
@@ -422,6 +451,7 @@ async function launchHermes(slug: string, card: any) {
     branch,
     cardTitle: card.title,
     cardDescription: card.description || '(sem descricao)',
+    cardSP,
     cardDp,
     logPath,
   })
@@ -444,6 +474,7 @@ async function launchHermes(slug: string, card: any) {
     args: ['-m', 'hermes_cli.main', '-z', prompt, ..._skillsArgs],
     env: { ...process.env, HERMES_HOME, ...(_skillsEnv ? { ATLAS_CARD_SKILLS: _skillsEnv } : {}) },
     logWs: ws, pane,
+    pidPath: join(wtRoot(repo), 'runs', slug, card.id + '.pid'),  // ponytail: narrow kill target — runCard writes child.pid here
   }).then(async (code: number) => {
     ws.end()
     const stRun = await readJ(stPath).catch(() => null)
@@ -630,8 +661,8 @@ export default function atlasApi(): Plugin {
       // ponytail: deps bag — every module-level helper a route might need.
       // Keep it lean: only what routes actually use, not speculative exports.
       if (await dispatch({ req, res, send, parts, m, deps: {
-        SLUG, DATA, INDEX, cfg, readIdx, readJ, writeJ, syncVault, repoDir, wtRoot,
-        killPane, killPaneForCard, killAllPanesForSlug, killAllPanesAtlas,
+        SLUG, DATA, INDEX, cfg, readIdx, readJ, writeJ, syncVault, repoDir, wtRoot, existsSync, readFileSync, statSync,
+        killPane, killPaneForCard, killAllPanesForSlug, killAllPanesAtlas, killWorkerForCard,
         launchHermes, launchBrainstorm, launchDp, launchGitOp, spawnHeadless,
         pickIcon, toSlug, runGit, runCmd, runCIGate, checkConflictMarkers,
         resolveMainTip, mergeDevToMain, tickAll, tickSnapshot, listSnapshots,

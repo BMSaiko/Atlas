@@ -10,6 +10,8 @@ CARTAO: ${cardTitle}
 TAREFA:
 ${cardDescription}
 
+${cardSP}
+
 ${cardDp}
 
 GIT WORKFLOW:

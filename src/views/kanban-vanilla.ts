@@ -21,7 +21,9 @@ export function launchRun(slug: string, c: Card): Promise<boolean> {
   }).catch((e: any) => { toast((e && e.message) || 'Falha ao abrir Hermes'); return false })
 }
 
-let pollTimer: ReturnType<typeof setInterval> | undefined
+let _currentSlug = ''  // ponytail: card super-prompt-loop — pidChip/startPidPolling precisam de slug; renderKanban atualiza este
+let pollTimer: ReturnType<typeof setInterval> | undefined  // board re-fetch poll
+let _pidPollStarted = false  // ponytail: lazy-init do PID poller
 // ponitail: pollers de DP que sobrevivem ao fecho do modal p/ notificar conclusao
 const dpPollers: Record<string, { timer?: ReturnType<typeof setInterval>; pre?: HTMLPreElement; statusEl?: HTMLElement }> = {}
 
@@ -128,6 +130,39 @@ export async function openNewCardModal(slug: string) {
 // ponytail: openReplyModal — 1 painel a esquerda (perguntas) + 1 modal a direita (reply).
 // rung 1 (YAGNI): 2 surfaces independentes. Submit do reply fecha ambos e chama onSubmit.
 // rung 6: painel esquerda via DOM directo (sem form, sem keydown), modal direita via openModal (reusa helper).
+// ponytail: card super-prompt-loop — modal para criar/editar o SP body+ref. Reusa openModal
+// (mesmas keys: Esc cancela, Ctrl+Enter submete). POST /api/w/<slug>/kanban/sp persiste e bumpar ver.
+export function openSPModal(c: Card, ctx: { slug: string; ver: number; mode?: 'sp' | 'refine'; onSaved: () => void }) {
+  // ponytail: default ref = path canonico sob knowledge/infra/super-prompts/. Sem input do user
+  // (campo hidden), evita typo que falha o regex no server.
+  const today = new Date().toISOString().slice(0, 10)
+  const defaultRef = `knowledge/infra/super-prompts/${ctx.slug}-${today}.md`
+  const m = openModal({
+    title: 'Super Prompt · ' + c.title,
+    submitText: ctx.mode === 'refine' ? 'Refinar (re-spawn)' : (c.superPromptBody ? 'Atualizar SP' : 'Guardar SP'),
+    cancelText: 'Cancelar',
+    body: () => `<div class="field"><label for="sp-body">Corpo do Super Prompt (>= 50 chars, max 200KB)</label>` +
+      `<textarea id="sp-body" name="body" rows="14" autofocus placeholder="Cola aqui o Super Prompt do card — tem de ser >= 50 chars">${esc(c.superPromptBody || '')}</textarea>` +
+      `<input type="hidden" name="ref" value="${esc(c.superPromptRef || defaultRef)}">` +
+      `<div class="muted" style="font-size:.78rem;margin-top:.4rem">ref: <code>${esc(c.superPromptRef || defaultRef)}</code></div></div>`,
+    onSubmit: () => {
+      const form = m.root.querySelector('form') as HTMLFormElement
+      const data = readForm(form)
+      const body = (data.body || '').trim()
+      const ref = (data.ref || '').trim()
+      if (body.length < 50) { toast('SP demasiado curto (min 50 chars)'); return }
+      if (body.length > 200_000) { toast('SP demasiado grande (max 200KB)'); return }
+      const endpoint = ctx.mode === 'refine' ? api.kanban.refine : api.kanban.sp
+      endpoint(ctx.slug, { cardId: c.id, body, ref, ver: ctx.ver })
+        .then(d => {
+          toast(ctx.mode === 'refine' ? 'Refinar a correr (re-spawn)' : 'SP guardado ✓')
+          ctx.onSaved()
+        })
+        .catch(e => toast('Erro: ' + (e instanceof Error ? e.message : String(e))))
+    },
+  })
+}
+
 export function openReplyModal(c: Card, ctx: { onSubmit: (reply: string) => Promise<void> | void }, opts?: { noteText?: string; noteTitle?: string }) {
   const leftTitle = opts?.noteTitle || c.title
   const leftMd = opts?.noteText || c.description || '(sem descricao)'
@@ -176,6 +211,7 @@ export function openReplyModal(c: Card, ctx: { onSubmit: (reply: string) => Prom
 }
 
 export async function renderKanban(root: HTMLElement, slug: string) {
+  _currentSlug = slug
   let board: BoardDoc = await api.kanban.get(slug).catch(() => ({ ver: 0, columns: [], cards: [] } as BoardDoc))
   const adopt = (d: { ver?: number } | undefined) => { if (d && typeof d.ver === 'number') board.ver = d.ver }  // mantem etag local em sync apos PUT
   const save = async () => {
@@ -378,7 +414,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       return `<article class="kcard${c.result ? ' has-output' : ''}${isSel ? ' sel' : ''}${dueState(c).cls === 'over' ? ' overdue' : ''}${dueState(c).cls === 'near' ? ' due-near' : ''}" draggable="true" tabindex="0" data-id="${c.id}">
         <div class="ktitle">${selMode ? `<input type="checkbox" class="kselbox" data-sel="${c.id}" ${isSel ? 'checked' : ''} aria-label="Selecionar ${esc(c.title)}">` : ''}<h5>${esc(c.title)}</h5><span class="kdate" title="Criado em ${fmtDate(c.ts)}">${fmtDate(c.ts)}</span></div>
         ${c.description ? `<div class="kdesc">${esc(previewText(c.description))}</div>` : ''}
-        <div class="kstates">${stateChip(c)}${phaseChip(c)}${roundsFromResult(c)}${c.dp ? `<span class="kbadge kbadge-dp">DP</span>` : ''}${c.result ? `<span class="kbadge kbadge-out">resultado</span>` : ''}${c.recur ? `<span class="kbadge kbadge-recur" title="Recorrente · ${esc(recurLabel(c.recur))}">↻ ${esc(recurLabel(c.recur))}</span>` : ''}</div>
+        <div class="kstates">${stateChip(c)}${pidChip(c)}${phaseChip(c)}${roundsFromResult(c)}${c.dp ? `<span class="kbadge kbadge-dp">DP</span>` : ''}${c.result ? `<span class="kbadge kbadge-out">resultado</span>` : ''}${c.recur ? `<span class="kbadge kbadge-recur" title="Recorrente · ${esc(recurLabel(c.recur))}">↻ ${esc(recurLabel(c.recur))}</span>` : ''}</div>
         <div class="kfoot">
           ${dueBadge(c)}
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
@@ -407,13 +443,23 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     // — o user quer ver o badge sem ficar vermelho no kanban.
     const crashBadge = c.crashRetry ? `<span class="k-badge-warn" title="Card recuperado após crash — o botão Run agora é um retry manual">⚠ retry após crash</span>` : ''
     if (c.colId === 'todo') {
-      b.push(`<button class="btn-icon btn-ghost" data-act="run" aria-label="Executar no Hermes">${icon('play', 15)}</button>${crashBadge}`)
+      // ponytail: card super-prompt-loop — sem SP, mostra 'generate-sp' (pencil). Com SP, mantem 'run' (play).
+      // Gate logico no data-act routing: generate-sp abre openSPModal; run so aparece se SP ja existe.
+      if (!c.superPromptBody) {
+        b.push(`<button class="btn-icon btn-ghost" data-act="generate-sp" data-card="${c.id}" aria-label="Gerar Super Prompt">${icon('pencil', 15)}</button>${crashBadge}`)
+      } else {
+        b.push(`<button class="btn-icon btn-ghost" data-act="run" aria-label="Executar no Hermes">${icon('play', 15)}</button>${crashBadge}`)
+      }
       b.push(`<button class="btn-icon btn-ghost" data-act="dp" data-card="${c.id}" aria-label="Gerar DP (design plan)">${icon('doc', 15)}</button>`)
     } else if (c.colId === 'doing') {
       b.push(`<button class="btn-icon btn-ghost" data-act="run" aria-label="Reiniciar execução">${icon('reset', 15)}</button>`)
       b.push(`<button class="btn-icon btn-ghost" data-act="term" aria-label="Ver terminal / log do run">${icon('term', 16)}</button>`)
       // ponytail: reply — botão universal em doing. Re-spawn com description extendida. Sem filtro por skill.
       b.push(`<button class="btn-icon btn-ghost" data-act="reply" aria-label="Responder (cola texto e reinicia)">${icon('pencil', 15)}</button>`)
+    } else if (c.colId === 'review') {
+      // ponytail: card super-prompt-loop — refine abre openSPModal pre-filled com c.superPromptBody.
+      // Não substitui o botão 'reject' do modal (que faz outra coisa); é acção per-card no grid.
+      b.push(`<button class="btn-icon btn-ghost" data-act="refine" data-card="${c.id}" aria-label="Refinar Super Prompt">${icon('pencil', 15)}</button>`)
     }
     if (!b.length) return ''
     return `<div class="kops">${b.join('')}</div>`
@@ -495,6 +541,10 @@ export async function renderKanban(root: HTMLElement, slug: string) {
       if (act === 'run' && c) { runCard(c); return }
       if (act === 'dp' && c) { dpCard(c); return }
       if (act === 'term' && c) { viewTerminal(c); return }
+      // ponytail: card super-prompt-loop — generate-sp abre openSPModal vazio (todo, sem SP).
+      if (act === 'generate-sp' && c) { openSPModal(c, { slug, ver: board.ver, mode: 'sp', onSaved: () => api.kanban.get(slug).then(f => { board = f; render() }) }); return }
+      // refine abre openSPModal pre-filled (review, com SP). Re-spawn via POST /api/w/:slug/kanban/refine.
+      if (act === 'refine' && c) { openSPModal(c, { slug, ver: board.ver, mode: 'refine', onSaved: () => api.kanban.get(slug).then(f => { board = f; render() }) }); return }
 if (act === 'arch' && c) { c.archived = true; save().then(render); toast('Arquivado'); return }
       if (act === 'approve' && c) { approveCard(c); return }
       if (act === 'reject' && c) { rejectCard(c); return }
@@ -980,6 +1030,7 @@ function runCard(c: Card) {
       board = fresh; render()
     }
   }, 4000)
+    if (!_pidPollStarted) { startPidPolling(); _pidPollStarted = true }
 }
 // ponytail: roda a palavra do doing de 8 em 8s no DOM com fade fluido (sem re-render do board)
 setInterval(() => {
@@ -1042,6 +1093,31 @@ function previewText(md: string): string {
     .trim()
 }
 // ponytail: chip de estado no card — doing=acao+clock, review/done=badge. Sem conteudo, so sinal.
+// ponytail: card super-prompt-loop — chip live PID. Poll a 5s; para quando colId sai de 'doing'
+// (MutationObserver no card root apaga o setInterval quando o card desaparece do DOM).
+function pidChip(c: Card): string {
+  if (c.colId !== 'doing') return ''
+  return `<span class="kbadge kbadge-pid" data-pid-chip="${c.id}" title="PID do worker Python (poll 5s)">agent: ⊙ starting…</span>`
+}
+
+// ponytail: poll global (1 timer p/ todos os cards doing). 5s é o suficiente para um sinal visual
+// sem martelar o server; o worker heartbeata a 60s via .status, mas o PID file é fonte de verdade para matar.
+let _pidPollTimer: ReturnType<typeof setInterval> | undefined
+function startPidPolling() {
+  if (_pidPollTimer) return
+  _pidPollTimer = setInterval(async () => {
+    document.querySelectorAll<HTMLElement>('[data-pid-chip]').forEach(async (el) => {
+      const id = el.dataset.pidChip
+      if (!id) return
+      try {
+        const r = await api.runs.pid(_currentSlug, id)
+        if (!r) { el.textContent = 'agent: done'; return }
+        el.textContent = r.pid ? `agent: running (pid ${r.pid})` : 'agent: starting\xe2��'
+      } catch { /* transient */ }
+    })
+  }, 5000)
+}
+function stopPidPolling() { if (_pidPollTimer) { clearInterval(_pidPollTimer); _pidPollTimer = undefined } }
 function stateChip(c: Card): string {
   if (c.colId === 'doing' && !c.result) return `<div class="kstates-live">${kdoing(c)}</div>`
   if (c.colId === 'review') return `<span class="kbadge kbadge-review">REVISAO</span>`
