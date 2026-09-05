@@ -164,3 +164,23 @@ test('getShortcutOverlay returns the documented keys', () => {
     assert.ok(keys.includes(expected), `shortcut overlay missing ${expected}`)
   }
 })
+
+test('palette accepts physical Semicolon code (cross-layout)', () => {
+  // ponytail: regression guard para 2026-09-05 (user reportou que `;` não disparava).
+  // A causa: o handler original só aceitava e.key === ';'. Em layouts PT-PT ou outras,
+  // a tecla física pode produzir e.key diferente ('ç', ':', etc.). A correção foi
+  // adicionar e.code === 'Semicolon' (que é layout-independent) como match primário.
+  //
+  // Este teste grep-a o source para garantir que TODAS as 3 variantes estão presentes:
+  //   - e.code === 'Semicolon'  (physical code, layout-independent)
+  //   - e.key === ';'           (US/PT-PT default)
+  //   - e.key === ':'           (US/PT-PT com Shift)
+  // Se alguém futuramente voltar a só e.key === ';', este teste falha.
+  const src = readFileSync('src/ui/palette.ts', 'utf8')
+  assert.ok(/e\.code\s*===\s*'Semicolon'/.test(src),
+    "palette.ts must accept e.code === 'Semicolon' (cross-layout leader)")
+  assert.ok(/e\.key\s*===\s*';'/.test(src),
+    "palette.ts must accept e.key === ';'")
+  assert.ok(/e\.key\s*===\s*':'/.test(src),
+    "palette.ts must accept e.key === ':'")
+})
