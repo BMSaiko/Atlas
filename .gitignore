@@ -28,3 +28,7 @@ build3.log
 .lighthouse
 .axe
 .screens/
+
+# ponytail: HEIMDALL cross-session codebase cache. Lives at ~/.hermes/codebase-memory/<project>
+# after Epic keyboard-first (2026-09-05). Ignored here in case the tool re-creates the dir.
+.codebase-memory/

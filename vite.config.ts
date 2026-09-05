@@ -5,6 +5,6 @@ import { cfg } from './server/config'
 
 export default defineConfig({
   plugins: [atlasApi(), tailwindcss()],
-  server: { port: cfg.port, strictPort: true, watch: { ignored: ['**/data/**'] } },
+  server: { port: cfg.port, strictPort: true, watch: { ignored: ['**/data/**', '**/.codebase-memory/**'] } },
   preview: { port: cfg.port, strictPort: true },
 })
