@@ -243,6 +243,8 @@ export const REGISTRY: Command[] = [
   // ===== Global (≥ 6) =====
   navCommand('global.dashboard', 'Dashboard', '/', 'Volta à visão geral', ['dashboard', 'inicio', 'overview', 'home'], 'sphere', ';D'),
   navCommand('global.chat', 'Chat (cross-mundo)', '/c', 'Abre o chat cross-mundo', ['chat', 'cross', 'mundo', 'agente'], 'chat', ';M'),
+  // ponytail: SP atlas-calendar-2026-09-05 — calendar route (cross-mundo, sibling of chat)
+  navCommand('global.calendar', 'Calendário', '/c/calendar', 'Abre o calendário cross-mundo', ['calendario', 'eventos', 'agenda', 'calendar', 'event'], 'cal'),
   apiCommand('global.toggle-theme', 'Alternar tema', 'Clicar no indicador da sidebar alterna Dia/Entardecer/Noite', ['tema', 'theme', 'alternar', 'dia', 'noite', 'dusk', 'night'], 'global', 'sun',
     ctx => { (window as any).__atlasToggleTheme?.() }, { shortcut: ';T' }),
   apiCommand('global.toggle-season', 'Alternar estação', 'Clicar no indicador da sidebar cicla Inverno/Primavera/Verão/Outono', ['estacao', 'season', 'alternar', 'inverno', 'verao'], 'global', 'leaf',
