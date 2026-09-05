@@ -176,7 +176,8 @@ test('palette accepts physical Semicolon code (cross-layout)', () => {
   //   - e.key === ';'           (US/PT-PT default)
   //   - e.key === ':'           (US/PT-PT com Shift)
   // Se alguém futuramente voltar a só e.key === ';', este teste falha.
-  const src = readFileSync('src/ui/palette.ts', 'utf8')
+  const fs = await import('node:fs')
+  const src = fs.readFileSync('src/ui/palette.ts', 'utf8')
   assert.ok(/e\.code\s*===\s*'Semicolon'/.test(src),
     "palette.ts must accept e.code === 'Semicolon' (cross-layout leader)")
   assert.ok(/e\.key\s*===\s*';'/.test(src),
