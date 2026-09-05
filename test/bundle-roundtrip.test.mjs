@@ -1,6 +1,6 @@
 // test/bundle-roundtrip.test.mjs
 //
-// Cobre /api/w/:slug/bundle: GET serializa {meta, notes, kanban}, PUT restaura
+// Cobre /api/w/:slug/bundle: GET serializa {meta, notes, kanban?}, PUT restaura
 // sem validar `ver` (operação destrutiva — replace completo). Recusa shape
 // invalido (400 sem tocar em disco). Confirma integridade do roundtrip.
 //

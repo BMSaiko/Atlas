@@ -1,6 +1,6 @@
 // server/lib/chat.mjs
 // ponytail: multi-conversation history store + chat-runner para o main chat (/c).
-// Reusa runHermesHeadless de chat-runner.mjs (extraido de run-card.mjs em 2026-09-05 strip-kanban). NAO toca em syncVault (cross-mundo
+// Reusa runHermesHeadless de chat-runner.mjs (extraido de run-card.mjs em 2026-09-05). NAO toca em syncVault (cross-mundo
 // nao vai para a vault do atlas).
 // storage: data/_chat/history.json = { current: <id>, conversations: [{id,title,createdAt,updatedAt,messages:[]}] }
 // runs: data/_chat/runs/<runId>.{log,status} (partilhado por todas as conversas; lookup por .log filename).

@@ -10,7 +10,7 @@ import { REGISTRY, runCommand, recordUse, getRecent, useCommandsWith, getShortcu
 
 // ponytail: palette keyboard-first (Ctrl+K). Overlay proprio (nao reusa openModal — obriga <form>
 // + submit). Reutiliza: navigate (deep-link de workspace para reabrir nota), quickAdd + newWorkdir
-// (fontes unicas para criar). Sem kanban — feature removida em 2026-09-05.
+// (fontes unicas para criar).
 type Item = { group: string; icon: string; title: string; sub?: string; search: string; run: () => void }
 
 // ponytail: bridges do registry (commands.ts) -> funcoes ja implementadas aqui em palette.

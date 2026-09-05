@@ -1,6 +1,6 @@
 // test/token-fence.test.mjs
 //
-// Cobre o fence anti-corrida (card iykn11lg): PUT /api/w/:slug/(notes|bundle|events) — kanban removido do fence
+// Cobre o fence anti-corrida (card iykn11lg): PUT /api/w/:slug/(notes|bundle|events)
 // exige X-Atlas-Token == cfg.wtoken OU remoteAddress loopback. Sem ambos -> 401.
 //
 // Estilo: vanilla node:assert (igual aos outros 8 testes). Counter de failures,
@@ -32,9 +32,6 @@ console.log('\n[1] PUT fence: no token, non-loopback remote -> 401')
   const r = await a.reqRaw({ method:'PUT', url:'/api/w/x/notes', body:{ ver:0, items:[] }, remote:'10.0.0.1' })
   ok(r.status === 401, `PUT notes sem token + remote 10.0.0.1 -> 401 (got ${r.status})`)
   ok(r.json?.error?.includes('X-Atlas-Token'), `body menciona X-Atlas-Token (got ${JSON.stringify(r.json)})`)
-  // kanban
-  const r2 = await a.reqRaw({ method:'PUT', url:'/api/w/x/kanban', body:{ ver:0, columns:[], cards:[] }, remote:'10.0.0.1' })
-  ok(r2.status === 401, `PUT kanban sem token + remote 10.0.0.1 -> 401 (got ${r2.status})`)
   // bundle
   const r3 = await a.reqRaw({ method:'PUT', url:'/api/w/x/bundle', body:{ meta:{}, notes:{}, kanban:{} }, remote:'10.0.0.1' })
   ok(r3.status === 401, `PUT bundle sem token + remote 10.0.0.1 -> 401 (got ${r3.status})`)
@@ -74,7 +71,7 @@ console.log('\n[3] PUT fence: loopback remote -> 200 sem token (bypass)')
   await a.close()
 }
 
-console.log('\n[4] GETs livres: wtoken/notes/kanban via non-loopback -> sem fence')
+console.log('\n[4] GETs livres: wtoken/notes via non-loopback -> sem fence')
 {
   const a = await spinAtlas()
   // GETs nao passam pelo fence (so PUTs). Spoof remote non-loopback para
@@ -83,8 +80,7 @@ console.log('\n[4] GETs livres: wtoken/notes/kanban via non-loopback -> sem fenc
   ok(r1.status === 200, `GET /api/workdirs non-loopback -> 200 (got ${r1.status})`)
   const r2 = await a.reqRaw({ method:'GET', url:'/api/w/get-test/notes', remote:'10.0.0.1' })
   ok(r2.status === 200, `GET /api/w/get-test/notes non-loopback -> 200 (got ${r2.status})`)
-  const r3 = await a.reqRaw({ method:'GET', url:'/api/w/get-test/kanban', remote:'10.0.0.1' })
-  ok(r3.status === 200, `GET /api/w/get-test/kanban non-loopback -> 200 (got ${r3.status})`)
+
   await a.close()
 }
 
@@ -101,8 +97,8 @@ console.log('\n[5] Token wrong: remote non-loopback + wrong token -> 401')
 // loopback check, c) a string do erro.
 console.log('\n[6] SOURCE EQUALITY — api.ts:700-704 (regex + loopback + 401)')
 {
-  // regex /^\/api\/w\/[^/]+\/(notes|kanban|bundle)$/
-  ok(/\/\^\\\/api\\\/w\\\/\[\^\/\]\+\\\/\(notes\|bundle\|events\)\$\//.test(apiSrc), 'regex de match do fence presente (api.ts:700 — strip-kanban removeu kanban do fence)')
+  // regex /^\/api\/w\/[^/]+\/(notes|bundle|events)$/
+  ok(/\/\^\\\/api\\\/w\\\/\[\^\/\]\+\\\/\(notes\|bundle\|events\)\$\//.test(apiSrc), 'regex de match do fence presente (api.ts:700)')
   // remote === '127.0.0.1' || '::1' || '::ffff:127.0.0.1'
   ok(apiSrc.includes("remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1'"), 'loopback set check (api.ts:703)')
   // string exata do erro

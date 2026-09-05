@@ -171,7 +171,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
   let selMode = false
   let sel = new Set<string>()
   // ponytail: PUT com retry — 409 (outro escritor avancou `ver`) fazia o item \"nao aparecer\". Re-sync
-  // ver + re-aplica criacoes locais e retenta 1x (mesmo padrao do kanban.ts).
+  // ver + re-aplica criacoes locais e retenta 1x.
   const putNotes = async () => {
     try { adoptVer(await api.notes.put(slug, { ver: notesVer, items: notes })) }
     catch (e: any) {
@@ -200,8 +200,8 @@ export async function renderNotes(root: HTMLElement, slug: string) {
   ensureIds(notes)
   const fmt = (ts: number) => new Date(ts).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
   const archCount = () => notes.filter(n => n.archived).length
-  // ponytail: refreshSideCount foi kanban-specific (contava cards ativos na sidebar).
-  // Removido em 2026-09-05 — kanban removido. Sidebar counts agora vem de counts.ts (notas ativas).
+  // ponytail: refreshSideCount removido em 2026-09-05 (countava cards na sidebar).
+  // Sidebar counts agora vem de counts.ts (notas ativas).
 
   root.innerHTML = `
     <div class="notes-toolbar">
@@ -257,7 +257,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
     if (nbar) {
       nbar.querySelector('#nbulk-arch')!.addEventListener('click', bulkArchNotes)
       nbar.querySelector('#nbulk-del')!.addEventListener('click', bulkDelNotes)
-      // ponytail: #nbulk-card (bulk to kanban) removido em 2026-09-05 — kanban removido.
+      // ponytail: #nbulk-card removido em 2026-09-05 (feature removida).
       nbar.querySelector('#nbulk-clear')!.addEventListener('click', () => { sel.clear(); doRender(searchInput.value.toLowerCase()) })
     }
   }
@@ -414,16 +414,16 @@ function applyBsRunning() {
   b.disabled = bsRunning
 }
 
-// ponytail: 2026-09-05 strip-kanban — brainstorm endpoint removido. Botao na toolbar agora
+// ponytail: 2026-09-05 — brainstorm endpoint removido. Botao na toolbar agora
 // apenas toast explicativo; viewBrainstorm/renderNotesAfterBrainstorm ficam como stubs
 // vazios para nao rebentar imports cruzados.
 function brainstorm(_slug: string) {
   toast('Brainstorm removido em 2026-09-05 (feature descontinuada). Use Ctrl+K → "Nova nota" para criar manualmente.')
 }
 function viewBrainstorm(_slug: string) {
-  // ponytail: 2026-09-05 strip-kanban — viewBrainstorm era stream de log do brainstorm headless.
+  // ponytail: 2026-09-05 — viewBrainstorm era stream de log do brainstorm headless.
   // Endpoint removido; mostra modal estatico com a mensagem de descontinuacao.
-  const body = () => '<div class="term-wrap"><pre class="term-view">Brainstorm descontinuado em 2026-09-05 — feature removida com o kanban.</pre><div class="term-status">feature removida</div></div>'
+  const body = () => '<div class="term-wrap"><pre class="term-view">Brainstorm descontinuado em 2026-09-05 — feature removida.</pre><div class="term-status">feature removida</div></div>'
   openModal({ title: 'Brainstorm/SWOT', submitText: 'Fechar', cancelText: 'Fechar', body })
 }
 // ponytail: o worker escreveu notas novas via API; re-render so relendo. Como renderNotes é

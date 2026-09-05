@@ -58,7 +58,7 @@ export async function renderSettings(root: HTMLElement, slug: string) {
       </div>
       <div class="card-block">
         <h3>Backup (bundle)</h3>
-        <p class="muted" style="margin-bottom:12px">Descarregar ou carregar o workdir inteiro (meta + notas + kanban-arquivo) como um único ficheiro JSON. O campo kanban e' preservado para compatibilidade (ficheiros antigos abrem) mas a UI ja' nao o mostra. Útil para portabilidade entre instalações e para um snapshot fora do git.</p>
+        <p class="muted" style="margin-bottom:12px">Descarregar ou carregar o workdir inteiro (meta + notas) como um único ficheiro JSON. Útil para portabilidade entre instalações e para um snapshot fora do git.</p>
         <div class="actions-row">
           <button class="btn" id="bk-export" type="button" >Exportar bundle (.json)</button>
           <button class="btn btn-ghost" id="bk-import-btn" type="button" >Importar bundle…</button>
@@ -72,8 +72,8 @@ export async function renderSettings(root: HTMLElement, slug: string) {
       </div>
     </div>`
 
-  // ponytail: 2026-09-05 strip-kanban — gestao de colunas do kanban removida (board, list,
-  // col-add, col-save, col-del, renderList, saveBoard). A secao "Colunas do kanban" ja' nao
+  // ponytail: 2026-09-05 — gestao de colunas removida (board, list,
+  // col-add, col-save, col-del, renderList, saveBoard). A secao de colunas ja' nao
   // e' renderizada no template (acima).
 
   // --- Tema: modo auto/manual (a escolha do tema fica no indicador da sidebar) ---
@@ -130,7 +130,7 @@ export async function renderSettings(root: HTMLElement, slug: string) {
   // ponytail: snapshots — ver ui/snapshot-list.ts. Lazy import para o bundle nao paginar o settings no cold start.
   void import('../ui/snapshot-list').then(m => m.renderSnapshotList(root, slug))
 
-  // --- Backup: exportar / importar bundle (meta+notes+kanban) ---
+  // --- Backup: exportar / importar bundle (meta+notes) ---
   root.querySelector('#bk-export')!.addEventListener('click', async () => {
     try {
       const b = await api.bundle.get(slug)
@@ -154,7 +154,7 @@ export async function renderSettings(root: HTMLElement, slug: string) {
     } catch { toast('Ficheiro JSON invalido'); (e.target as HTMLInputElement).value = ''; return }
     // ponytail: valida shape minimo — recusar bundle malformado NAO sobrescreve estado.
     if (!bundle || typeof bundle !== 'object' || !bundle.meta || !bundle.notes) {
-      toast('Bundle invalido: requer meta+notes (kanban opcional, preservado para compat)'); (e.target as HTMLInputElement).value = ''; return
+      toast('Bundle invalido: requer meta+notes'); (e.target as HTMLInputElement).value = ''; return
     }
     const ok = await confirmDialog({
       title: 'Importar bundle',
@@ -162,8 +162,8 @@ export async function renderSettings(root: HTMLElement, slug: string) {
     })
     if (!ok) { (e.target as HTMLInputElement).value = ''; return }
     try {
-      // ponytail: bundle preserva campo kanban (ficheiros antigos continuam a importar). UI nao o mostra.
-      await api.bundle.put(slug, { meta: bundle.meta, notes: bundle.notes, kanban: bundle.kanban ?? { ver: 0, columns: [], cards: [] } })
+      // ponytail: api.bundle.put signature accepts optional kanban for old bundles — server keeps lossless.
+      await api.bundle.put(slug, { meta: bundle.meta, notes: bundle.notes } as any)
       toast('Bundle importado')
       navigate('/w/' + slug + '/settings')
     } catch (err: any) { toast('Erro a importar: ' + err.message) }

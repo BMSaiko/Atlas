@@ -16,7 +16,7 @@ const router = createBrowserRouter([
       { path: 'w/:slug', element: <Workspace /> },
       { path: 'w/:slug/settings', element: <Settings /> },
       { path: 'c', element: <MainChat /> },
-      // ponytail: SP atlas-calendar-2026-09-05 — month grid, deadline chips from kanban.json
+      // ponytail: SP atlas-calendar-2026-09-05 — month grid, events from meta.json
       { path: 'c/calendar', element: <Calendar /> },
     ],
   },

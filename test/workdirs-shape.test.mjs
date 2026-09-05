@@ -50,7 +50,7 @@ console.log('\n[2] POST com name valido -> 201, slug derivado')
   await a.close()
 }
 
-console.log('\n[3] POST cria data/<slug>/{meta,notes,kanban}.json')
+console.log('\n[3] POST cria data/<slug>/{meta,notes,kanban}.json — kanban preservado para compat')
 {
   const a = await spinAtlas()
   const r = await a.req('POST', '/api/workdirs', { name: 'Files Test' })
@@ -63,8 +63,7 @@ console.log('\n[3] POST cria data/<slug>/{meta,notes,kanban}.json')
   // ponytail: writeJ() faz bumpVer (api.ts:43), entao ver:0 vira ver:1 na 1a escrita.
   ok(notes.ver >= 0 && Array.isArray(notes.items), `notes inicial: {ver>=0, items:[]} (got ver=${notes.ver})`)
   const kanban = JSON.parse(readFileSync(join(a.cwd, 'data', slug, 'kanban.json'), 'utf8'))
-  ok(kanban.ver >= 0 && Array.isArray(kanban.columns) && Array.isArray(kanban.cards), `kanban inicial (got ver=${kanban.ver})`)
-  ok(kanban.columns.length === 4, `4 colunas default (todo/doing/review/done) (got ${kanban.columns.length})`)
+  ok(kanban.ver >= 0 && Array.isArray(kanban.columns) && Array.isArray(kanban.cards), `kanban.json inicial preservado (got ver=${kanban.ver})`)
   await a.close()
 }
 

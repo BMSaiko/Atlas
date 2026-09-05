@@ -9,7 +9,7 @@ import { join } from 'node:path'
 
 const ROOT = join(process.cwd(), 'data', '_snapshots')   // um sitio so, prune num loop
 const DATA = join(process.cwd(), 'data')
-const KINDS = ['meta', 'notes', 'kanban'] as const
+const KINDS = ['meta', 'notes', 'kanban'] as const  // ponytail: kanban kept for restore-compat (old slots still restore this file)
 export type Kind = typeof KINDS[number]
 const KEEP_SLOTS = 28  // 4 slots/dia × 7 dias
 

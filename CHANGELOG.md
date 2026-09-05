@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased] - 2026-09-05 — kanban feature + card-driven workflow removed
+
+- **feat(atlas): strip kanban feature and workflow** (`06db44e`, ~9633 LOC removed) — primary views, routes, lib/run-card, orchestrator, card-driven loop, prompts, dead tests.
+- **2nd-pass cleanup (this commit)** — residue scrub: catch-all route renamed `w:notes-kanban-bundle` → `w:notes-events-bundle`, dead CSS classes dropped (~2.5KB), chat prompt examples retargeted to calendar events, dead Kanban icon dropped, snapshot-UI kind-label removed. `data/<slug>/kanban.json` preserved on disk for restore-compat of old snapshots; bundle shape keeps the optional `kanban` field for old-bundle compat.
+- Notes/Calendar/Chat/Settings/Workspace/Workdirs/Snapshots untouched (functional surface unchanged).
+
 ## 2026-09-05 — card-driven kanban loop (SP lifecycle)
 
 - **feat(atlas): card-driven kanban loop — SP lifecycle, kill-on-transition, status chip** (`e25ff0d`) — liga o Atlas kanban ao ciclo de vida do **Super Prompt** end-to-end:

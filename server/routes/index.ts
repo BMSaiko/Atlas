@@ -6,7 +6,7 @@
 // The dispatcher in routes.ts imports `ALL_ROUTES` (the flat concat) at
 // module init; per-domain files stay independent.
 //
-// strip-kanban (2026-09-05): w.ts + orchestratorRoutes removed; w-survivors.ts holds the 7
+// strip-kanban (2026-09-05): w.ts + orchestratorRoutes removed; w-survivors.ts holds the
 // /api/w/* routes that survive (bundle, snapshots*, export, notes/templates/events/meta).
 
 import type { Route } from "../routes"

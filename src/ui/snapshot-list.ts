@@ -23,7 +23,6 @@ export async function renderSnapshotList(root: HTMLElement, slug: string) {
         <div><strong>${esc(s.slot.replace('/', ' '))}</strong> <span class="muted">${sz}${pre}</span></div>
         <div class="actions">
           <button class="btn btn-ghost" data-act="dl" data-kind="notes">notas</button>
-          <button class="btn btn-ghost" data-act="dl" data-kind="kanban">kanban</button>
           <button class="btn btn-danger" data-act="restore">Restaurar</button>
         </div>
       </div>`
@@ -45,7 +44,7 @@ export async function renderSnapshotList(root: HTMLElement, slug: string) {
     const btn = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null
     const row = (e.target as HTMLElement).closest('.snap-row') as HTMLElement | null
     if (!btn || !row) return
-    const slot = row.dataset.slot!, act = btn.dataset.act!, kind = btn.dataset.kind as 'meta' | 'notes' | 'kanban' | undefined
+    const slot = row.dataset.slot!, act = btn.dataset.act!, kind = btn.dataset.kind as 'meta' | 'notes' | undefined
     if (act === 'dl' && kind) {
       try {
         const r = await fetch(api.snapshots.fileUrl(slug, slot, kind))

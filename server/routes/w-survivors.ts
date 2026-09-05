@@ -1,20 +1,20 @@
 // server/routes/w-survivors.ts
 //
 // ponytail: survivors of the former server/routes/w.ts after strip-kanban (2026-09-05).
-// Only the /api/w/* routes that DON'T drive the kanban feature remain:
+// Only the /api/w/* routes that DON'T drive the (now removed) feature remain:
 //   - w:bundle                *    /api/w/:slug/bundle
 //   - w:snapshots             GET  /api/w/:slug/snapshots
 //   - w:snapshots:restore     POST /api/w/:slug/snapshots/:slot/restore
 //   - w:snapshots:file        GET  /api/w/:slug/snapshots/:slot/file/:name
 //   - w:export                POST /api/w/:slug/export                 (notes -> docs/notas.md)
-//   - w:notes-kanban-bundle   *    /api/w/:slug/{notes|templates|events|meta}
-//                              ^ catches everything; rejects kanban with 410 (feature removed).
+//   - w:notes-events-bundle   *    /api/w/:slug/{notes|templates|events|meta}
+//                              ^ catches everything; rejects the legacy kind with 410.
 //   - w:meta                  GET  /api/w/:slug                        (read meta.json)
 //
-// Removed routes (kanban + card-driven workflow): w:review*, w:run, w:runs:pid, w:kanban:*,
+// Removed routes (former feature + workflow): w:review*, w:run, w:runs:pid, w:kanban:*,
 // w:brainstorm, w:dp, w:cleanup, w:orphans*, w:cards:clear-orphan, w:output, w:git:*, w:import-roadmap.
 //
-// ORDER preserved from original w.ts. w:notes-kanban-bundle is length-3 wildcard and runs after
+// ORDER preserved from original w.ts. w:notes-events-bundle is length-3 wildcard and runs after
 // the more-specific matches (bundle/snapshots*/export). w:meta (length 2) runs last.
 
 import type { Route } from "../routes"
@@ -39,15 +39,16 @@ export const ROUTES: Route[] = [
           if (m === 'GET') {
             const meta = await readJ(metaFile) || {}
             const notes = await readJ(notesFile) || { ver: 0, items: [] }
+            // ponytail: kanban field kept in bundle response for restore-compat (old bundles still load).
             const kanban = await readJ(kanbanFile) || { ver: 0, columns: [], cards: [] }
             send(200, { slug, meta, notes, kanban, ts: Date.now() }); return
           }
           if (m === 'PUT') {
             const b = (await deps.readJsonBody(req)) || {}
             // ponytail: valida shape minimo (recusar bundle malformado NAO sobrescreve estado). Aceita
-            // {meta, notes, kanban} no payload. Faltar qualquer um -> 400 sem tocar em disco.
-            if (!b || typeof b !== 'object' || !('meta' in b) || !('notes' in b) || !('kanban' in b)) {
-              send(400, { error: 'bundle invalido: requer meta+notes+kanban' }); return
+            // {meta, notes, kanban?} no payload. kanban e' opcional (compat). Faltar meta/notes -> 400.
+            if (!b || typeof b !== 'object' || !('meta' in b) || !('notes' in b)) {
+              send(400, { error: 'bundle invalido: requer meta+notes' }); return
             }
             await writeJ(metaFile, b.meta)
             await writeJ(notesFile, b.notes)
@@ -133,14 +134,14 @@ export const ROUTES: Route[] = [
     method: "*",
     length: 3,
     match: ["w", null, null],
-    name: "w:notes-kanban-bundle",
+    name: "w:notes-events-bundle",
     handler: async (ctx) => {
       const { deps = {} as any, send, parts, req, m, res } = ctx
         const { DATA, HERMES_HOME, SLUG, VAULT, _sanitizeText, cleanupRuns, cleanupWorktrees, getSnapshotFile, inside, interpolate, launchBrainstorm, launchDp, launchGitOp, launchHermes, listSnapshots, loadPrompt, mergeDevToMain, nid, parseRoadmap, readFile, readJ, repoDir, restoreSnapshot, rmJunction, runCIGate, runGit, sanitize, slotFor, spawnHeadless, syncVault, tickAll, tickSnapshot, writeJ, writeWipeGuardSnapshot, wtRoot } = deps
           const slug = parts[1], kind = parts[2]
           if (!SLUG.test(slug)) { send(400,{error:'bad request'}); return }
-        // ponytail: strip-kanban (2026-09-05) — kanban kind removed; reject with 410 Gone.
-        if (kind === 'kanban') { send(410, { error: 'kanban removido — feature descontinuada em 2026-09-05' }); return }
+        // ponytail: 2026-09-05 — legacy 'kanban' kind no longer served (feature removed); reject with 410 Gone.
+        if (kind === 'kanban') { send(410, { error: 'feature descontinuada em 2026-09-05' }); return }
         // templates: read-only — merge global (data/templates.json) + workdir (data/<slug>/templates.json);
         // em colisao de id, o do workdir vence o global. JSON malformado -> lista vazia (nao 500).
         if (kind === 'templates') {
@@ -183,7 +184,7 @@ export const ROUTES: Route[] = [
             if (arrKey2 && !Array.isArray(b[arrKey2])) { send(400, { error: 'invalid body: missing or non-array ' + arrKey2 }); return }
             // optimistic concurrency (card: optimistic concurrency no PUT): o client deve enviar o `ver`
             // que leu; se o ficheiro em disco ja avancou, outro escritor ganhou -> 409 p/ o client re-sync.
-            // meta nao entra (nao e reescrito em corrida por agents) — so notes/kanban validam.
+            // meta nao entra (nao e reescrito em corrida por agents) — so notes valida.
             if (kind === 'notes') {
               const cur = await readJ(file)
               const storedVer = cur?.ver ?? 0

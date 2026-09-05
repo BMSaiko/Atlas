@@ -5,16 +5,16 @@ import { toast } from '../ui/toast'
 import { navigate } from '../router'
 import { today, week } from '../ui/stats'
 
-// ponytail: dashboard após strip-kanban (2026-09-05). Mostra stats de notas por mundo +
-// meteorologia (Porto via Open-Meteo) + API keys/uso do Hermes. Kanban pipeline/sessions/orch
+// ponytail: dashboard (2026-09-05). Mostra stats de notas por mundo +
+// meteorologia (Porto via Open-Meteo) + API keys/uso do Hermes.
 // removidos — feature descontinuada.
 
 interface Wd { slug: string; name: string; description?: string; icon?: string }
 interface Row { wd: Wd; notes: Nota[] }
 interface Tally { notes: number; notesArch: number }
 
-// ponytail: dashboard após strip-kanban (2026-09-05). Mostra stats de notas por mundo +
-// meteorologia (Porto via Open-Meteo) + API keys/uso do Hermes. Kanban pipeline/sessions/orch
+// ponytail: dashboard (2026-09-05). Mostra stats de notas por mundo +
+// meteorologia (Porto via Open-Meteo) + API keys/uso do Hermes.
 // removidos — feature descontinuada.
 
 function tally(rows: Row[]): { total: Tally; byWd: Map<string, Tally> } {

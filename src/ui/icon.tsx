@@ -1,5 +1,5 @@
 import {
-  Circle, Play, MessageSquare, Plus, FileText, BookOpen, KanbanSquare, Settings, Pencil, Trash2,
+  Circle, Play, MessageSquare, Plus, FileText, BookOpen, Settings, Pencil, Trash2,
   Archive, Search, ChevronRight, ChevronLeft, Menu, MoveHorizontal, Check, Filter, Sparkles,
   Sun, Sunset, Moon, Timer, Pause, RotateCcw, Leaf, Bell, Tag, BellOff, Terminal, Snowflake,
   Sprout, Cloud, CloudFog, CloudRain, CloudLightning, Power, Calendar, type LucideIcon,
@@ -14,7 +14,7 @@ const M: Record<string, LucideIcon> = {
   plus: Plus,
   note: FileText,
   doc: BookOpen,
-  board: KanbanSquare,
+  // board: removed 2026-09-05 (strip-kanban)
   gear: Settings,
   pencil: Pencil,
   trash: Trash2,

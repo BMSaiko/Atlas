@@ -23,7 +23,7 @@ export interface CommandCtx {
   navigate: (path: string) => void
   toast: (msg: string) => void
   confirm: (o: { title: string; message: string; confirmText?: string }) => Promise<boolean>
-  api: any                          // ponytail: minimal — only `api.workdirs/notes/kanban/...` are called
+  api: any                          // ponytail: minimal — only `api.workdirs/notes/...` are called
   recordUse: (id: string) => void
 }
 

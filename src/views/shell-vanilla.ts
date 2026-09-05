@@ -19,7 +19,7 @@ const active = () => { try { return localStorage.getItem(ACTIVE_KEY) || '' } cat
 const setActive = (s: string) => { try { localStorage.setItem(ACTIVE_KEY, s) } catch {} }
 
 async function counts(slug: string) {
-  // ponytail: 2026-09-05 strip-kanban — "open" era kanban-cards ativos. Removido; counts agora
+  // ponytail: 2026-09-05 — "open" counter removido; counts agora
   // sao apenas notas (a sidebar mostra notas arquivadas/ativas via counts.ts).
   try {
     const notes = await api.notes.get(slug)
@@ -206,7 +206,7 @@ function bindKeydown() {
 }
 
 // ponytail: quickAdd (palette ctrl+K) DELEGA no modal completo de criar nota — fonte unica.
-// Kanban removido em 2026-09-05; o type picker (cartão vs nota) deixa de existir.
+// Type picker (cartão vs nota) removido em 2026-09-05.
 export function quickAdd(slug: string | null) {
   if (!slug) return
   openNewNoteModal(slug)

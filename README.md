@@ -1,10 +1,10 @@
 # ATLAS
 
-> O titã que sustenta os céus. Cada projeto é um **mundo** que Atlas carrega nos ombros — notas, kanban e relógio próprios, virados para cima para nunca se misturarem.
+> O titã que sustenta os céus. Cada projeto é um **mundo** que Atlas carrega nos ombros — notas e relógio próprios, virados para cima para nunca se misturarem.
 
-Num Atlas, não trabalhas em pastas: atravessas **mundos**. Cada **mundo** é um workspace isolado (quicknotes + kanban próprios, com icon, fuso horário, tema e estação à sua medida). Entrar num mundo é trocar de contexto de vez — nunca se mistura o que não deve, e `Alt+↑/↓` deixa-te viajar entre mundos num sopro. O **`Ctrl+K`** abre uma command palette para saltar de mundo em mundo, abrir notas/cartões e disparar ações sem largar o teclado; o **leader `;`** (`;N` nota, `;C` cartão, `;M` chat, `;D` dashboard, `;S` settings, `;T` tema, `;F` fuso, `;?` overlay) dá-te tudo a uma tecla do mindinho esquerdo.
+Num Atlas, não trabalhas em pastas: atravessas **mundos**. Cada **mundo** é um workspace isolado (quicknotes próprios, com icon, fuso horário, tema e estação à sua medida). Entrar num mundo é trocar de contexto de vez — nunca se mistura o que não deve, e `Alt+↑/↓` deixa-te viajar entre mundos num sopro. O **`Ctrl+K`** abre uma command palette para saltar de mundo em mundo, abrir notas/cartões e disparar ações sem largar o teclado; o **leader `;`** (`;N` nota, `;C` cartão, `;M` chat, `;D` dashboard, `;S` settings, `;T` tema, `;F` fuso, `;?` overlay) dá-te tudo a uma tecla do mindinho esquerdo.
 
-Atlas é **keyboard-first**: o registry único em `src/lib/commands.ts` (56 commands × 6 grupos) é a source of truth, a palette renderiza a partir dele, todos os 81 `<button>` do app têm `data-cmd` auditado em teste — largar o rato não é opcional.
+Atlas é **keyboard-first**: o registry único em `src/lib/commands.ts` é a source of truth, a palette renderiza a partir dele, todos os `<button>` do app têm `data-cmd` auditado em teste — largar o rato não é opcional.
 
 ## Características
 
@@ -15,31 +15,31 @@ Atlas é **keyboard-first**: o registry único em `src/lib/commands.ts` (56 comm
 - **Seletor de fuso horário** — relógio da sidebar em ~13 zonas comuns via `Intl`.
 - **Tema auto/manual** — dia ↔ entardecer ↔ noite (day/dusk/night) seguem as horas, ou fixas manualmente (botão: esquerdo = manual, direito = auto).
 - **Época do ano (estação)** — dimensão paralela ao shift: Inverno (Out–Dez), Primavera (Jan–Mar), Verão (Abr–Jun), Outono (Jul–Set); automática pelo mês ou manual. Botão de estação na sidebar (esquerdo cicla, direito volta a auto).
-- **Command palette (`Ctrl+K`)** — atalhos por teclado para mundos, notas, cartões e ações (novo mundo, novas notas/cartões), com modais completos delegados.
-- **Templates** — cria notas e cartões a partir de templates (globais + por mundo); no modal Refinar, o template aplica-se à nota de revisão.
+- **Command palette (`Ctrl+K`)** — atalhos por teclado para mundos, notas e ações (novo mundo, novas notas), com modais completos delegados.
+- **Templates** — cria notas a partir de templates (globais + por mundo); no modal Refinar, o template aplica-se à nota de revisão.
 - **Brainstorm** — botão por mundo: gera brainstorm + SWOT do projeto e escreve notas novas (headless, sem tocar no código).
-- **Gerar DP** — botão por card: gera/reescreve o Design Plan (DP) do card em segundo plano (headless); resultado streamado no modal e notificado ao concluir. O `dp` e o `result` do card renderizam **Markdown legível** (`renderMd`) no modal.
+- **Gerar DP** — para o chat cross-mundo (`/c`): corre o ciclo de Super Prompt (DP + DA) em segundo plano; resultado streamado no log e notificado ao concluir.
 - **Sessões de foco** — overlay imersivo com cronómetro + pomodoro (fases focus/pausa).
 - **Prazos (deadlines)** — `due date` por card com badge; cor progressiva por proximidade: a <48h fica laranja, ultrapassado vermelho (done nunca alarme).
 - **Prioridades** — urgente/alta/média/baixa com sort e deteção de overdue.
 - **Bulk actions** — modo seleção de múltiplos cartões (inclui selecionar a coluna inteira com toggle) e barra bulk: mover coluna, mudar prioridade, arquivar, eliminar.
-- **Visualização da tarefa em execução** — ao correr um card, um modal mostra o log do worker ao vivo (stream offset-based) com estado `a executar / concluído`; botões Brainstorm/DP com animação `running`. Em paralelo, o **status chip** (`agent: running (pid NNNN)`) polla o PID file cada 5s enquanto o card está em `doing`, e pára via MutationObserver em column change.
-- **Card-driven loop (Super Prompt lifecycle)** — um card pode ter `superPromptBody` + `superPromptRef` (persistido por `POST /api/w/:slug/kanban/sp`, validado: `50 ≤ body ≤ 200KB` + ref sob `knowledge/infra/super-prompts/`); o botão **Gerar SP** aparece em `todo` quando falta SP, e em `review` aparece **Refinar** (re-usa a worktree, mata o worker PID antigo, dispara novo launch). Mudar coluna agora também mata o worker python (`killWorkerForCard` narrow `taskkill /F /PID`), não só a pane WezTerm.
+- **Visualização da tarefa em execução** — no chat cross-mundo (`/c`), o painel de execução mostra o log do worker ao vivo com estado `a executar / concluído`; botões com animação `running`. o card está em `doing`, e pára via MutationObserver em column change.
+- **Super Prompt lifecycle (no chat cross-mundo)** — o chat `/c` pode disparar o ciclo SP → DP → DA via `runHermesHeadless` (headless, log streamado). Prompt interpolado a partir de `${userMsg}` + history + world metadata.m.
 - **Calendar cross-mundo (`/c/calendar`)** — month grid em React, navegação prev/next, eventos livres CRUD (`GET/PUT /api/w/:slug/events`, sem OT) e chips read-only para cards com `due`/`!archived`/`colId !== 'done'` (clique salta para o card). Entrada no `Ctrl+K` filtrável por "calend/agenda/eventos".
-- **Main chat cross-mundo (`/c`) com multi-conversation** — composer + thread, stream do Hermes em tempo real, sidebar de conversas, agent com **Atlas parity** (lê/escreve `meta`/`notes`/`kanban`/`review`/`orchestrator` em qualquer mundo via API; token injetado no prompt). Slug sempre explícito no prompt. Cap 200 msgs/conversa (FIFO).
-- **Data de criação no card (`kdate`)** — visível no título do card kanban (`title="Criado em …"`).
-- **Cards recorrentes + lembretes** — `recur` (diária/semanal/mensal) com badge `↻`; cards `due` em ≤30min disparam notificação/toast (dedup por `slug:id`); próximo ciclo materializa-se sozinho em `todo`.
+- **Main chat cross-mundo (`/c`) com multi-conversation** — composer + thread, stream do Hermes em tempo real, sidebar de conversas, agent com **Atlas parity** (lê/escreve `meta`/`notes` em qualquer mundo via API; token injetado no prompt). Slug sempre explícito no prompt. Cap 200 msgs/conversa (FIFO).
+- **Data de criação na nota** — visível no header da nota (`title="Criado em …"`).
+- **Eventos recorrentes + lembretes** — `recur` (diária/semanal/mensal) com badge `↻`; eventos `due` em ≤30min disparam notificação/toast (dedup por `slug:id`); próximo ciclo materializa-se sozinho.
 - **Dashboards de operação do Hermes** — API keys (`/api/hermes/keys`, com `access_token` censurado e `secret_fingerprint` sha256) e Usage (`/api/hermes/usage`, hoje/tokens/custo) em ambas as dashboards.
-- **Backup/Export/Import de workdir** — Definições → Backup: exportar notas+kanban+meta como JSON, ou importar (replace destrutivo); útil para migrar mundos entre máquinas.
-- **Cobertura de testes do backend + front** — **117 testes** `node --test` puros (vanilla `node:assert`, ~13s) cobrem **~30 routes** de `server/api.ts` (token fence, wtoken loopback, bundle roundtrip, hermes keys redaction, hermes usage, workdirs, review action, notes/kanban PUT, run/dp, run-finish close handler, chat history cap, chat routes, sp-persistence/refine/kill-transition/runs-pid, commands registry + palette dom audit, etc.) **+ fluxo end-to-end** (`POST /run` → Node run-card module → git worktree → `p.on('close')` doing→review, com fixtures `test/fixtures/hermes_cli/`). Os 2 integration tests lentos (`run-integration`, `syncvault-debounce`) vivem em `npm run test:integration` separado. Harnesses partilhados: `test/_atlas-runtime.mjs` (Vite `middlewareMode` + seam `ATLAS_TEST_*`) e `test/_atlas-harness.mjs` (integration real); ambos zero risco prod. Default `npm test` passa 117/117 em ~13s; `npm run test:integration` adiciona +2.
+- **Backup/Export/Import de workdir** — Definições → Backup: exportar notas+meta como JSON, ou importar (replace destrutivo); útil para migrar mundos entre máquinas. Bundles antigos com campo `kanban` opcional (compat). preservado (compat).
+- **Cobertura de testes do backend + front** — testes `node --test` puros (vanilla `node:assert`, ~13s) cobrem as routes de `server/api.ts` (token fence, wtoken loopback, bundle roundtrip, hermes keys redaction, hermes usage, workdirs, run-finish close handler, chat history cap, chat routes, sp-persistence/refine/kill-transition/runs-pid, commands registry + palette dom audit, etc.) **+ fluxo end-to-end** (`POST /run` → Node run-card module → git worktree → `p.on('close')` doing→review, com fixtures `test/fixtures/hermes_cli/`). Os 2 integration tests lentos (`run-integration`, `syncvault-debounce`) vivem em `npm run test:integration` separado. Harnesses partilhados: `test/_atlas-runtime.mjs` (Vite `middlewareMode` + seam `ATLAS_TEST_*`) e `test/_atlas-harness.mjs` (integration real); ambos zero risco prod. Default `npm test` passa 117/117 em ~13s; `npm run test:integration` adiciona +2.
 
-- **Notificações de review** — avisos globais quando um card está pronto a rever.
-- **Import roadmap** — um `.md` vira um card por tarefa + nota de detalhe, idempotente.
+- **Notificações de review** — avisos globais para revisão de notas.
+- **Import roadmap** — um `.md` vira uma nota por tarefa, idempotente.
 - **Export notas** — exporta notas não-arquivadas para markdown na vault (`docs/notas.md`).
 - **Git headless por mundo** — cada mundo pode apontar para o seu repo (path) e correr merge `dev → main` ou resolver conflito, tudo em segundo plano.
 - **Live-data + CI** — dados versionados com auto-backup na vault e GitHub Actions (typecheck + build).
-- **Review como coluna default** + cards em 2 tamanhos, `Alt+↑/↓` entre mundos.
-- **Write-token anti-corrida** — `PUT` em `notes|kanban|bundle` exige header `X-Atlas-Token`; apenas loopback (`127.0.0.1`/`::1`) ou requests do `localhost`. Token impresso no boot do server, configurável via `.env` (`ATLAS_WTOKEN`) ou `npm run dev:token`.
+- **Review por tag** + `Alt+↑/↓` entre mundos.
+- **Write-token anti-corrida** — `PUT` em `notes|bundle|events` exige header `X-Atlas-Token`; apenas loopback (`127.0.0.1`/`::1`) ou requests do `localhost`. Token impresso no boot do server, configurável via `.env` (`ATLAS_WTOKEN`) ou `npm run dev:token`.
 - **Dashboard defloat + Meteorologia** — dashboard hub em modo funcional (anéis só em vistas por mundo) + widget meteorologia (Open-Meteo) com emoji/cache 10 min.
 - **Keybinds** — `Alt+←/→` cicla tabs do workspace, `Ctrl/Cmd+Enter` submete forms em modais, `Esc`/clique-fora fecha overlays.
 
@@ -49,9 +49,9 @@ Atlas é **keyboard-first**: o registry único em `src/lib/commands.ts` (56 comm
 - **React 18.3 + react-router-dom 6.30** — routes frozen: `/`, `/w/:slug`, `/w/:slug/settings`, `/c`, `/c/calendar`. Views vanilla (`*-vanilla.ts`) preservadas intactas; cada view expõe um thin React wrapper que renderiza o DOM vanilla via `NavBridge` (capture `useNavigate()` em `globalThis` para `navigate('/...')` imperativo das views).
 - **Tailwind CSS 4.3** via `@tailwindcss/vite` — `src/index.css` `@theme` block declara cosmos/gold/marble/pipe como `--color-*` (`bg-bg-0`, `text-gold`). `components.css` ainda carregado para classes vanilla até Epic A polish sweep.
 - **shadcn/ui** — 17 componentes em `src/components/ui/` (alert, avatar, badge, button, card, command, dialog, dropdown-menu, input, label, popover, progress, scroll-area, separator, sheet, skeleton, tabs, textarea, tooltip) sobre `@radix-ui/*` + `cmdk` + `lucide-react` + `next-themes` + `sonner` + `class-variance-authority` + `tailwind-merge` + `tailwindcss-animate`.
-- **Persistência local** em **ficheiros JSON** por mundo (`data/<slug>/{meta,notes,kanban}.json`), servida por uma **mini-API embutida** no Vite dev/preview (Node `server/api.ts` + `server/lib/{chat,run-card,auto-merge}.mjs`)
+- **Persistência local** em **ficheiros JSON** por mundo (`data/<slug>/{meta,notes,kanban}.json` — `kanban.json` preservado para restore-compat), servida por uma **mini-API embutida** no Vite dev/preview (Node `server/api.ts` + `server/lib/chat.mjs`)
 - **Drag & Drop nativo** (HTML5), zero libs de runtime para isso
-- **Task-runner**: cada card kanban pode disparar uma **tarefa autónoma** (Node `runCard()` → `hermes_cli.main` numa worktree git isolada), com branch própria por card e auto-merge detached via `auto-merge.mjs`
+- **Task-runner (chat cross-mundo)**: cada mensagem no `/c` pode disparar o ciclo SP → DP → DA via `runHermesHeadless` → `hermes_cli.main` (headless, log streamado em tempo real).
 
 ## Correr
 
@@ -60,7 +60,7 @@ npm install
 npm run dev          # http://localhost:5173 (dev server + API)
 npm run build        # build de produção -> dist/
 npm run preview      # serve o build + API (persistência funciona igual)
-npm test             # 117 testes do backend + front (node --test vanilla, ~13s)
+npm test             # testes do backend + front (node --test vanilla, ~13s)
 npm run test:integration  # +2 integration tests (run-integration, syncvault-debounce)
 ```
 
@@ -71,16 +71,16 @@ npm run test:integration  # +2 integration tests (run-integration, syncvault-deb
 ```
 data/                 # persistência (versionada no git) — fronteira dura por slug (mundo)
   index.json          #   lista de mundos (workdirs)
-  <slug>/{meta,notes,kanban}.json
+  <slug>/{meta,notes,kanban}.json   # kanban.json preserved on disk (feature removed 2026-09-05)
   _chat/history.json  # multi-conversation chat history (cap 200 msgs/conversa)
 live-data/            # junction para a vault — datas locais fora do repo, auto-backup
 server/
   api.ts              # plugin Vite + mini-API embutida (rotas /api) + task-runner de cards
   config.ts           # cfg: port, wtoken, wezterm paths, etc.
-  roadmap.ts          # parser de roadmap markdown -> kanban (import)
-  routes/             # chat, hermes, icons, orchestrator, terms, w, workdirs, index
-  lib/                # auto-merge.mjs, chat.mjs, run-card.mjs (Node helpers)
-  prompts/            # brainstorm, chat, dp, git-op, merge-approve, run-card
+  roadmap.ts          # parser de roadmap markdown -> notes (import)
+  routes/             # chat, hermes, icons, terms, w-survivors, workdirs, index
+  lib/                # chat.mjs, chat-runner.mjs (Node helpers)
+  prompts/            # chat (other prompts were kanban-specific and removed)
 src/
   main.tsx            # entry React (createRoot) — substituiu main.ts na migração epic-D
   App.tsx             # router root + NavBridge (capture useNavigate)
@@ -91,7 +91,7 @@ src/
     commands.ts       # registry único (56 commands × 6 grupos) — keyboard-first source of truth
     utils.ts          # cn() helper (clsx + tailwind-merge)
   ui/                 # icons, palette, modal, toast, confirm, clock, text, theme (shift+estação), notifs, pomodoro, timezones, icon.tsx
-  views/              # shell, workspace, dashboard, notes, kanban, settings, main-chat, calendar
+  views/              # shell, workspace, dashboard, notes, settings, main-chat, calendar
     *-vanilla.ts      # código vanilla preservado; *-tsx são React wrappers (NavBridge)
   components/
     ui/               # 17 componentes shadcn/ui (alert, avatar, badge, button, card, command, dialog, dropdown-menu, input, label, popover, progress, scroll-area, separator, sheet, skeleton, tabs, textarea, tooltip)
@@ -109,14 +109,14 @@ plans/                # DPs por feature/epic (2026-08-28..2026-09-05)
 ## Rotas frontend
 
 - `/` — **main dashboard**: visão geral de todos os mundos (projetos, notas, pipeline, sessões ativas)
-- `/w/:slug` — workspace (tabs **Notas | Kanban**)
+- `/w/:slug` — workspace (tabs **Notas**)
 - `/w/:slug/settings` — editar mundo, tema, estação, colunas, icon, repo, notificações, eliminar
 - `/c` — **main chat cross-mundo**: composer + thread, multi-conversation sidebar, agent com Atlas parity (lê/escreve qualquer mundo via API; token injetado no prompt; slug sempre explícito no user prompt)
-- `/c/calendar` — **calendário cross-mundo**: month grid + chips de deadlines (kanban cards com `due && !archived && colId !== 'done'`) + eventos livres CRUD
+- `/c/calendar` — **calendário cross-mundo**: month grid + eventos livres CRUD
 
 ## Palette (`Ctrl+K`) & keyboard-first
 
-Command palette keyboard-first, **renderizada a partir do registry único `src/lib/commands.ts`** (56 commands × 6 grupos: mundo, notas, kanban, global, navegação, sistema). Secções: **Workdirs**, **Notas**, **Cartões**, **Global** (inclui **Chat** cross-mundo, **Calendário**, FAQ, How to use) e **Ações** (ex. *Novo mundo*). Introduzir texto filtra; `Enter` executa. Criar por aqui delega nos modais completos de criar (nota/cartão), para não duplicar lógica.
+Command palette keyboard-first, **renderizada a partir do registry único `src/lib/commands.ts`**. Secções: **Workdirs**, **Notas**, **Cartões**, **Global** (inclui **Chat** cross-mundo, **Calendário**, FAQ, How to use) e **Ações** (ex. *Novo mundo*). Introduzir texto filtra; `Enter` executa. Criar por aqui delega nos modais completos de criar (nota/cartão), para não duplicar lógica.
 
 **Leader `;` + 1 letra** (mindinho esq descansa em `;`, zero conflito com filtro PT-PT):
 
@@ -146,14 +146,13 @@ Endpoints embutidos no Vite (prefixo `/api`):
 | PATCH/DELETE | `/api/workdirs/:slug` | editar (nome/descrição/icon/repo) / apagar mundo |
 | GET | `/api/icons` | catálogo de icons disponíveis (órbitas SVG) |
 | POST | `/api/orchestrator/start[/slug]` | passa TODO(s) não arquivados (de um mundo, se slug) para `doing` |
-| GET/PUT | `/api/w/:slug/{notes,kanban,meta}` | ler / gravar dados do mundo (com optimistic concurrency via `ver`) |
+| GET/PUT | `/api/w/:slug/{notes,meta}` | ler / gravar dados do mundo (com optimistic concurrency via `ver`) |
 | GET | `/api/w/:slug/templates` | templates (globais + do mundo) p/ criar notas/cartões |
 | GET | `/api/w/:slug` | lê `meta.json` do mundo |
-| POST | `/api/w/:slug/run` | **corre card kanban** — marca `doing`, abre WezTerm+Hermes (tarefa = `description`) |
+| POST | (removed) | (former card-runner route — feature removed 2026-09-05) |
 | POST | `/api/w/:slug/brainstorm` | **brainstorm + SWOT** do mundo — escreve notas novas (headless) |
 | POST | `/api/w/:slug/dp` | **gera/reescreve o DP** de um card (headless, não toca no código) |
-| POST | `/api/w/:slug/kanban/sp` | **persiste Super Prompt** (`{cardId, body, ref}`) num card; valida `50 ≤ body.length ≤ 200000` + `ref` sob `knowledge/infra/super-prompts/`; 409 em ver mismatch |
-| POST | `/api/w/:slug/kanban/refine` | **refina card em review** — re-usa a mesma worktree, mata worker PID antigo, dispara novo `launchHermes` |
+| — | (removed) | (former `/api/w/:slug/kanban/{sp,refine}` routes — feature removed 2026-09-05) |
 | GET | `/api/w/:slug/runs/:cardId/pid` | devolve `String(child.pid)` do worker (escrito por `runCard` no PID file) |
 | GET/PUT | `/api/w/:slug/events` | CRUD de eventos livres do calendar (`title + date + colour + note`); flat array, sem OT |
 | POST | `/api/chat/message` | envia mensagem ao agent (`/c` main chat); stream em `/api/chat/stream/:runId`; agent com Atlas parity via token injetado |
@@ -165,43 +164,42 @@ Endpoints embutidos no Vite (prefixo `/api`):
 | POST | `/api/w/:slug/export` | exporta notas não-arquivadas → markdown na vault (`docs/notas.md`) |
 | POST | `/api/w/:slug/git/merge-main` | merge `dev → main` + push (headless, repo do mundo) |
 | POST | `/api/w/:slug/git/resolve` | resolve conflito de merge em `dev` (headless, repo do mundo) |
-| POST | `/api/w/:slug/review/approve` | Card em `review` → `done` + **`merge dev → main`** (com CI gate) |
-| POST | `/api/w/:slug/review/reject` | Card → `doing` (refinamento) + re-corre a tarefa |
-| GET/PUT | `/api/w/:slug/bundle` | backup/restore do workdir inteiro (`meta+notes+kanban`); PUT não valida `ver` (replace destrutivo) |
+| — | (removed) | (former `/api/w/:slug/review/*` routes — kanban feature removed 2026-09-05) |
+| GET/PUT | `/api/w/:slug/bundle` | backup/restore do workdir inteiro (`meta+notes+kanban?`); PUT não valida `ver` (replace destrutivo) |
 | GET | `/api/hermes/keys` | lista API keys do Hermes (censurado: `secret_fingerprint`, **sem** `access_token`) |
 | GET | `/api/hermes/usage` | agrega `usage.jsonl` por `key_id` (`since=` ISO opcional; default = início do dia local) |
 | GET | `/api/atlas/logs` | tail/stream dos logs do atlas (filtro por level, últimos N) |
-| PUT | `/api/w/:slug/{notes,kanban,bundle}` | exige header `X-Atlas-Token`; recusado fora de loopback |
+| PUT | `/api/w/:slug/{notes,bundle,events}` | exige header `X-Atlas-Token`; recusado fora de loopback |
 
 ### Write token (anti-corrida)
 
-`PUT /api/w/:slug/{notes,kanban,bundle}` exige o header `X-Atlas-Token` igual a `cfg.wtoken`. O server imprime o token no boot (`[atlas] write token: <hex>`); o cliente recolhe-o via `?token=<hex>` no URL (fica em `localStorage` para reloads). Para setups persistentes, fixa `ATLAS_WTOKEN` no `.env` (`npm run dev:token` gera um hex novo). GETs nunca são gated.
+`PUT /api/w/:slug/{notes,bundle,events}` exige o header `X-Atlas-Token` igual a `cfg.wtoken`. O server imprime o token no boot (`[atlas] write token: <hex>`); o cliente recolhe-o via `?token=<hex>` no URL (fica em `localStorage` para reloads). Para setups persistentes, fixa `ATLAS_WTOKEN` no `.env` (`npm run dev:token` gera um hex novo). GETs nunca são gated.
 
 Apenas requests de **loopback** (`127.0.0.1`/`localhost`/`::1`) ou do header `Host: localhost` são aceites; em containers/WSL com IP interno não-loopback a verificação recorre ao `x-forwarded-for` apenas quando o request já vem de loopback. Inspeção sem `WezTerm`: `GET /api/atlas/logs`.
 
-> `card.result` (resumo do que o worker fez) é gravado pelo worker no `kanban.json` e renderizado no card. `card.dp` guarda o Design Plan gerado por `/dp`. As rotas novas devem registar-se **acima** do bloco genérico `/api/w/:slug/{notes|kanban|meta}`.
+> `kanban.json` é preservado no disco (restore-compat) mas a UI já não o mostra. As rotas novas devem registar-se **acima** do bloco genérico `/api/w/:slug/{notes|meta}` (catch-all `w:notes-events-bundle`).
 
-## Workflow kanban (task-runner)
+## Chat cross-mundo (`/c` workflow)
 
-1. **Run** (`▶` no card) → card vai a **Em Curso** e abre uma janela WezTerm a correr Hermes autónomo numa **worktree isolada** da branch default do repo do mundo (ex. `dev`) — `feature/<card-slug>`.
-2. O worker faz commit localmente, e no fim move o card para **Review** (coluna `review`) com um campo `result`.
-3. **`status`:** a view faz polling do board enquanto houver card em `doing`; o `result` é renderizado com destaque assim que aparece. O botão **Gerar DP** corre `/dp` em segundo plano e notifica ao concluir. O **status chip** (`agent: running (pid NNNN)`) polla `runs/<slug>/<cardId>.pid` cada 5s e pára via MutationObserver em column change.
-4. **Review (só BMS):** `approve` → merge `dev → main` e card para **done**; `reject` → volta a `doing` com nota de refinamento e re-corre. **`done` é sempre manual** (validação BMS), nunca automático.
-5. **Card-driven loop (Super Prompt):** se o card tem `superPromptBody` + `superPromptRef` (persistido via `/api/w/:slug/kanban/sp`), o bloco SP é injectado no `prompts/run-card.md` antes do DP (`${cardSP}` → `${cardDp}`). Em `review` aparece **Refinar** (`/api/w/:slug/kanban/refine`) que re-usa a worktree, mata o worker PID antigo via `killWorkerForCard` (narrow `taskkill /F /PID`), e dispara novo launch. Mudar coluna também mata o worker python — não só a pane WezTerm.
+> (Section rewritten 2026-09-05 — kanban feature removed; chat cross-mundo still uses `runHermesHeadless` para SP → DP → DA, sem worktree isolada nem auto-merge.)
 
-### Task-runner interno (`server/api.ts::launchHermes` + `server/lib/run-card.mjs`)
+1. **Mensagem do user** → composer no `/c` faz spawn de `runHermesHeadless` (em `server/lib/chat-runner.mjs`) com prompt interpolado (`${userMsg}` + history + world metadata + atlas token).
+2. **Stream ao vivo** — o worker escreve em `${runsDir}/<conversation>.log`; o cliente faz fetch offset-based e renderiza em tempo real (linha-a-linha ou batched).
+3. **Status** — `.status` JSON em `${runsDir}/<conversation>.status` regista `state: 'running' | 'done' | 'cancelled'` + `code: N` + `ts`. UI mostra um chip `agent: running (pid NNNN)` durante `running`.
+4. **Stop** — STOP pelo user escreve `state: 'cancelled'` no `.status` + mata o child PID via `killWorkerForCard` (narrow `taskkill /F /PID <pid>`).
+5. **Done** — em `rc==0` o resultado fica na última linha do log (Markdown-friendly); em `rc!=0` o estado fica `done` com `code: 1`.
 
-- **Node module único** (`server/lib/run-card.mjs`) substitui 5 wrappers Python inline — fim do argv shape lock-step (BUG 3b family):
-  - `runCard(opts)` spawns `hermes_cli.main` directly numa worktree isolada, heartbeats `.status` cada 60s, sanitises C1 stdio, kills WezTerm pane on exit, em `rc==0` spawns **`auto-merge.mjs` detached** (sobrevive Vite restart).
-  - `runHermesHeadless(opts)` é a variante thin para os 3 sites sem worktree (`launchDp`, `spawnHeadless`, `launchBrainstorm`).
-  - Campo opcional `pidPath?` em `runCard` (BC-additive) — `launchHermes` passa-o; `runHermesHeadless` callers não passam → zero BC break.
-- **Worktree por card**: `git worktree add -B feature/<slug>-<cardId> <code>/data/.wt/<slug>/<cardId> <baseBranch>` — a base é a **branch default real do repo do mundo** (não hardcoded `dev`).
-- **Auto-merge detached** (`server/lib/auto-merge.mjs`) — `detached+unref` sobrevive Vite restart; chdir repo, checkout bb, fetch+merge, push, on push-fail retry, success cleanup wt+branch, merge-fail write `.status=merge-failed`.
-- `cwd` do spawn = a worktree do card (nunca o repo raiz).
-- Spawn não-bloqueante: `WEZTERM start -- <python> -m hermes_cli.main -z "<prompt>"` com `{detached:true, stdio:'ignore'}` e `p.unref()`.
-- Qualquer falha escreve `card.result` (ex. `ERRO: …`) — **nunca** return silencioso.
-- No fim do card (rc==0): `auto-merge.mjs` detached (acima) + remove a junction node_modules, `worktree remove --force`, apaga a branch → auto-cleanup; panes WezTerm que seguram a worktree são mortas (`killWtLockers`).
-- **CI gate** (`runCIGate(repo, wtDir?)`) — quando `wtDir` passado, build fica em `dist/` default dentro da worktree isolada; quando ausente, build escreve em `.ci-gate/<ts>` (gitignored, cleaned após) — evita clash com `npm run dev` no mesmo dir.
+### Chat runner interno (`server/lib/chat-runner.mjs` + `server/lib/chat.mjs`)
+
+- **Node module único** (`server/lib/chat-runner.mjs`) substitui o antigo `run-card.mjs` (removido com o kanban 2026-09-05) — única variante que resta: `runHermesHeadless({exe, args, env, logWs})`.
+- **Sem worktree** — o chat cross-mundo corre no repo raiz (ou onde o user quiser via `cwd` override), sem `auto-merge.mjs`.
+- **Stream offset-based** — logs escritos em `${runsDir}/<conversation>.log`; o cliente faz GET para ler do offset atual.
+- `.status` JSON em `${runsDir}/<conversation>.status` regista `state: 'running' | 'done' | 'cancelled'` + `code: N` + `ts`.
+- `killWorkerForCard` (em `server/api.ts`) — narrow `taskkill /F /PID <pid>` (NÃO mata `node.exe` em massa); usado pelo STOP do user.
+- Spawn não-bloqueante: `python -m hermes_cli.main -z "<prompt>"` com stdout/stderr piped para logWs (não detached — o cliente acompanha).
+- Qualquer falha (rc != 0 ou excepção) regista `code: 1` + `state: 'done'` no `.status` — **nunca** return silencioso.
+- Cancelamento limpo: STOP do user ou timeout escreve `state: 'cancelled'` antes de matar o PID (UI mostra "interrompido pelo utilizador").
+- **Sem CI gate inline** — chat cross-mundo não dispara build; CI roda no GitHub Actions em push (ver secção CI).
 
 ### Variáveis de ambiente do server
 

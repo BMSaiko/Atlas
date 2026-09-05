@@ -1,5 +1,5 @@
 // ponytail: SP atlas-calendar-2026-09-05. Single-file React view (under SP's ~250 LOC cap).
-// One network call on mount (events + kanban in parallel), one PUT per save. No polling,
+// One network call on mount (events), one PUT per save. No polling,
 // no new deps. CalendarEvent type + api.events.* live in src/api.ts (single source of truth).
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -54,7 +54,7 @@ export default function Calendar() {
     let cancel = false
     ;(async () => {
       try {
-        // ponytail: kanban removido em 2026-09-05 — deadlines derivavam de board.cards.
+        // ponytail: 2026-09-05 — deadlines derivavam de board.cards (feature removida).
         // Calendar agora mostra apenas os events.json (calendar events do utilizador).
         const ev = await api.events.get(slug).catch(() => ({ events: [] }))
         if (cancel) return

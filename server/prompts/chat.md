@@ -42,24 +42,19 @@ Exemplo — ler meta do mundo:
 curl -sS ${apiBase}/w/atlas
 ```
 
-Exemplo — adicionar card ao kanban (POST cria card novo):
+Exemplo — adicionar evento ao calendario:
 
 ```bash
-curl -sS -X POST ${apiBase}/w/atlas/kanban \
+curl -sS -X PUT ${apiBase}/w/atlas/events \
   -H 'Content-Type: application/json' \
   -H 'X-Atlas-Token: ${atlasToken}' \
-  -d '{"ver":<lido-do-GET>,"columns":[...],"cards":[...]}'
+  -d '{"events":[{"id":"e'$(date +%s)'","title":"reuniao","date":"2026-09-05","time":"15:00"}]}'
 ```
 
-Exemplo — mover card para "doing" + lancar run:
+Exemplo — ler eventos existentes:
 
 ```bash
-# patch do card via PUT kanban (preservar tudo, mudar colId do card)
-curl -sS -X PUT ${apiBase}/w/atlas/kanban ...
-# depois:
-curl -sS -X POST ${apiBase}/w/atlas/run \
-  -H 'X-Atlas-Token: ${atlasToken}' \
-  -d '{"cardId":"<id>"}'
+curl -sS ${apiBase}/w/atlas/events
 ```
 
 ## Ultimas mensagens

@@ -62,7 +62,8 @@ export const ROUTES: Route[] = [
       await deps.writeJ(join(d, "meta.json"), meta0)
       // ver:0 -> bumpVer on 1st write records ver:1
       await deps.writeJ(join(d, "notes.json"), { ver: 0, items: [] })
-      await deps.writeJ(join(d, "kanban.json"), { ver: 0, columns: [{ id: "todo", name: "To Do" }, { id: "doing", name: "Em Curso" }, { id: "review", name: "Review/Revisão" }, { id: "done", name: "Concluído" }], cards: [] })
+      // ponytail: kanban.json preserved on disk for restore-compat (feature removed 2026-09-05). Empty placeholder.
+      await deps.writeJ(join(d, "kanban.json"), { ver: 0, columns: [], cards: [] })
       send(201, wd)
     },
   },

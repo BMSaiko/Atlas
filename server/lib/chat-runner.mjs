@@ -1,7 +1,7 @@
 // server/lib/chat-runner.mjs
 //
-// ponytail: 2026-09-05 strip-kanban — extracted runHermesHeadless de run-card.mjs (que foi
-// apagado com o kanban). Chat (cross-mundo) e' o unico consumidor; mantem-se so' a variante
+// ponytail: 2026-09-05 — extracted runHermesHeadless de run-card.mjs (que foi
+// apagado com o strip-kanban). Chat (cross-mundo) e' o unico consumidor; mantem-se so' a variante
 // sem pane/heartbeat/auto-merge. Stdlib only. Mesmo invariants do original: sanitize,
 // ms units, child.unref(), resolved on close.
 import { spawn } from 'node:child_process'

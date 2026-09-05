@@ -2,8 +2,8 @@ export type Prioridade = 'urgent' | 'high' | 'medium' | 'low'
 export interface Nota { id: string;
   title: string; text: string; ts: number; archived?: boolean; tags?: string[] }
 
-// ponytail: 2026-09-05 strip-kanban — Card/Coluna/Board/MichiPhase removidos (kanban removido).
-// Mantidos apenas os tipos de bundle (WorkdirBundle.kanban e' opcional, preservado para compat
+// ponytail: 2026-09-05 strip-kanban — feature removida. WorkdirBundle.kanban field permanece (compat).
+
 // de ficheiros antigos).
 // ponytail: write-token fence (card iykn11lg) — header global em TODOS os PUTs (j<T> é o unico helper
 // que toca fetch no cliente). Resolucao (ordem): URL ?token=... -> localStorage ->
@@ -86,7 +86,7 @@ export const api = {
 
 
   // ponytail: SP atlas-calendar-2026-09-05 — calendar events. Flat array, no `ver` (no OT).
-  // Mirror of notes/kanban shape (get/put) so the call-site reads identically.
+  // Mirror of notes shape (get/put) so the call-site reads identically.
   events: {
     get: (slug: string) => j<{ events: CalendarEvent[] }>(`/api/w/${slug}/events`),
     put: (slug: string, doc: { events: CalendarEvent[] }) => j<{ ok: boolean }>(`/api/w/${slug}/events`, 'PUT', doc),
@@ -150,7 +150,7 @@ export interface WorkdirBundle {
 }
 export const uid = () => Math.random().toString(36).slice(2, 10)
 
-// ponytail: OrphanRun removido em 2026-09-05 — kanban removido.
+// ponytail: OrphanRun removido em 2026-09-05 (strip-kanban).
 
 
 

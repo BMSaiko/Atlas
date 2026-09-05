@@ -18,7 +18,7 @@ mkdirSync(dir, { recursive: true })
 
 // seed: 1 nota + 1 card
 const notesSeed = { ver: 0, items: [{ id: 'n1', title: 'T1', text: 'hello' }] }
-const kanbanSeed = { ver: 0, columns: [{ id: 'todo', name: 'To Do' }], cards: [{ id: 'c1', title: 'C1', colId: 'todo' }] }
+const kanbanSeed = { ver: 0, columns: [{ id: 'todo', name: 'To Do' }], cards: [{ id: 'c1', title: 'C1', colId: 'todo' }] }  // ponytail: snapshot subsystem preserves kanban.json for restore-compat
 writeFileSync(join(dir, 'notes.json'), JSON.stringify(notesSeed))
 writeFileSync(join(dir, 'kanban.json'), JSON.stringify(kanbanSeed))
 
@@ -34,7 +34,7 @@ eq(tick.deduped, false, 'first tick not deduped')
 console.log('\n[2] ficheiros no disco em data/_snapshots/<slug>/<slot>/')
 const slotDir = join(a.cwd, 'data', '_snapshots', slug, tick.slot)
 ok(existsSync(join(slotDir, 'notes.json')), 'notes.json exists on disk')
-ok(existsSync(join(slotDir, 'kanban.json')), 'kanban.json exists on disk')
+ok(existsSync(join(slotDir, 'kanban.json')), 'kanban.json preservado no snapshot (compat)')
 ok(existsSync(join(slotDir, '_manifest.json')), '_manifest.json exists')
 
 console.log('\n[3] list devolve >=1 snapshot')

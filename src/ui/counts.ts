@@ -1,7 +1,7 @@
 import { api } from '../api'
 
 // ponytail: badge de contagem nos tabs do workspace (Notas ativas / Cartoes em curso).
-// Partilhado por workspace.ts (switch/init) e pelas views notes/kanban (apos cada save),
+// Partilhado por workspace.ts (switch/init) e pelas views notes (apos cada save),
 // para o count atualizar de forma reativa ao arquivar nota ou concluir cartao.
 export async function refreshTabCounts(slug: string) {
   const notes = await api.notes.get(slug).catch(() => null)

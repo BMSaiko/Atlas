@@ -218,7 +218,7 @@ export default function atlasApi(): Plugin {
     const send = makeSend(res)
     try {
       if (!p.startsWith('/api/')) return next()   // static handled by vite, preview fallback (ex: dist/index.html em produção)
-      // ponytail: fence anti-corrida (card iykn11lg) — writers externos (PUT notes/kanban/bundle) tem de apresentar
+      // ponytail: fence anti-corrida (card iykn11lg) — writers externos (PUT notes/bundle/events) tem de apresentar
       // X-Atlas-Token a bater com cfg.wtoken. Sem token -> 401. Escritas internas (writeJ chamado pelo proprio
       // server em launchHermes/dp worker) NAO passam pelo middleware HTTP, ficam trusted. GETs livre (UI+meta).
       if (m === 'PUT' && /^\/api\/w\/[^/]+\/(notes|bundle|events)$/.test(p)) {

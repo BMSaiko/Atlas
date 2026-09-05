@@ -17,7 +17,7 @@ export interface AtlasConfig {
   // entra em doing. CLI (wezterm.exe) vive na mesma pasta e e' resolvido por path-rewrite no killPane().
   // Card terminal-control: sem este binario o spawn cai em headless (mesmo comportamento de antes).
   wezterm: string
-  // ponytail: token anti-corrida (card iykn11lg) — writers externos (PUT notes/kanban/bundle) tem de apresentar este
+  // ponytail: token anti-corrida (card iykn11lg) — writers externos (PUT notes/bundle/events) tem de apresentar este
   // header. NUNCA persistido em disco (uma fuga de cfg no log já é debug) — random por boot ou ATLAS_WTOKEN.
   wtoken: string
 }
