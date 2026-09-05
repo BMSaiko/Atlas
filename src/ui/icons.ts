@@ -38,7 +38,8 @@ const I = {
   rain: '<path d="M7 13h10a4 4 0 0 0 .8-7.9 6 6 0 0 0-11.6 1A4.5 4.5 0 0 0 7 13zM9 17l-1 3M13 17l-1 3M17 17l-1 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
   storm: '<path d="M7 13h10a4 4 0 0 0 .8-7.9 6 6 0 0 0-11.6 1A4.5 4.5 0 0 0 7 13zM13 14l-3 5h4l-2 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
   kill: '<path d="M12 4v8M5.5 7.5a7 7 0 1 0 13 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
-
+  // ponytail: SP atlas-calendar-2026-09-05 -- calendar sidebar icon (24x24, 1.5 stroke, currentColor).
+  cal: '<rect x="4" y="5" width="16" height="15" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 10h16" stroke="currentColor" stroke-width="1.5"/><path d="M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
 }
 export function icon(name: keyof typeof I, size = 20): string {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" aria-hidden="true">${I[name]}</svg>`

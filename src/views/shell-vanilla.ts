@@ -26,7 +26,7 @@ async function counts(slug: string) {
   } catch { return { notes: 0, open: 0 } }
 }
 
-export async function renderShell(root: HTMLElement, slug: string | null, isSettings: boolean, isChat = false, skipDispatch = false) {
+export async function renderShell(root: HTMLElement, slug: string | null, isSettings: boolean, isChat = false, skipDispatch = false, isCalendar = false) {
   const workdirs = await api.workdirs()
   let activeSlug = slug && workdirs.some(w => w.slug === slug) ? slug : null
   const catalog = await api.icons().catch(() => [] as string[])
@@ -38,7 +38,7 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
     <div class="shell" id="shell">
       <aside class="side" id="side">
         <div class="side-head"><a class="logo logo-sm" href="/" data-nav="/">ATLAS</a><span class="shift-ind" id="shift-ind" title="Luminosidade do dia"></span><span class="shift-ind" id="season-ind" title="Estação do ano"></span></div>
-        <a class="side-item chat-link" href="/c" data-nav="/c" id="chat-link" aria-label="Main chat cross-mundo">${icon('chat', 16)} <span class="side-label">Chat</span></a><nav class="side-nav" aria-label="Workdirs"></nav>
+        <a class="side-item chat-link" href="/c" data-nav="/c" id="chat-link" aria-label="Main chat cross-mundo">${icon('chat', 16)} <span class="side-label">Chat</span></a><a class="side-item cal-link" href="/c/calendar" data-nav="/c/calendar" id="cal-link" aria-label="Calendário">${icon('cal', 16)} <span class="side-label">Calendário</span></a><nav class="side-nav" aria-label="Workdirs"></nav>
         <div class="side-clock" id="clock">
           <div class="clock-time" data-clock="time">--:--:--</div>
           <div class="clock-sub"><span class="clock-date" data-clock="date"></span> · <span class="clock-tz" data-clock="tz" id="clock-tz" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-label="Fuso horário">PT</span> · <span class="clock-wx" data-clock="wx" role="button" tabindex="0" aria-label="Previsão meteorológica — 7 dias" title="Meteorologia — Open-Meteo"><span class="wx-icon" data-clock="wx-icon"></span><span class="wx-temp" data-clock="wx-temp">--°</span></span></div>
@@ -297,7 +297,7 @@ function esc(s: unknown) { return String(s ?? '').replace(/&/g,'&amp;').replace(
 // ponytail: SP §7 step 8 — renderShellChrome is the sidebar portion of the old renderShell.
 // Renders logo, shift/season indicators, chat link, world nav, clock, focus pill, footer.
 // Called by React <Shell/>; vanilla never touches the main <Outlet/>.
-export async function renderShellChrome(host: HTMLElement, slug: string | null, _isSettings: boolean, isChat = false) {
+export async function renderShellChrome(host: HTMLElement, slug: string | null, _isSettings: boolean, isChat = false, isCalendar = false) {
   // Clear any previous chrome
   while (host.firstChild) host.removeChild(host.firstChild)
 
@@ -309,7 +309,7 @@ export async function renderShellChrome(host: HTMLElement, slug: string | null, 
 
   host.innerHTML = `
     <div class="side-head"><a class="logo logo-sm" href="/" data-nav="/">ATLAS</a><span class="shift-ind" id="shift-ind" title="Luminosidade do dia"></span><span class="shift-ind" id="season-ind" title="Estação do ano"></span></div>
-    <a class="side-item chat-link" href="/c" data-nav="/c" id="chat-link" aria-label="Main chat cross-mundo">${icon('chat', 16)} <span class="side-label">Chat</span></a><nav class="side-nav" aria-label="Workdirs"></nav>
+    <a class="side-item chat-link" href="/c" data-nav="/c" id="chat-link" aria-label="Main chat cross-mundo">${icon('chat', 16)} <span class="side-label">Chat</span></a><a class="side-item cal-link" href="/c/calendar" data-nav="/c/calendar" id="cal-link" aria-label="Calendário">${icon('cal', 16)} <span class="side-label">Calendário</span></a><nav class="side-nav" aria-label="Workdirs"></nav>
     <div class="side-clock" id="clock">
       <div class="clock-time" data-clock="time">--:--:--</div>
       <div class="clock-sub"><span class="clock-date" data-clock="date"></span> · <span class="clock-tz" data-clock="tz" id="clock-tz" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-label="Fuso horário">PT</span> · <span class="clock-wx" data-clock="wx" role="button" tabindex="0" aria-label="Previsão meteorológica — 7 dias" title="Meteorologia — Open-Meteo"><span class="wx-icon" data-clock="wx-icon"></span><span class="wx-temp" data-clock="wx-temp">--°</span></span></div>
@@ -359,6 +359,8 @@ export async function renderShellChrome(host: HTMLElement, slug: string | null, 
 
   const chatLink = host.querySelector<HTMLElement>('#chat-link')
   if (chatLink) chatLink.classList.toggle('active', isChat)
+  const calLink = host.querySelector<HTMLElement>('#cal-link')
+  if (calLink) calLink.classList.toggle('active', isCalendar)
   host.querySelectorAll('[data-nav]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); navigate(el.getAttribute('data-nav')!) }))
   host.querySelector('#side-new')!.addEventListener('click', () => newWorkdir())
   bindKeydown()

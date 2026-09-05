@@ -17,11 +17,14 @@ export default function Shell() {
   const slug = slugMatch ? slugMatch[1] : null
   const isSettings = !!slugMatch?.[2]
   const isChat = /^\/c(\/settings)?$/.test(location.pathname)
+  // ponytail: SP atlas-calendar-2026-09-05 — calendar is a sibling of /c (chat) under the cross-mundo
+  // umbrella. isChat stays true for the chat-link highlight; isCalendar drives the calendar-link highlight.
+  const isCalendar = /^\/c\/calendar$/.test(location.pathname)
 
   useEffect(() => {
     if (!sideRef.current) return
-    renderShellChrome(sideRef.current, slug, isSettings, isChat)
-  }, [slug, isSettings, isChat])
+    renderShellChrome(sideRef.current, slug, isSettings, isChat, isCalendar)
+  }, [slug, isSettings, isChat, isCalendar])
 
   return (
     <div className="shell" id="shell">

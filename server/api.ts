@@ -601,7 +601,7 @@ export default function atlasApi(): Plugin {
       // ponytail: fence anti-corrida (card iykn11lg) — writers externos (PUT notes/kanban/bundle) tem de apresentar
       // X-Atlas-Token a bater com cfg.wtoken. Sem token -> 401. Escritas internas (writeJ chamado pelo proprio
       // server em launchHermes/dp worker) NAO passam pelo middleware HTTP, ficam trusted. GETs livre (UI+meta).
-      if (m === 'PUT' && /^\/api\/w\/[^/]+\/(notes|kanban|bundle)$/.test(p)) {
+      if (m === 'PUT' && /^\/api\/w\/[^/]+\/(notes|kanban|bundle|events)$/.test(p)) {
         const got = (req.headers['x-atlas-token'] || '') as string
         const loopback = isLoopback(req)
         if (!loopback && got !== cfg.wtoken) { send(401, { error: 'unauthorized: missing or invalid X-Atlas-Token' }); return }

@@ -46,6 +46,9 @@ export interface Template { id: string; name: string; kind: 'note' | 'card'; tit
 export interface Workdir { slug: string; name: string; description?: string; createdAt: number; icon?: string; repo?: string }
 export interface LogEntry { id: string; ts: number; kind: 'review' | 'brainstorm' | 'due'; slug: string; title: string; body: string; ref: { cardId?: string; cardTitle?: string } | null; level: 'info' | 'ok' | 'warn' | 'err' }
 export interface WorkdirMeta { slug: string; name: string; description: string; createdAt: number; icon?: string; repo?: string }
+// ponytail: SP atlas-calendar-2026-09-05 — CalendarEvent lives next to other domain types so
+// the calendar view imports it from api.ts (single source of truth, mirrors how Nota/Card are organised).
+export interface CalendarEvent { id: string; title: string; date: string; color?: 'gold'|'red'|'blue'; note?: string }
 
 async function j<T>(url: string, method = 'GET', body?: unknown): Promise<T> {
   // ponytail: se o token ainda nao foi puxado do server, aguarda (max 1.5s). Evita 401 no 1o PUT
@@ -89,6 +92,12 @@ export const api = {
   kanban: {
     get: (slug: string) => j<{ ver: number; columns: Coluna[]; cards: Card[] }>(`/api/w/${slug}/kanban`),
     put: (slug: string, doc: { ver: number; columns: Coluna[]; cards: Card[] }) => j<{ ok: boolean; ver?: number }>(`/api/w/${slug}/kanban`, 'PUT', doc),
+  },
+  // ponytail: SP atlas-calendar-2026-09-05 — calendar events. Flat array, no `ver` (no OT).
+  // Mirror of notes/kanban shape (get/put) so the call-site reads identically.
+  events: {
+    get: (slug: string) => j<{ events: CalendarEvent[] }>(`/api/w/${slug}/events`),
+    put: (slug: string, doc: { events: CalendarEvent[] }) => j<{ ok: boolean }>(`/api/w/${slug}/events`, 'PUT', doc),
   },
   logs: {
     get: (slug: string) => j<{ ver: number; items: LogEntry[] }>(`/api/w/${slug}/logs`),
