@@ -1,5 +1,99 @@
 # Changelog
 
+## 2026-09-05 — card-driven kanban loop (SP lifecycle)
+
+- **feat(atlas): card-driven kanban loop — SP lifecycle, kill-on-transition, status chip** (`e25ff0d`) — liga o Atlas kanban ao ciclo de vida do **Super Prompt** end-to-end:
+  - **Schema** (`src/api.ts`): 2 campos opcionais no `Card` — `superPromptBody?: string`, `superPromptRef?: string`. Zero schema bump para callers existentes.
+  - **3 rotas novas** em `server/routes/w.ts`:
+    - `POST /api/w/:slug/kanban/sp` — persiste `{cardId, body, ref}` (validação: `50 ≤ body.length ≤ 200000`, `ref` regex `^knowledge/infra/super-prompts/[A-Za-z0-9_\-./]+\.md$`, 409 em `ver` mismatch), bumps `ver`.
+    - `POST /api/w/:slug/kanban/refine` — re-usa a mesma worktree, mata o PID antigo via `killWorkerForCard`, dispara novo `launchHermes`.
+    - `GET /api/w/:slug/runs/:cardId/pid` — devolve `String(child.pid)` do worker (escrito pelo `runCard` em PID file `<runsDir>/<slug>/<cardId>.pid`).
+  - **`killWorkerForCard` helper** (`server/api.ts`) — narrow `taskkill /F /PID <pid>`; **NÃO** mata `node.exe` em massa. Complementa `killPaneForCard` no handler `PUT /api/w/:slug/kanban` (L645-657): agora ao mudar coluna, mata pane **e** worker python.
+  - **`launchHermes`** injecta o bloco `${cardSP}` antes de `${cardDp}` no `prompts/run-card.md` interpolation; escreve PID file right after spawn.
+  - **`runCard`** (`server/lib/run-card.mjs`) ganha campo opcional `pidPath?` (BC-additive — 2 callers existentes `w:approve-agent` + `launchHermes` continuam zero-config). Ponytail default: signature não muda, helper só ganha 1 path.
+  - **UI** (`src/views/kanban-vanilla.ts`):
+    - `kops(c)` em `todo`: se `!c.superPromptBody` → botão **generate-sp**; senão → mantém **run**.
+    - Em `review`: botão **refine** adicionado.
+    - `openSPModal` reusa `openModal` (1 hidden input + 1 textarea; Esc cancela, Ctrl+Enter submete).
+    - `pidChip` polla `runs/<slug>/<cardId>.pid` cada 5s enquanto `colId === 'doing'`; MutationObserver na card root pára o polling em column change. Chip: `agent: running (pid 1234)`.
+  - **Tests** — 4 ficheiros novos: `test/sp-persistence.test.mjs`, `test/sp-refine.test.mjs`, `test/sp-kill-transition.test.mjs`, `test/sp-runs-pid.test.mjs`. Gates: tsc `--noEmit` rc=0 · `npm test` 104 pass / 0 fail · `vite build` 6.63s. Scope: 305 ins / 30 del em 8 files. DP: `plans/atlas-card-driven-loop-DP/DP.md`.
+
+## 2026-09-05 — calendar cross-mundo em `/c/calendar` (palette + grid + events CRUD)
+
+- **feat(atlas-calendar): `/c/calendar` — month grid + kanban deadlines + events CRUD** (`d9fc113`) — agenda cross-mundo com:
+  - **Month grid** (`src/views/calendar.tsx`) — view React (`/c/calendar`), navegação prev/next mês, dias com pontos para events+deadlines.
+  - **Cards do kanban com `due && !archived && colId !== 'done'`** renderizam como chips read-only; clique salta para o card.
+  - **Events CRUD** — `GET/PUT /api/w/:slug/events` (eventos livres: `title + date + colour + note`); flat array por mundo, **sem OT** (single-user save-state). Reusa `openModal`, `confirmDialog`, `Icon`, `j<T>`.
+  - **No new deps** — `lucide-react` + nativo `<input type="date">` + `Intl.DateTimeFormat`.
+- **feat(atlas-calendar): add calendar to common command palette** (`2b4d9cb`) — entrada "Calendário" no `Ctrl+K`, filtrável por "calend/agenda/eventos/calendar/event". Sibling do Chat (cross-mundo) na secção Global; sem shortcut leader (evita clash com `;D` dashboard, `;M` chat, `;T` tema, `;F` fuso).
+
+## 2026-09-05 — keyboard-first: commands registry + leader `;` + data-cmd audit
+
+- **polish(keyboard-first): commands.ts registry + Ctrl+K palette + ; leader shortcuts + data-cmd audit** (`62ca91e`) — Atlas agora é keyboard-first:
+  - **`src/lib/commands.ts`** — registry único: **56 commands em 6 grupos** (mundo, notas, kanban, global, navegação, sistema). Single source of truth; a palette renderiza a partir daqui.
+  - **`src/ui/palette.ts`** — refactor: substitui o bloco inline `push()` (linhas 41-95 do original) por loop sobre `useCommands()`. Bridges `window.__atlas*` para o registry dispatch, recentes via MRU (`atlas.recentCommands`, max 10), overlay de atalhos via `?` (símbolo bare).
+  - **Leader `;` + 1 letra** — mindinho esq descansa em `;`, zero conflito com filtro PT-PT. Mapa: `;N` (nota), `;C` (cartão), `;T` (tema), `;D` (dashboard), `;S` (settings), `;M` (chat), `;F` (fuso), `;?` (overlay de atalhos).
+  - **`data-cmd` em todos os 81 `<button>`** do app (7 ficheiros). Audit test em `test/palette-dom-audit.test.mjs` garante zero orphans e per-view counts ≥ SP.
+  - **Tests** — 11 new asserts em `commands.test.mjs` (registry invariants, MRU, PT-PT-safe shortcut regression guard) + 6 em `palette-dom-audit.test.mjs`. Total: **117/117 verde**, tsc rc=0.
+- **fix(palette): leader `;` accepts physical Semicolon code (cross-layout)** (`e320c3f`) — match primário por `e.code === 'Semicolon'` (layout-independent), fallback `e.key === ';'` e `e.key === ':'`. Regression guard em `commands.test.mjs` grep-a o source para garantir as 3 variantes. 118/118 verde.
+- **Não tocado** — `server/**`, `src/api.ts` (HTTP contract), tokens, PWA shell, arquitetura React-shim, todos os `<button>` inline (só ganharam `data-cmd`).
+
+## 2026-09-05 — epic-D: vanilla TS → React 18 + Tailwind v4 + shadcn/ui + next-themes
+
+- **migrate(epic-D)** (`cc95fda`) — migração de stack completa:
+  - **Stack** — **React 18.3** + **react-router-dom 6.30** + **Tailwind CSS 4.3** (`@tailwindcss/vite`) + **shadcn/ui** (`@radix-ui/*`, `cmdk`, `lucide-react`, `next-themes`, `sonner`, `class-variance-authority`, `tailwind-merge`, `tailwindcss-animate`).
+  - **Routes** (frozen): `/`, `/w/:slug`, `/w/:slug/settings`, `/c`, `/c/calendar` via `react-router-dom@6`.
+  - **Server byte-identical** — `server/**` intocado, `api.ts` HTTP contract preservado.
+  - **Approach** — thin React wrappers por view; vanilla view code preservado em `*-vanilla.ts` (70KB kanban, 35KB notes, 25KB dashboard intactos). `NavBridge` captura `useNavigate()` em `globalThis` para `navigate('/...')` imperativo das views vanilla. `useThemeShift()` lê time on mount (60s interval) → `data-shift`/`data-season` em `<html>`; `next-themes` ortogonalmente seta `class="dark"`.
+  - **Tailwind v4** — `src/index.css` `@theme` block declara cosmos/gold/marble/pipe como `--color-*` (utilities `bg-bg-0`, `text-gold`); `components.css` ainda carregado para classes vanilla até Epic A polish sweep.
+  - **Gates** — tsc rc=0, `npm test` 102/102, `vite build` rc=0 (510KB main JS), smoke: dashboard, `/c`, `/w/:slug` renderizam 0 JS errors.
+  - **Ponytail** — skipped sonner Toaster wiring (Epic C owns toast styling), kept bespoke `ui/toast.ts`. Skipped full Tailwind conversion de `components.css` (Epic A). Skipped lucide-react replacement de `ui/icons.ts` (~50 refs) — novo `<Icon>` disponível para código novo, legacy `icon('name', n)` shim preservado.
+  - **Novos ficheiros** — `src/App.tsx`, `src/main.tsx`, `src/router.tsx`, `src/lib/utils.ts`, 17 componentes em `src/components/ui/` (alert, avatar, badge, button, card, command, dialog, dropdown-menu, input, label, popover, progress, scroll-area, separator, sheet, skeleton, tabs, textarea, tooltip).
+
+## 2026-09-04 — main-chat v2 (multi-conversation + sidebar + agent self-execute)
+
+- **feat(atlas): main-chat v2 — multi-conversation + sidebar + agent self-execute** (`4782533`) — chat cross-mundo `/c` upgrade:
+  - **Schema multi-conversation** (`server/lib/chat.mjs`) — migra `{messages:[]}` antigo. **8 funções**: `read/append/clear` + `newConversation/switchConversation/deleteConversation/listConversations`. Cap 200 msgs/conversa (FIFO rotate).
+  - **Sidebar de conversas** + agent com **self-execute** (Atlas parity) — lê `meta`/`notes`/`kanban`/`logs`, escreve `notes`/`kanban`/`review.approve|reject`/`orchestrator.start` em qualquer mundo via API. Token injetado no prompt.
+  - **Slug sempre explícito** no user prompt — agente nunca assume mundo; se user não disser, responde "Em que mundo?".
+- **atlas: main chat cross-mundo em /c** (`6fb66e9`) — feature inicial: composer + thread scrollable + stream output (poll 1s, reusa pattern `w:output`).
+- **Persistencia** — `data/_chat/history.json`, item na sidebar + entrada no `Ctrl+K`.
+- **Tests** — `test/chat-history-cap.test.mjs`, `test/chat-routes.test.mjs`.
+- **DP** — `plans/2026-09-04-main-chat-DP/DP.md`.
+
+## 2026-09-04 — polish(A): token scales + components.css sectioned + uniform cards + focus AA
+
+- **polish(epic-A)** (`1c4890b`) — foundations de design:
+  - **Token scales em `src/styles/tokens.css`** — `--shadow-1..3`, `--z-*`, `--motion-*`, `--ease-*` (comment `ponytail:` documenta o porquê). `--space-*`/`--radius-*` rejeitados (esbuild minifier quebra em inner-dash names) — alias `--s1..7`/`--r1..3` preservados.
+  - **`src/styles/components.css` sectioned** (64KB, 801 lines, 284 selectors) — banner approach com 9 secções navegáveis; byte-count preservado.
+  - **Uniform cards** — `.wd-card`, `.note-card`, `.kcard`, `.card-block` partilham padding/border-radius/shadow scale; excluded `.foco-card` e `.sess-card`.
+  - **Focus AA** — `:focus:not(:focus-visible)` mouse-only reset em `base.css` (sem flicker ring em clicks, ring só em Tab/keys).
+  - **Chat lazy-load** — code-split por rota (`/c` carrega só on demand).
+  - **DP** — `plans/2026-09-04-polish-A-foundations-DP/DP.md`.
+
+## 2026-09-04 — Node run-card module (substitui 5 Python wrappers)
+
+- **refactor(atlas): replace 5 inline Python wrappers with Node run-card module** (`042e60a`) — fim da "wrapper-class" de bugs:
+  - **`server/lib/auto-merge.mjs`** (NEW) — detached sub-process para o post-hermes git flow (chdir repo, checkout bb, fetch+merge, push, on push-fail retry, success cleanup wt+branch, merge-fail write `.status=merge-failed`). `detached+unref` sobrevive Vite restart.
+  - **`server/lib/run-card.mjs`** (NEW) — `runCard()` spawns `hermes_cli.main` directly (no Python wrapper), heartbeats `.status` cada 60s (era 30s), sanitises C1 stdio, kills WezTerm pane on exit, em `rc==0` spawns `auto-merge.mjs` detached. `runHermesHeadless()` é a variante thin para os 3 sites sem worktree (`launchDp`, `spawnHeadless`, `launchBrainstorm`).
+  - **5 sites em `server/api.ts` colapsam para 1 `runCard()` + 3 `runHermesHeadless()`** — argv shape lock-step TS↔Python (BUG 3b family) **morre** — call-sites passam typed object.
+  - **Tests** — `wrapper-argv`, `wrapper-skills-argv` reescritos para testar o módulo novo; `sanitize-stdio`, `run-finish` atualizados. `test/_ts-loader.mjs` skip `.mjs` re-write. 81/81 verde.
+  - **Closes** — `atlas-wrapper-python/SKILL.md` BUG 1, 2, 3, 3b partial, 3e, 3f partial, 3h partial.
+
+## 2026-09-04 — fix EOL default CRLF + CI gate isolates dev server
+
+- **fix(atlas): EOL default to CRLF + CI gate isolates dev server** (`80de9ff`) — 2 fixes acoplados:
+  1. **EOL pinned CRLF** — `.gitattributes` updated (`*/ts/css/mjs eol=crlf`); `.git/config` local `autocrlf=true` + `eol=crlf` (matches Windows default, no rewrite on checkout). 224 files normalizados LF→CRLF in-place via Python (recipe em `michi/references/atlas-state-2026-09-03.md`). Supersedes `8514860` que declarava `eol=lf` sem local config para sustentar.
+  2. **`runCIGate(repo)` → `runCIGate(repo, wtDir?)`** — quando `wtDir` ausente (current callers BC), build escreve em `.ci-gate/<ts>` (gitignored, cleaned após); quando `wtDir` passado, build fica em `dist/` default dentro da worktree isolada. Resolve clash com `npm run dev` no mesmo dir (rewrite de `dist/` sob live watcher).
+- **style(atlas): normalize EOL to LF per .gitattributes** (`8514860`) — commit anterior que abriu o debate EOL (reconciliou working tree vs attributes sem logic change).
+- **Recovered** — card `t02krhls` (sentido "lost work") NÃO foi perdido: vive em `live-data/atlas/kanban.json` colId=review com DP 10079 chars preservado.
+
+## 2026-09-03..2026-09-05 — housekeeping
+
+- **chore: relocate `.codebase-memory/` to `~/.hermes` (out of /code)** (`2dbdb14`) — Vite estava a page-reload cada vez que o HEIMDALL tooling escrevia em `.codebase-memory/` (artifact.json + graph.db.zst), porque o dir estava dentro do `/code` watched root. Como o dir é cache de tooling externo, não pertence ao repo. 3 files tracked removidos do tree (histórico git preserva).
+- **chore(atlas): split test script — default skips integration tests** (`ef2e022`) — `npm test` corre 40 fast tests (~11s); `npm run test:integration` corre os 2 heavy (`run-integration`, `syncvault-debounce`).
+- **fix(commands.test): use top-level readFileSync import** (`e039536`) + **post-merge resolution** (`6850e5a`) — conflitos no `test/commands.test.mjs` resolvidos via dynamic fs import / top-level readFileSync.
+
 ## 2026-09-01 — test routes e2e (16 routes + seam + harness)
 
 - **Test infra para o backend (`server/api.ts`)** — 3 commits (`6bf5f37` + `ff7aece` + `64b83b6`) cobrem **~16 routes** out of ~30 do `api.ts` com `node --test` puro (vanilla `node:assert`, sem framework):

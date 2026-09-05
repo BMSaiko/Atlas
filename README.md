@@ -2,7 +2,9 @@
 
 > O titã que sustenta os céus. Cada projeto é um **mundo** que Atlas carrega nos ombros — notas, kanban e relógio próprios, virados para cima para nunca se misturarem.
 
-Num Atlas, não trabalhas em pastas: atravessas **mundos**. Cada **mundo** é um workspace isolado (quicknotes + kanban próprios, com icon, fuso horário, tema e estação à sua medida). Entrar num mundo é trocar de contexto de vez — nunca se mistura o que não deve, e `Alt+↑/↓` deixa-te viajar entre mundos num sopro. O **`Ctrl+K`** abre uma command palette para saltar de mundo em mundo, abrir notas/cartões e disparar ações sem largar o teclado.
+Num Atlas, não trabalhas em pastas: atravessas **mundos**. Cada **mundo** é um workspace isolado (quicknotes + kanban próprios, com icon, fuso horário, tema e estação à sua medida). Entrar num mundo é trocar de contexto de vez — nunca se mistura o que não deve, e `Alt+↑/↓` deixa-te viajar entre mundos num sopro. O **`Ctrl+K`** abre uma command palette para saltar de mundo em mundo, abrir notas/cartões e disparar ações sem largar o teclado; o **leader `;`** (`;N` nota, `;C` cartão, `;M` chat, `;D` dashboard, `;S` settings, `;T` tema, `;F` fuso, `;?` overlay) dá-te tudo a uma tecla do mindinho esquerdo.
+
+Atlas é **keyboard-first**: o registry único em `src/lib/commands.ts` (56 commands × 6 grupos) é a source of truth, a palette renderiza a partir dele, todos os 81 `<button>` do app têm `data-cmd` auditado em teste — largar o rato não é opcional.
 
 ## Características
 
@@ -21,12 +23,15 @@ Num Atlas, não trabalhas em pastas: atravessas **mundos**. Cada **mundo** é um
 - **Prazos (deadlines)** — `due date` por card com badge; cor progressiva por proximidade: a <48h fica laranja, ultrapassado vermelho (done nunca alarme).
 - **Prioridades** — urgente/alta/média/baixa com sort e deteção de overdue.
 - **Bulk actions** — modo seleção de múltiplos cartões (inclui selecionar a coluna inteira com toggle) e barra bulk: mover coluna, mudar prioridade, arquivar, eliminar.
-- **Visualização da tarefa em execução** — ao correr um card, um modal mostra o log do worker ao vivo (stream offset-based) com estado `a executar / concluído`; botões Brainstorm/DP com animação `running`.
+- **Visualização da tarefa em execução** — ao correr um card, um modal mostra o log do worker ao vivo (stream offset-based) com estado `a executar / concluído`; botões Brainstorm/DP com animação `running`. Em paralelo, o **status chip** (`agent: running (pid NNNN)`) polla o PID file cada 5s enquanto o card está em `doing`, e pára via MutationObserver em column change.
+- **Card-driven loop (Super Prompt lifecycle)** — um card pode ter `superPromptBody` + `superPromptRef` (persistido por `POST /api/w/:slug/kanban/sp`, validado: `50 ≤ body ≤ 200KB` + ref sob `knowledge/infra/super-prompts/`); o botão **Gerar SP** aparece em `todo` quando falta SP, e em `review` aparece **Refinar** (re-usa a worktree, mata o worker PID antigo, dispara novo launch). Mudar coluna agora também mata o worker python (`killWorkerForCard` narrow `taskkill /F /PID`), não só a pane WezTerm.
+- **Calendar cross-mundo (`/c/calendar`)** — month grid em React, navegação prev/next, eventos livres CRUD (`GET/PUT /api/w/:slug/events`, sem OT) e chips read-only para cards com `due`/`!archived`/`colId !== 'done'` (clique salta para o card). Entrada no `Ctrl+K` filtrável por "calend/agenda/eventos".
+- **Main chat cross-mundo (`/c`) com multi-conversation** — composer + thread, stream do Hermes em tempo real, sidebar de conversas, agent com **Atlas parity** (lê/escreve `meta`/`notes`/`kanban`/`review`/`orchestrator` em qualquer mundo via API; token injetado no prompt). Slug sempre explícito no prompt. Cap 200 msgs/conversa (FIFO).
 - **Data de criação no card (`kdate`)** — visível no título do card kanban (`title="Criado em …"`).
 - **Cards recorrentes + lembretes** — `recur` (diária/semanal/mensal) com badge `↻`; cards `due` em ≤30min disparam notificação/toast (dedup por `slug:id`); próximo ciclo materializa-se sozinho em `todo`.
 - **Dashboards de operação do Hermes** — API keys (`/api/hermes/keys`, com `access_token` censurado e `secret_fingerprint` sha256) e Usage (`/api/hermes/usage`, hoje/tokens/custo) em ambas as dashboards.
 - **Backup/Export/Import de workdir** — Definições → Backup: exportar notas+kanban+meta como JSON, ou importar (replace destrutivo); útil para migrar mundos entre máquinas.
-- **Cobertura de testes do backend** — **28 testes** `node --test` puros (vanilla `node:assert`) cobrem **~16 routes** de `server/api.ts` (token fence, wtoken loopback, bundle roundtrip, hermes keys redaction, hermes usage, workdirs, review action, notes/kanban PUT, run/dp, run-finish close handler, etc.) **+ fluxo end-to-end** (`POST /run` -> python child -> git worktree -> `p.on('close')` doing->review, com fixtures `test/fixtures/hermes_cli/`). Harnesses partilhados: `test/_atlas-runtime.mjs` (Vite `middlewareMode` + seam `ATLAS_TEST_*`) e `test/_atlas-harness.mjs` (integration real); ambos zero risco prod. `npm test` passa 28/28 em ~17s.
+- **Cobertura de testes do backend + front** — **117 testes** `node --test` puros (vanilla `node:assert`, ~13s) cobrem **~30 routes** de `server/api.ts` (token fence, wtoken loopback, bundle roundtrip, hermes keys redaction, hermes usage, workdirs, review action, notes/kanban PUT, run/dp, run-finish close handler, chat history cap, chat routes, sp-persistence/refine/kill-transition/runs-pid, commands registry + palette dom audit, etc.) **+ fluxo end-to-end** (`POST /run` → Node run-card module → git worktree → `p.on('close')` doing→review, com fixtures `test/fixtures/hermes_cli/`). Os 2 integration tests lentos (`run-integration`, `syncvault-debounce`) vivem em `npm run test:integration` separado. Harnesses partilhados: `test/_atlas-runtime.mjs` (Vite `middlewareMode` + seam `ATLAS_TEST_*`) e `test/_atlas-harness.mjs` (integration real); ambos zero risco prod. Default `npm test` passa 117/117 em ~13s; `npm run test:integration` adiciona +2.
 
 - **Notificações de review** — avisos globais quando um card está pronto a rever.
 - **Import roadmap** — um `.md` vira um card por tarefa + nota de detalhe, idempotente.
@@ -40,19 +45,23 @@ Num Atlas, não trabalhas em pastas: atravessas **mundos**. Cada **mundo** é um
 
 ## Stack
 
-- **Vite + TypeScript** (vanilla, zero framework de UI pesado) — SPA com shell/sidebar + painel
-- Persistência local em **ficheiros JSON** por mundo (`data/<slug>/{meta,notes,kanban}.json`), servida por uma **mini-API embutida** no Vite dev/preview
-- **Drag & Drop nativo** (HTML5), zero libs de runtime
-- Task-runner: cada card kanban pode disparar uma **tarefa autónoma** (WezTerm + Hermes oneshot), com branch git própria por card
+- **Vite 6.4 + TypeScript 5.6** — dev server, build, plugin `atlasApi()` que serve a API em `/api`
+- **React 18.3 + react-router-dom 6.30** — routes frozen: `/`, `/w/:slug`, `/w/:slug/settings`, `/c`, `/c/calendar`. Views vanilla (`*-vanilla.ts`) preservadas intactas; cada view expõe um thin React wrapper que renderiza o DOM vanilla via `NavBridge` (capture `useNavigate()` em `globalThis` para `navigate('/...')` imperativo das views).
+- **Tailwind CSS 4.3** via `@tailwindcss/vite` — `src/index.css` `@theme` block declara cosmos/gold/marble/pipe como `--color-*` (`bg-bg-0`, `text-gold`). `components.css` ainda carregado para classes vanilla até Epic A polish sweep.
+- **shadcn/ui** — 17 componentes em `src/components/ui/` (alert, avatar, badge, button, card, command, dialog, dropdown-menu, input, label, popover, progress, scroll-area, separator, sheet, skeleton, tabs, textarea, tooltip) sobre `@radix-ui/*` + `cmdk` + `lucide-react` + `next-themes` + `sonner` + `class-variance-authority` + `tailwind-merge` + `tailwindcss-animate`.
+- **Persistência local** em **ficheiros JSON** por mundo (`data/<slug>/{meta,notes,kanban}.json`), servida por uma **mini-API embutida** no Vite dev/preview (Node `server/api.ts` + `server/lib/{chat,run-card,auto-merge}.mjs`)
+- **Drag & Drop nativo** (HTML5), zero libs de runtime para isso
+- **Task-runner**: cada card kanban pode disparar uma **tarefa autónoma** (Node `runCard()` → `hermes_cli.main` numa worktree git isolada), com branch própria por card e auto-merge detached via `auto-merge.mjs`
 
 ## Correr
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173 (dev server + API)
-npm run build      # build de produção -> dist/
-npm run preview    # serve o build + API (persistência funciona igual)
-npm test           # 28 testes do backend (node --test vanilla, ~17s)
+npm run dev          # http://localhost:5173 (dev server + API)
+npm run build        # build de produção -> dist/
+npm run preview      # serve o build + API (persistência funciona igual)
+npm test             # 117 testes do backend + front (node --test vanilla, ~13s)
+npm run test:integration  # +2 integration tests (run-integration, syncvault-debounce)
 ```
 
 > O CI (GitHub Actions) corre `npm run typecheck` (`tsc --noEmit`) + `build` em `dev`/`main`.
@@ -63,18 +72,38 @@ npm test           # 28 testes do backend (node --test vanilla, ~17s)
 data/                 # persistência (versionada no git) — fronteira dura por slug (mundo)
   index.json          #   lista de mundos (workdirs)
   <slug>/{meta,notes,kanban}.json
+  _chat/history.json  # multi-conversation chat history (cap 200 msgs/conversa)
 live-data/            # junction para a vault — datas locais fora do repo, auto-backup
 server/
-  api.ts              # mini-API embutida (rotas /api) + task-runner de cards
+  api.ts              # plugin Vite + mini-API embutida (rotas /api) + task-runner de cards
+  config.ts           # cfg: port, wtoken, wezterm paths, etc.
   roadmap.ts          # parser de roadmap markdown -> kanban (import)
+  routes/             # chat, hermes, icons, orchestrator, terms, w, workdirs, index
+  lib/                # auto-merge.mjs, chat.mjs, run-card.mjs (Node helpers)
+  prompts/            # brainstorm, chat, dp, git-op, merge-approve, run-card
 src/
-  main.ts             # entrada; importa tokens/base/components + watcher de notifs
-  router.ts           # `/` e `/w/:slug(/settings)`; renderShell sempre
-  store.ts, api.ts    # state partilhado e cliente HTTP da API
-  ui/                 # icons, palette, modal, toast, confirm, clock, text, theme (shift+estação), notifs, pomodoro, timezones
-  views/              # shell, workspace, dashboard, notes, kanban, settings
-  styles/             # tokens.css (cosmos/noite), base.css, components.css
+  main.tsx            # entry React (createRoot) — substituiu main.ts na migração epic-D
+  App.tsx             # router root + NavBridge (capture useNavigate)
+  router.tsx          # rotas (/, /w/:slug, /w/:slug/settings, /c, /c/calendar)
+  api.ts              # cliente HTTP partilhado (Card interface, j<T>, helpers)
+  store.ts            # state global
+  lib/
+    commands.ts       # registry único (56 commands × 6 grupos) — keyboard-first source of truth
+    utils.ts          # cn() helper (clsx + tailwind-merge)
+  ui/                 # icons, palette, modal, toast, confirm, clock, text, theme (shift+estação), notifs, pomodoro, timezones, icon.tsx
+  views/              # shell, workspace, dashboard, notes, kanban, settings, main-chat, calendar
+    *-vanilla.ts      # código vanilla preservado; *-tsx são React wrappers (NavBridge)
+  components/
+    ui/               # 17 componentes shadcn/ui (alert, avatar, badge, button, card, command, dialog, dropdown-menu, input, label, popover, progress, scroll-area, separator, sheet, skeleton, tabs, textarea, tooltip)
+  styles/             # tokens.css (cosmos/noite), base.css, components.css (vanilla classes)
+  index.css           # Tailwind v4 @theme block + @import components.css
 public/icons/         # 60 orbs SVG (catálogo de icons por mundo)
+test/                 # ~45 ficheiros *.test.mjs (node --test vanilla) — 117 asserts em ~13s
+  _atlas-runtime.mjs  # harness Vite middlewareMode + ATLAS_TEST_* seam
+  _atlas-harness.mjs  # harness integration (POST /run → runCard → close handler)
+  _register-loader.mjs, _ts-loader.mjs  # Node 22 ESM/strip-types plumbing
+  fixtures/hermes_cli/  # fixtures para integration tests
+plans/                # DPs por feature/epic (2026-08-28..2026-09-05)
 ```
 
 ## Rotas frontend
@@ -82,10 +111,29 @@ public/icons/         # 60 orbs SVG (catálogo de icons por mundo)
 - `/` — **main dashboard**: visão geral de todos os mundos (projetos, notas, pipeline, sessões ativas)
 - `/w/:slug` — workspace (tabs **Notas | Kanban**)
 - `/w/:slug/settings` — editar mundo, tema, estação, colunas, icon, repo, notificações, eliminar
+- `/c` — **main chat cross-mundo**: composer + thread, multi-conversation sidebar, agent com Atlas parity (lê/escreve qualquer mundo via API; token injetado no prompt; slug sempre explícito no user prompt)
+- `/c/calendar` — **calendário cross-mundo**: month grid + chips de deadlines (kanban cards com `due && !archived && colId !== 'done'`) + eventos livres CRUD
 
-## Palette (`Ctrl+K`)
+## Palette (`Ctrl+K`) & keyboard-first
 
-Command palette keyboard-first com secções **Workdirs**, **Notas**, **Cartões** e **Ações** (ex. *Novo mundo*). Introduzir texto filtra; `Enter` executa. Criar por aqui delega nos modais completos de criar (nota/cartão), para não duplicar lógica.
+Command palette keyboard-first, **renderizada a partir do registry único `src/lib/commands.ts`** (56 commands × 6 grupos: mundo, notas, kanban, global, navegação, sistema). Secções: **Workdirs**, **Notas**, **Cartões**, **Global** (inclui **Chat** cross-mundo, **Calendário**, FAQ, How to use) e **Ações** (ex. *Novo mundo*). Introduzir texto filtra; `Enter` executa. Criar por aqui delega nos modais completos de criar (nota/cartão), para não duplicar lógica.
+
+**Leader `;` + 1 letra** (mindinho esq descansa em `;`, zero conflito com filtro PT-PT):
+
+| Shortcut | Comando |
+|---|---|
+| `;N` | Nova nota |
+| `;C` | Novo cartão |
+| `;T` | Tema (cicla day/dusk/night) |
+| `;D` | Dashboard |
+| `;S` | Settings |
+| `;M` | Main chat |
+| `;F` | Fuso horário |
+| `;?` | Overlay de atalhos |
+
+Bare shortcut `?` (símbolo) → overlay. **PT-PT-safe**: match primário por `e.code === 'Semicolon'` (layout-independent), fallback `e.key === ';'` e `e.key === ':'` — o handler funciona em todos os layouts.
+
+Recentes via MRU (`atlas.recentCommands`, max 10). Todos os 81 `<button>` do app têm `data-cmd` auditado em `test/palette-dom-audit.test.mjs`.
 
 ## API
 
@@ -104,6 +152,13 @@ Endpoints embutidos no Vite (prefixo `/api`):
 | POST | `/api/w/:slug/run` | **corre card kanban** — marca `doing`, abre WezTerm+Hermes (tarefa = `description`) |
 | POST | `/api/w/:slug/brainstorm` | **brainstorm + SWOT** do mundo — escreve notas novas (headless) |
 | POST | `/api/w/:slug/dp` | **gera/reescreve o DP** de um card (headless, não toca no código) |
+| POST | `/api/w/:slug/kanban/sp` | **persiste Super Prompt** (`{cardId, body, ref}`) num card; valida `50 ≤ body.length ≤ 200000` + `ref` sob `knowledge/infra/super-prompts/`; 409 em ver mismatch |
+| POST | `/api/w/:slug/kanban/refine` | **refina card em review** — re-usa a mesma worktree, mata worker PID antigo, dispara novo `launchHermes` |
+| GET | `/api/w/:slug/runs/:cardId/pid` | devolve `String(child.pid)` do worker (escrito por `runCard` no PID file) |
+| GET/PUT | `/api/w/:slug/events` | CRUD de eventos livres do calendar (`title + date + colour + note`); flat array, sem OT |
+| POST | `/api/chat/message` | envia mensagem ao agent (`/c` main chat); stream em `/api/chat/stream/:runId`; agent com Atlas parity via token injetado |
+| GET | `/api/chat/conversations` | lista conversas do main chat (multi-conversation schema em `data/_chat/history.json`) |
+| POST | `/api/chat/conversations` | cria nova conversa; DELETE/GET by id disponíveis |
 | GET | `/api/w/:slug/output/:cardId` | stream do log do run/DP (offset-based, p/ a vista de execução) |
 | POST | `/api/w/:slug/cleanup` | limpeza manual de runs/worktrees órfãs |
 | POST | `/api/w/:slug/import-roadmap` | importa um roadmap `.md` → notas + cards (idempotente) |
@@ -130,16 +185,23 @@ Apenas requests de **loopback** (`127.0.0.1`/`localhost`/`::1`) ou do header `Ho
 
 1. **Run** (`▶` no card) → card vai a **Em Curso** e abre uma janela WezTerm a correr Hermes autónomo numa **worktree isolada** da branch default do repo do mundo (ex. `dev`) — `feature/<card-slug>`.
 2. O worker faz commit localmente, e no fim move o card para **Review** (coluna `review`) com um campo `result`.
-3. **`status`:** a view faz polling do board enquanto houver card em `doing`; o `result` é renderizado com destaque assim que aparece. O botão **Gerar DP** corre `/dp` em segundo plano e notifica ao concluir.
-4. **Review (só BMS):** `approve` → mergem `dev → main` e card para **done**; `reject` → volta a `doing` com nota de refinamento e re-corre. **`done` é sempre manual** (validação BMS), nunca automático.
+3. **`status`:** a view faz polling do board enquanto houver card em `doing`; o `result` é renderizado com destaque assim que aparece. O botão **Gerar DP** corre `/dp` em segundo plano e notifica ao concluir. O **status chip** (`agent: running (pid NNNN)`) polla `runs/<slug>/<cardId>.pid` cada 5s e pára via MutationObserver em column change.
+4. **Review (só BMS):** `approve` → merge `dev → main` e card para **done**; `reject` → volta a `doing` com nota de refinamento e re-corre. **`done` é sempre manual** (validação BMS), nunca automático.
+5. **Card-driven loop (Super Prompt):** se o card tem `superPromptBody` + `superPromptRef` (persistido via `/api/w/:slug/kanban/sp`), o bloco SP é injectado no `prompts/run-card.md` antes do DP (`${cardSP}` → `${cardDp}`). Em `review` aparece **Refinar** (`/api/w/:slug/kanban/refine`) que re-usa a worktree, mata o worker PID antigo via `killWorkerForCard` (narrow `taskkill /F /PID`), e dispara novo launch. Mudar coluna também mata o worker python — não só a pane WezTerm.
 
-### Task-runner interno (`server/api.ts::launchHermes`)
+### Task-runner interno (`server/api.ts::launchHermes` + `server/lib/run-card.mjs`)
 
-- Cria **uma worktree por card**: `git worktree add -B feature/<slug>-<cardId> <code>/data/.wt/<slug>/<cardId> <baseBranch>` — a base é a **branch default real do repo do mundo** (não hardcoded `dev`).
+- **Node module único** (`server/lib/run-card.mjs`) substitui 5 wrappers Python inline — fim do argv shape lock-step (BUG 3b family):
+  - `runCard(opts)` spawns `hermes_cli.main` directly numa worktree isolada, heartbeats `.status` cada 60s, sanitises C1 stdio, kills WezTerm pane on exit, em `rc==0` spawns **`auto-merge.mjs` detached** (sobrevive Vite restart).
+  - `runHermesHeadless(opts)` é a variante thin para os 3 sites sem worktree (`launchDp`, `spawnHeadless`, `launchBrainstorm`).
+  - Campo opcional `pidPath?` em `runCard` (BC-additive) — `launchHermes` passa-o; `runHermesHeadless` callers não passam → zero BC break.
+- **Worktree por card**: `git worktree add -B feature/<slug>-<cardId> <code>/data/.wt/<slug>/<cardId> <baseBranch>` — a base é a **branch default real do repo do mundo** (não hardcoded `dev`).
+- **Auto-merge detached** (`server/lib/auto-merge.mjs`) — `detached+unref` sobrevive Vite restart; chdir repo, checkout bb, fetch+merge, push, on push-fail retry, success cleanup wt+branch, merge-fail write `.status=merge-failed`.
 - `cwd` do spawn = a worktree do card (nunca o repo raiz).
 - Spawn não-bloqueante: `WEZTERM start -- <python> -m hermes_cli.main -z "<prompt>"` com `{detached:true, stdio:'ignore'}` e `p.unref()`.
 - Qualquer falha escreve `card.result` (ex. `ERRO: …`) — **nunca** return silencioso.
-- No fim do card (rc==0): merge branch→dev + push dev, remove a junction node_modules, `worktree remove --force`, apaga a branch → auto-cleanup; panes WezTerm que seguram a worktree são mortas (`killWtLockers`).
+- No fim do card (rc==0): `auto-merge.mjs` detached (acima) + remove a junction node_modules, `worktree remove --force`, apaga a branch → auto-cleanup; panes WezTerm que seguram a worktree são mortas (`killWtLockers`).
+- **CI gate** (`runCIGate(repo, wtDir?)`) — quando `wtDir` passado, build fica em `dist/` default dentro da worktree isolada; quando ausente, build escreve em `.ci-gate/<ts>` (gitignored, cleaned após) — evita clash com `npm run dev` no mesmo dir.
 
 ### Variáveis de ambiente do server
 
