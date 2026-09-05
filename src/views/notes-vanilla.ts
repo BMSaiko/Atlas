@@ -6,7 +6,6 @@ import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
 import { renderMd } from '../ui/text'
 import { navigate } from '../router'
-import { openReplyModal } from './kanban-vanilla'
 
 export const parseTags = (v: string) => Array.from(new Set(v.split(/[,\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean)))
 const existingTags = (notes: Nota[]) => Array.from(new Set(notes.flatMap(n => n.tags || []))).sort()
@@ -201,16 +200,8 @@ export async function renderNotes(root: HTMLElement, slug: string) {
   ensureIds(notes)
   const fmt = (ts: number) => new Date(ts).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
   const archCount = () => notes.filter(n => n.archived).length
-  // ponytail: ao converter nota->cartao (tocanban) o board muda fora de kanban.ts; re-sync sidebar aqui
-  function refreshSideCount() {
-    api.kanban.get(slug).then(b => {
-      const n = b.cards.filter(c => !c.archived && c.colId !== 'done').length
-      const item = document.querySelector<HTMLElement>(`.side-item[data-slug="${slug}"]`)
-      if (!item) return
-      item.querySelector('.side-count')?.remove()
-      if (n) item.insertAdjacentHTML('beforeend', `<span class="side-count">${n}</span>`)
-    }).catch(() => {})
-  }
+  // ponytail: refreshSideCount foi kanban-specific (contava cards ativos na sidebar).
+  // Removido em 2026-09-05 — kanban removido. Sidebar counts agora vem de counts.ts (notas ativas).
 
   root.innerHTML = `
     <div class="notes-toolbar">
@@ -257,8 +248,6 @@ export async function renderNotes(root: HTMLElement, slug: string) {
         ${(n.tags && n.tags.length) ? `<div class="note-tags">${n.tags.map(t => `<button class="tag-chip" data-tag="${esc(t)}" aria-label="Filtrar por ${esc(t)}" data-cmd="ui.tag-add">${esc(t)}</button>`).join('')}</div>` : ''}
         <div class="note-date">${showArch ? unhide('Arquivada') : ''}${fmt(n.ts)}</div>
         <div class="note-actions">
-          ${(n.tags||[]).some(t => t === 'grilled') ? `<button class="btn-icon btn-ghost" data-act="reply-grill" title="Abrir card e continuar grilling" aria-label="Continuar grilling" data-cmd="notas.reply-grill">${icon('pencil', 16)}</button>` : ''}
-          <button class="btn-icon btn-ghost" data-act="tocanban" title="Converter para cartão" aria-label="Converter para cartão" data-cmd="notas.para-cartao">${icon('board', 16)}</button>
           <button class="btn-icon btn-ghost" data-act="edit" aria-label="Editar" data-cmd="notas.editar">${icon('pencil', 16)}</button>
           <button class="btn-icon btn-ghost" data-act="${n.archived ? 'unarch' : 'arch'}" title="${n.archived ? 'Restaurar' : 'Arquivar'}" aria-label="${n.archived ? 'Restaurar' : 'Arquivar'}" data-cmd="notas.arquivar">${icon('archive', 16)}</button>
           <button class="btn-icon btn-ghost" data-act="del" aria-label="Eliminar" data-cmd="notas.eliminar">${icon('trash', 16)}</button>
@@ -268,7 +257,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
     if (nbar) {
       nbar.querySelector('#nbulk-arch')!.addEventListener('click', bulkArchNotes)
       nbar.querySelector('#nbulk-del')!.addEventListener('click', bulkDelNotes)
-      nbar.querySelector('#nbulk-card')!.addEventListener('click', bulkToCard)
+      // ponytail: #nbulk-card (bulk to kanban) removido em 2026-09-05 — kanban removido.
       nbar.querySelector('#nbulk-clear')!.addEventListener('click', () => { sel.clear(); doRender(searchInput.value.toLowerCase()) })
     }
   }
@@ -326,81 +315,10 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       confirmDialog({ title: 'Eliminar nota', message: showArch ? 'Eliminar esta nota arquivada?' : 'Apagar esta nota?' }).then(ok => { if (!ok) return; notes = notes.filter(x => x.id !== n.id); save().then(()=>doRender(searchInput.value)); toast('Nota eliminada') })
     }
     if (btn.dataset.act === 'edit') noteModal(n)
-    if (btn.dataset.act === 'tocanban') toCard(n)
-    if (btn.dataset.act === 'reply-grill') replyGrill(n)
     if (btn.dataset.act === 'arch') { n.archived = true; save().then(()=>doRender(searchInput.value)); toast('Nota arquivada') }
     if (btn.dataset.act === 'unarch') { delete n.archived; save().then(()=>doRender(searchInput.value)); toast('Nota restaurada') }
   })
 
-  // ponytail: replyGrill — botão nas notas com tag 'grilled'. Resolve Card via tag card:<id> e navega.
-  // rung 1 (YAGNI): não faz reply inline — abre o card no kanban, utilizador clica 'Reply' no viewTerminal.
-  // ponytail: replyGrill — busca o Card, abre openReplyModal (split). onSubmit cria NOVO card de grilling
-  // rung 2: reusa openReplyModal + launchRun (palette.ts exporta). 0 server change.
-  function replyGrill(n: Nota) {
-    const cardTag = (n.tags || []).find(t => t.startsWith('card:') || t.startsWith('card-'))
-    if (!cardTag) { toast('Nota sem tag card:<id>'); return }
-    const cardId = cardTag.replace(/^card[-:]/, '')
-    api.kanban.get(slug).then(async b => {
-      const src = b.cards.find(x => x.id === cardId)
-      if (!src) { toast('Card ' + cardId + ' nao encontrado'); return }
-      // importa launchRun sob demanda para evitar ciclo de imports
-      const { launchRun } = await import('./kanban-vanilla')
-      openReplyModal(src, { onSubmit: async (reply: string) => {
-        // ponytail: clona o card, anexa reply, lança worker. SEM re-spawn no mesmo card.
-        const newCard = {
-          id: Math.random().toString(36).slice(2, 10),
-          title: src.title,
-          description: (src.description || '') + '\n\n## Reply do user (' + new Date().toLocaleString('pt-PT') + ')\n' + reply,
-          priority: src.priority,
-          colId: 'doing' as const,
-          ts: Date.now(),
-          archived: false,
-          // ponytail: skills repostas (removidas no patch headless). Sem isto, worker corre sem grill-me.
-          skills: ['grill-me', 'grilling'] as string[],
-        }
-        b.cards.push(newCard)
-        try {
-          await api.kanban.put(slug, b)
-          await launchRun(slug, newCard)
-          navigate('/w/' + slug + '?tab=kanban&card=' + newCard.id)
-          toast('Novo card de grilling criado')
-        } catch (e: any) { toast('Erro: ' + (e?.message || e)) }
-      } }, { noteText: n.text, noteTitle: 'Perguntas (round) — ' + n.title })
-    }).catch(e => toast('Erro: ' + e.message))
-  }
-
-  function toCard(n: Nota) {
-    api.kanban.get(slug).then(b => {
-      if (!b.columns.length) { toast('Sem colunas no kanban'); return }
-      const cols = b.columns.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('')
-      openModal({
-        title: 'Novo cartão', submitText: 'Criar',
-        body: () => `<div class="field"><label for="nk-title">Título</label><input id="nk-title" name="title" required value="${esc(n.title)}"></div>
-                   <div class="field"><label for="nk-desc">Descrição</label><textarea id="nk-desc" name="description">${esc((n.text||'').trim())}</textarea></div>
-                   <div class="field"><label for="nk-prio">Prioridade</label><select id="nk-prio" name="priority">
-                     <option value="low" selected>Baixa</option>
-                     <option value="medium">Média</option>
-                     <option value="high">Alta</option>
-                   </select></div>
-                   <div class="field"><label for="nk-col">Coluna</label><select id="nk-col" name="colId">${cols}</select></div>`,
-        onSubmit: () => {
-          const form = document.querySelector('.modal form') as HTMLFormElement
-          const title = (form.querySelector('[name=title]') as HTMLInputElement).value.trim()
-          if (!title) return
-          b.cards.push({
-            id: uid(), title,
-            description: (form.querySelector('[name=description]') as HTMLTextAreaElement).value,
-            priority: (form.querySelector('[name=priority]') as HTMLSelectElement).value as Prioridade,
-            colId: (form.querySelector('[name=colId]') as HTMLSelectElement).value,
-            ts: Date.now(), archived: false,
-          })
-          api.kanban.put(slug, b)
-            .then(() => { refreshSideCount(); refreshTabCounts(slug); toast(`Criado: "${title}"`) })
-            .catch(e => toast('Erro: ' + e.message))
-        },
-      })
-    }).catch(e => toast('Erro: ' + e.message))
-  }
 
   function noteView(n: Nota) {
     openModal({
@@ -487,15 +405,6 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       if (!ok) return; const ids = new Set(sel); notes = notes.filter(x => !ids.has(x.id)); sel.clear(); save().then(() => { doRender(searchInput.value.toLowerCase()); toast('Notas eliminadas') })
     })
   }
-  function bulkToCard() {
-    const n = sel.size
-    api.kanban.get(slug).then(b => {
-      const col = b.columns.find(c => c.id === 'todo' || c.id === 'doing')?.id || b.columns[0]?.id
-      if (!col) { toast('Sem colunas no kanban'); return }
-      currentSelNotes().filter(x => !x.archived).forEach(x => b.cards.push({ id: uid(), title: x.title, description: (x.text || '').trim(), priority: 'low', colId: col, ts: Date.now(), archived: false }))
-      api.kanban.put(slug, b).then(() => { sel.clear(); refreshSideCount(); refreshTabCounts(slug); doRender(searchInput.value.toLowerCase()); toast(`Criados cartões (${n})`) }).catch(e => toast('Erro: ' + e.message))
-    }).catch(e => toast('Erro: ' + e.message))
-  }
 }
 let bsRunning = false  // fonte de verdade do estado "a executar" do brainstorm (sobrevive a re-renders)
 function applyBsRunning() {
@@ -505,52 +414,17 @@ function applyBsRunning() {
   b.disabled = bsRunning
 }
 
-// ponytail: botão Brainstorm na toolbar de notas — corre um hermes headless que analisa o
-// source-tree, faz SWOT + brainstorm e escreve notas novas no workdir. Log streameado do
-// mecanismo /output do run-card (id ficticio "brainstorm"); ao concluir, refresca a lista.
-function brainstorm(slug: string) {
-  fetch(`/api/w/${slug}/brainstorm`, { method: 'POST' })
-    .then(r => r.json()).then((d: any) => {
-      if (d && d.ok) { bsRunning = true; applyBsRunning(); toast('Brainstorm a correr em segundo plano (headless)'); viewBrainstorm(slug) }
-      else toast((d && d.error) || 'Erro ao iniciar brainstorm')
-    }).catch(() => toast('Falha ao iniciar brainstorm'))
+// ponytail: 2026-09-05 strip-kanban — brainstorm endpoint removido. Botao na toolbar agora
+// apenas toast explicativo; viewBrainstorm/renderNotesAfterBrainstorm ficam como stubs
+// vazios para nao rebentar imports cruzados.
+function brainstorm(_slug: string) {
+  toast('Brainstorm removido em 2026-09-05 (feature descontinuada). Use Ctrl+K → "Nova nota" para criar manualmente.')
 }
-function viewBrainstorm(slug: string) {
-  const started = Date.now()
-  let offset = 0
-  let pre = document.createElement('pre')
-  pre.className = 'term-view'
-  pre.textContent = 'A ligar ao brainstorm...'
-  let timer: ReturnType<typeof setInterval> | undefined
-  const body = () => `<div class="term-wrap">${pre.outerHTML}<div class="term-status" id="bs-tstatus">a trabalhar…</div></div>`
-  const m = openModal({
-    title: 'Brainstorm/SWOT · ' + slug, submitText: 'Fechar', cancelText: 'Fechar',
-    body,
-    onSubmit: () => { if (timer) clearInterval(timer) },
-  })
-  pre = m.root.querySelector('.term-view') as HTMLPreElement
-  const statusEl = m.root.querySelector('.term-status') as HTMLElement
-  const tick = async () => {
-    // ponytail: cap de seguranca — para o poller apos 30 min se nunca acabar (evita flag presa a girar)
-    if (Date.now() - started > 30 * 60 * 1000) { if (timer) clearInterval(timer); bsRunning = false; applyBsRunning(); return }
-    try {
-      const d = await api.run.output(slug, 'brainstorm', offset)
-      if (d && d.chunk) { pre.textContent += d.chunk; pre.scrollTop = pre.scrollHeight }
-      offset = d ? d.offset : offset
-      if (d && d.done) {
-        if (timer) clearInterval(timer)
-        bsRunning = false; applyBsRunning()
-        statusEl.textContent = d.code === 0 ? 'concluído ✓ (notas criadas)' : ('terminou com erro (código ' + d.code + ') — vê o log acima')
-        statusEl.classList.toggle('err', !!(d && d.code !== 0))
-        // ponytail: refresca as notas quando o brainstorm acaba (o worker escreveu notas novas via API)
-        if (d.code === 0) renderNotesAfterBrainstorm(slug)
-      }
-    } catch { }
-  }
-  timer = setInterval(tick, 1000)
-  tick()
-  const obs = new MutationObserver(() => { if (!m.root.isConnected) { if (timer) clearInterval(timer); obs.disconnect() } })
-  obs.observe(document.body, { childList: true })
+function viewBrainstorm(_slug: string) {
+  // ponytail: 2026-09-05 strip-kanban — viewBrainstorm era stream de log do brainstorm headless.
+  // Endpoint removido; mostra modal estatico com a mensagem de descontinuacao.
+  const body = () => '<div class="term-wrap"><pre class="term-view">Brainstorm descontinuado em 2026-09-05 — feature removida com o kanban.</pre><div class="term-status">feature removida</div></div>'
+  openModal({ title: 'Brainstorm/SWOT', submitText: 'Fechar', cancelText: 'Fechar', body })
 }
 // ponytail: o worker escreveu notas novas via API; re-render so relendo. Como renderNotes é
 // uma closure com estado, o mais fiável e simples é refazer a viagem à rota (re-render shell).

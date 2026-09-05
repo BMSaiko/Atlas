@@ -13,7 +13,7 @@
 // O caller (palette.ts) passa as funcoes via `ctx`. Mantem o modulo 100% standalone para
 // os testes carregarem sem ter de puxar o grafo de UI.
 
-export type CommandGroup = 'mundo' | 'notas' | 'kanban' | 'global' | 'navegacao' | 'sistema'
+export type CommandGroup = 'mundo' | 'notas' | 'global' | 'navegacao' | 'sistema'
 
 export interface CommandCtx {
   slug: string | null
@@ -76,14 +76,6 @@ function modalCommand(id: string, label: string, hint: string, mdProvider: () =>
   return { id, group: 'sistema', icon, label, hint, keywords, shortcut, perform: () => { /* handled by palette via runCommand special-case */ if (typeof mdProvider === 'function') (window as any).__atlasOpenHelp?.(label, mdProvider()) } }
 }
 
-// skillCommand: corre um skill card (grill-me / grilling). O conteúdo do prompt é template.
-function skillCommand(id: string, label: string, skill: string, promptTpl: string, hint: string, keywords: string[], icon = 'aura'): Command {
-  return { id, group: 'mundo', icon, label, hint, keywords, perform: ctx => {
-    if (!ctx.slug) return
-    // delegated ao runner em palette.ts — exposto pela função setSkillRunner()
-    ;(window as any).__atlasRunSkill?.(ctx.slug, skill, promptTpl)
-  } }
-}
 
 // apiCommand: chamada direta a api.* (sem modal). Para ações one-shot como toggle theme, orchestrator.
 function apiCommand(id: string, label: string, hint: string, keywords: string[], group: CommandGroup, icon: string, fn: (ctx: CommandCtx) => Promise<void> | void, opts: { destructive?: boolean; when?: (ctx: CommandCtx) => boolean; shortcut?: string } = {}): Command {
@@ -100,16 +92,12 @@ export const REGISTRY: Command[] = [
   // ===== Mundo (≥ 8) =====
   apiCommand('mundo.novo', 'Novo mundo', 'Cria um workdir novo', ['novo', 'mundo', 'criar', 'workdir', 'new'], 'mundo', 'plus',
     ctx => { ctx.navigate('/') /* shell-vanilla binds to #panel-new / newWorkdir via DOM */ ; (window as any).__atlasNewWorkdir?.() }),
-  apiCommand('mundo.novo-nota-ou-cartao', 'Criar cartão ou nota', 'Modal quickAdd: escolhe tipo', ['novo', 'criar', 'cartao', 'nota', 'card', 'note', 'quick'], 'mundo', 'plus',
-    // ponytail: shortcut ';C' removido daqui (kanban.novo fica com a tecla C). QuickAdd continua
-    // acessivel via filtro: escrever 'criar' mostra este comando em cima.
+  apiCommand('mundo.novo-nota-ou-cartao', 'Criar nota', 'Modal quickAdd: escolhe tipo', ['novo', 'criar', 'cartao', 'nota', 'card', 'note', 'quick'], 'mundo', 'plus',
+    // ponytail: shortcut nao atribuido — quickAdd e' a forma canonica de criar nota no mundo ativo.
+    // Acessivel via filtro: escrever 'criar' mostra este comando em cima.
     ctx => { if (ctx.slug) (window as any).__atlasQuickAdd?.(ctx.slug) }, { when: c => c.slug !== null }),
   apiCommand('mundo.definicoes', 'Definições', 'Abre settings do mundo ativo', ['definicoes', 'settings', 'config', 'opcoes'], 'mundo', 'gear',
     ctx => { if (ctx.slug) ctx.navigate('/w/' + ctx.slug + '/settings') }, { when: c => c.slug !== null, shortcut: ';S' }),
-  apiCommand('mundo.merge-to-main', 'Merge to main', 'Merge dev → main headless', ['merge', 'main', 'dev', 'headless'], 'mundo', 'forward',
-    ctx => { if (ctx.slug) (window as any).__atlasGitOp?.(ctx.slug, 'merge-main') }, { when: c => c.slug !== null }),
-  apiCommand('mundo.resolve-conflito', 'Resolve conflito', 'Resolve merge conflito', ['resolve', 'conflito', 'merge', 'fix'], 'mundo', 'reset',
-    ctx => { if (ctx.slug) (window as any).__atlasGitOp?.(ctx.slug, 'resolve') }, { when: c => c.slug !== null }),
   apiCommand('mundo.terminais-wezterm', 'Abrir terminal WezTerm', 'Abre uma janela WezTerm no mundo', ['terminal', 'wezterm', 'shell', 'cmd'], 'mundo', 'term',
     async ctx => {
       if (!ctx.slug) return
@@ -140,7 +128,7 @@ export const REGISTRY: Command[] = [
         ctx.toast(k > 0 ? `${k} terminais fechados em ${w} mundo${w !== 1 ? 's' : ''}` : 'Nenhum terminal aberto')
       } catch (e: any) { ctx.toast('Erro: ' + (e?.message || e)) }
     }, { destructive: true }),
-  apiCommand('mundo.eliminar-workdir', 'Eliminar workdir', 'Zona perigosa: apaga notas+kanban+meta. Irreversível.', ['eliminar', 'apagar', 'delete', 'workdir', 'mundo'], 'mundo', 'trash',
+  apiCommand('mundo.eliminar-workdir', 'Eliminar workdir', 'Zona perigosa: apaga notas+events+meta. Irreversível.', ['eliminar', 'apagar', 'delete', 'workdir', 'mundo'], 'mundo', 'trash',
     async ctx => {
       if (!ctx.slug) return
       const ok = await ctx.confirm({ title: 'Eliminar workdir', message: `Eliminar definitivamente o mundo activo? Esta acção não pode ser desfeita.` })
@@ -149,10 +137,7 @@ export const REGISTRY: Command[] = [
       catch (e: any) { ctx.toast('Erro: ' + e.message) }
     }, { when: c => c.slug !== null, destructive: true }),
 
-  // Skill prompts — grill-me + grilling. O prompt template vive em palette.ts (FAQ_MD/HOWTO_MD/SKILL_PROMPT_*).
-  skillCommand('mundo.grill-me', 'Grill-me — entrevista a plano/decisão', 'grill-me', 'grill-me', 'Stress-test guiado por rounds', ['grill', 'me', 'stress', 'plano', 'decisao', 'entrevista'], 'aura'),
-  skillCommand('mundo.grilling', 'Grilling — stress-test contínuo', 'grilling', 'grilling', 'Stress-test contínuo', ['grilling', 'stress', 'test', 'decision'], 'aura'),
-
+  
   // ===== Notas (≥ 6) =====
   apiCommand('notas.nova', 'Nova nota', 'Cria nota nova no mundo ativo', ['nova', 'nota', 'note', 'criar'], 'notas', 'plus',
     ctx => { if (ctx.slug) (window as any).__atlasNewNote?.(ctx.slug) }, { when: c => c.slug !== null, shortcut: ';N' }),
@@ -180,57 +165,6 @@ export const REGISTRY: Command[] = [
       try { ctx.toast('Use a vista Notas → filtro arquivadas para gerir em bulk') }
       catch (e: any) { ctx.toast('Erro: ' + e.message) }
     }, { when: c => c.slug !== null, destructive: true }),
-
-  // ===== Kanban (≥ 8) =====
-  apiCommand('kanban.novo', 'Novo cartão', 'Abre o modal de novo cartão', ['novo', 'cartao', 'card', 'criar'], 'kanban', 'plus',
-    ctx => { if (ctx.slug) (window as any).__atlasNewCard?.(ctx.slug) }, { when: c => c.slug !== null, shortcut: ';C' }),
-  apiCommand('kanban.importar-roadmap', 'Importar roadmap (markdown)', 'Importa um roadmap em markdown para o kanban', ['importar', 'roadmap', 'markdown', 'kanban'], 'kanban', 'forward',
-    ctx => { (window as any).__atlasImportRoadmap?.() }, { when: c => c.slug !== null }),
-  apiCommand('kanban.arquivados', 'Cartões arquivados', 'Modal de cartões arquivados', ['arquivados', 'archived', 'kanban'], 'kanban', 'archive',
-    ctx => { (window as any).__atlasShowArchived?.() }, { when: c => c.slug !== null }),
-  apiCommand('kanban.orquestrar', 'Orquestrar mundo', 'Move todos os TODO deste mundo para Em Curso', ['orquestrar', 'todo', 'doing', 'world'], 'kanban', 'term',
-    async ctx => {
-      if (!ctx.slug) return
-      try {
-        const d: any = await ctx.api.orchestrator.start(ctx.slug)
-        ctx.toast(d.moved ? `Orquestrador: ${d.moved} tarefa${d.moved === 1 ? '' : 's'} → Em Curso` : 'Orquestrador: sem TODOs neste mundo (0)')
-      } catch (e: any) { ctx.toast('Erro: ' + e.message) }
-    }, { when: c => c.slug !== null }),
-  apiCommand('kanban.orquestrar-global', 'Orquestrar todos os mundos', 'Ativa o orquestrador em todos os mundos', ['orquestrar', 'todos', 'global', 'dashboard'], 'kanban', 'term',
-    async ctx => {
-      try {
-        const d: any = await ctx.api.orchestrator.start()
-        ctx.toast(d.moved ? `Orquestrador ativado — ${d.moved} tarefa${d.moved === 1 ? '' : 's'} TODO → Em Curso` : 'Orquestrador: sem TODOs para mover (0)')
-      } catch (e: any) { ctx.toast('Erro: ' + e.message) }
-    }),
-  apiCommand('kanban.bulk', 'Bulk (selecionar cartões)', 'Liga modo bulk no kanban', ['bulk', 'selecionar', 'cartoes', 'kanban'], 'kanban', 'check',
-    ctx => { (window as any).__atlasToggleKanbanBulk?.() }, { when: c => c.slug !== null }),
-  apiCommand('kanban.col-adicionar', 'Adicionar coluna', 'Adiciona uma coluna nova ao quadro', ['adicionar', 'coluna', 'col', 'kanban'], 'kanban', 'plus',
-    ctx => { (window as any).__atlasAddColumn?.() }, { when: c => c.slug !== null }),
-  apiCommand('kanban.col-guardar', 'Guardar colunas', 'Persiste as colunas editadas', ['guardar', 'colunas', 'save', 'kanban'], 'kanban', 'check',
-    ctx => { (window as any).__atlasSaveColumns?.() }, { when: c => c.slug !== null }),
-  apiCommand('kanban.snapshot', 'Criar snapshot agora', 'Snapshot do workdir (4/dia, 7d retenção)', ['snapshot', 'backup', 'instantaneo'], 'kanban', 'archive',
-    async ctx => {
-      if (!ctx.slug) return
-      try {
-        const r = await ctx.api.snapshots.run(ctx.slug)
-        ctx.toast('Snapshot criado (' + (r.slot || '?') + ')')
-      } catch (e: any) { ctx.toast('Erro: ' + e.message) }
-    }, { when: c => c.slug !== null }),
-  apiCommand('kanban.export-bundle', 'Exportar bundle (.json)', 'Exporta meta+notes+kanban como JSON', ['exportar', 'bundle', 'json', 'backup'], 'kanban', 'doc',
-    ctx => { (window as any).__atlasExportBundle?.() }, { when: c => c.slug !== null }),
-  // Per-card actions (palette offers "Correr: <title>" by name; the cmd ids below are aliases
-  // for inline buttons that the audit validates — they map to dispatchers in palette or shell).
-  apiCommand('kanban.correr-card', 'Correr cartão', 'Abre modal quickAdd para escolher cartão a correr', ['correr', 'executar', 'run', 'card'], 'kanban', 'play',
-    ctx => { (window as any).__atlasCorrerCardFocus?.(ctx.slug) }, { when: c => c.slug !== null }),
-  apiCommand('kanban.gerar-dp', 'Gerar DP', 'Gera design plan de um cartão', ['gerar', 'dp', 'design', 'plan'], 'kanban', 'doc',
-    ctx => { (window as any).__atlasGerarDpFocus?.(ctx.slug) }, { when: c => c.slug !== null }),
-  apiCommand('kanban.reiniciar-card', 'Reiniciar cartão', 'Reinicia um cartão em doing', ['reiniciar', 'restart', 'doing'], 'kanban', 'reset',
-    ctx => { (window as any).__atlasReiniciarCardFocus?.(ctx.slug) }, { when: c => c.slug !== null }),
-  apiCommand('kanban.ver-terminal', 'Ver terminal', 'Abre o terminal/log de um cartão', ['terminal', 'log', 'ver'], 'kanban', 'term',
-    ctx => { (window as any).__atlasVerTerminalFocus?.(ctx.slug) }, { when: c => c.slug !== null }),
-  apiCommand('kanban.reply-card', 'Reply a cartão', 'Abre o reply de um cartão grilled', ['reply', 'responder', 'grilling'], 'kanban', 'pencil',
-    ctx => { (window as any).__atlasReplyCardFocus?.(ctx.slug) }, { when: c => c.slug !== null }),
 
   // ===== Chat (cross-mundo) =====
   apiCommand('chat.nova-conversa', 'Nova conversa', 'Cria uma conversa nova no chat', ['nova', 'conversa', 'chat', 'criar'], 'global', 'chat',
@@ -271,10 +205,14 @@ export const REGISTRY: Command[] = [
     async ctx => { (window as any).__atlasRequestNotifs?.() }),
   apiCommand('sistema.limpar-recentes', 'Limpar recentes da palette', 'Limpa o MRU (atlas.recentCommands)', ['limpar', 'clear', 'recentes', 'mru', 'palette'], 'sistema', 'trash',
     ctx => { clearRecent(); ctx.toast('Recentes limpos') }, { destructive: true }),
-  apiCommand('sistema.snapshot-agora', 'Snapshot global', 'Snapshot de todos os mundos? — só do ativo', ['snapshot', 'global', 'instantaneo'], 'sistema', 'archive',
-    ctx => { /* delega para kanban.snapshot */ runCommand('kanban.snapshot', ctx as any).catch(() => {}) }),
   apiCommand('sistema.importar-bundle', 'Importar bundle…', 'Importa um bundle JSON no mundo ativo', ['importar', 'bundle', 'json'], 'sistema', 'doc',
     ctx => { (window as any).__atlasImportBundle?.() }, { when: c => c.slug !== null, destructive: true }),
+  navCommand('nav.calendario', 'Calendario', '/c/calendar', 'Calendario cross-mundo', ['calendario', 'agenda', 'eventos', 'calendar'], 'cal'),
+  navCommand('nav.chat', 'Chat cross-mundo', '/c', 'Main chat (cross-mundo)', ['chat', 'conversa', 'mensagem'], 'chat'),
+  apiCommand('sistema.tema', 'Alternar tema', 'Cicla entre os 3 shifts de luminosidade', ['tema', 'theme', 'luminosidade', 'shift', 'dia', 'noite'], 'sistema', 'sun',
+    ctx => { (window as any).__atlasToggleTheme?.(); ctx.toast('Tema alterado') }),
+  apiCommand('sistema.fuso', 'Mudar fuso horario', 'Abre o seletor de fuso no relogio da sidebar', ['fuso', 'timezone', 'tz', 'relogio'], 'sistema', 'clock',
+    ctx => { (window as any).__atlasOpenTz?.() }),
 ]
 
 // -------- accessors --------

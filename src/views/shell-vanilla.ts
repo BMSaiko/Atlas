@@ -6,7 +6,6 @@ import { navigate } from '../router'
 // renderWorkspace imported only when !skipDispatch (now removed since React owns dispatch)
 import { openPalette } from '../ui/palette'
 import { parseTags, bindTagAutocomplete, openNewNoteModal } from './notes-vanilla'
-import { openNewCardModal } from './kanban-vanilla'
 import { renderDashboard } from './dashboard-vanilla'
 // ponytail: renderMainChat lazy-loaded (Epic A6 — code-split /c route; was eager, broke lighthouse perf 90 vs SP gate >=95)
 import { startClockWidget } from '../ui/clock'
@@ -20,9 +19,11 @@ const active = () => { try { return localStorage.getItem(ACTIVE_KEY) || '' } cat
 const setActive = (s: string) => { try { localStorage.setItem(ACTIVE_KEY, s) } catch {} }
 
 async function counts(slug: string) {
+  // ponytail: 2026-09-05 strip-kanban — "open" era kanban-cards ativos. Removido; counts agora
+  // sao apenas notas (a sidebar mostra notas arquivadas/ativas via counts.ts).
   try {
-    const [notes, board] = await Promise.all([api.notes.get(slug), api.kanban.get(slug)])
-    return { notes: notes.items.length, open: board.cards.filter(c => !c.archived && c.colId !== 'done').length }
+    const notes = await api.notes.get(slug)
+    return { notes: notes.items.length, open: 0 }
   } catch { return { notes: 0, open: 0 } }
 }
 
@@ -204,23 +205,11 @@ function bindKeydown() {
   })
 }
 
-// ponytail: quickAdd (palette ctrl+K) DELEGA nos modais completos de criar (openNewCardModal /
-// openNewNoteModal) em vez do mini-form proprio — fonte unica do "novo cartão/nota". Range type fica a escolher.
+// ponytail: quickAdd (palette ctrl+K) DELEGA no modal completo de criar nota — fonte unica.
+// Kanban removido em 2026-09-05; o type picker (cartão vs nota) deixa de existir.
 export function quickAdd(slug: string | null) {
   if (!slug) return
-  const m = openModal({
-    title: 'Criar cartão ou nota', submitText: 'Seguinte',
-    body: () => `<div class="field"><label for="qa-type">Tipo</label>
-      <select id="qa-type" name="type">
-        <option value="card">Cartão</option>
-        <option value="note">Nota</option>
-      </select></div>`,
-    onSubmit: () => {
-      const type = (m.root.querySelector('[name=type]') as HTMLSelectElement).value
-      if (type === 'note') openNewNoteModal(slug)
-      else openNewCardModal(slug)
-    },
-  })
+  openNewNoteModal(slug)
 }
 
 function renderEmpty(panel: HTMLElement, items: Array<any>, root: HTMLElement) {

@@ -3,7 +3,7 @@
 // no new deps. CalendarEvent type + api.events.* live in src/api.ts (single source of truth).
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, CalendarEvent, Card } from '../api'
+import { api, type CalendarEvent } from '../api'
 import { Icon } from '../ui/icon'
 import { openModal, readForm } from '../ui/modal'
 import { confirmDialog } from '../ui/confirm'
@@ -54,19 +54,12 @@ export default function Calendar() {
     let cancel = false
     ;(async () => {
       try {
-        const [ev, board] = await Promise.all([
-          api.events.get(slug).catch(() => ({ events: [] })),
-          api.kanban.get(slug).catch(() => null),
-        ])
+        // ponytail: kanban removido em 2026-09-05 — deadlines derivavam de board.cards.
+        // Calendar agora mostra apenas os events.json (calendar events do utilizador).
+        const ev = await api.events.get(slug).catch(() => ({ events: [] }))
         if (cancel) return
         setEvents(ev.events || [])
-        if (board) {
-          setDeadlines(
-            (board.cards || [])
-              .filter((c: Card) => c.due && !c.archived && c.colId !== 'done')
-              .map((c: Card) => ({ date: ymd(new Date(c.due!)), cardId: c.id, title: c.title, priority: c.priority }))
-          )
-        }
+        setDeadlines([])
       } catch { /* keep prior state on transient error */ }
     })()
     return () => { cancel = true }
@@ -203,15 +196,6 @@ export default function Calendar() {
                      onClick={(ev) => { ev.stopPropagation(); openEdit(e) }}
                      onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openEdit(e) } }}>
                   {e.title}
-                </div>
-              ))}
-              {items.deadlines.map(dl => (
-                <div key={dl.cardId} className="cal-deadline text-xs text-text-dim italic truncate"
-                     role="button" tabIndex={0}
-                     title={`${dl.priority}: ${dl.title}`}
-                     onClick={(e) => { e.stopPropagation(); nav('/w/' + slug + '?tab=kanban&card=' + dl.cardId) }}
-                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); nav('/w/' + slug + '?tab=kanban&card=' + dl.cardId) } }}>
-                  📌 {dl.title}
                 </div>
               ))}
             </div>

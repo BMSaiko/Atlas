@@ -1,6 +1,6 @@
 // test/token-fence.test.mjs
 //
-// Cobre o fence anti-corrida (card iykn11lg): PUT /api/w/:slug/(notes|kanban|bundle)
+// Cobre o fence anti-corrida (card iykn11lg): PUT /api/w/:slug/(notes|bundle|events) — kanban removido do fence
 // exige X-Atlas-Token == cfg.wtoken OU remoteAddress loopback. Sem ambos -> 401.
 //
 // Estilo: vanilla node:assert (igual aos outros 8 testes). Counter de failures,
@@ -102,7 +102,7 @@ console.log('\n[5] Token wrong: remote non-loopback + wrong token -> 401')
 console.log('\n[6] SOURCE EQUALITY — api.ts:700-704 (regex + loopback + 401)')
 {
   // regex /^\/api\/w\/[^/]+\/(notes|kanban|bundle)$/
-  ok(/\/\^\\\/api\\\/w\\\/\[\^\/\]\+\\\/\(notes\|kanban\|bundle\)\$\//.test(apiSrc), 'regex de match do fence presente (api.ts:700)')
+  ok(/\/\^\\\/api\\\/w\\\/\[\^\/\]\+\\\/\(notes\|bundle\|events\)\$\//.test(apiSrc), 'regex de match do fence presente (api.ts:700 — strip-kanban removeu kanban do fence)')
   // remote === '127.0.0.1' || '::1' || '::ffff:127.0.0.1'
   ok(apiSrc.includes("remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1'"), 'loopback set check (api.ts:703)')
   // string exata do erro

@@ -2,14 +2,9 @@ export type Prioridade = 'urgent' | 'high' | 'medium' | 'low'
 export interface Nota { id: string;
   title: string; text: string; ts: number; archived?: boolean; tags?: string[] }
 
-// ponytail: phase e' derivado de colId client-side (MVP). Persistir em phase 3.
-export type MichiPhase = 'todo'|'grill'|'dr'|'dp'|'da'|'gates'|'review'|'reflect'|'done';
-
-
-// ponytail: phase on Card persisted; derived client-side via colIdToPhase (src/views/kanban.ts).
-export interface Card { id: string; colId: string; title: string; description: string; priority: Prioridade; due?: number; ts: number; archived: boolean; result?: string; dp?: string; reviewed?: boolean; startedAt?: number; recur?: 'daily' | 'weekly' | 'monthly'; occurrenceOf?: string; timerMs?: number; timerStartedAt?: number; skills?: string[]; crashRetry?: boolean; crashAt?: number; orphanWorktreePath?: string; phase?: MichiPhase; superPromptBody?: string; superPromptRef?: string }
-export interface Coluna { id: string; name: string }
-export interface Board { columns: Coluna[]; cards: Card[] }
+// ponytail: 2026-09-05 strip-kanban — Card/Coluna/Board/MichiPhase removidos (kanban removido).
+// Mantidos apenas os tipos de bundle (WorkdirBundle.kanban e' opcional, preservado para compat
+// de ficheiros antigos).
 // ponytail: write-token fence (card iykn11lg) — header global em TODOS os PUTs (j<T> é o unico helper
 // que toca fetch no cliente). Resolucao (ordem): URL ?token=... -> localStorage ->
 // server /api/wtoken em background (loopback-only, mesma fence que o PUT). Sem o endpoint /api/wtoken,
@@ -40,7 +35,6 @@ if (!_atlasToken) {
 }
 
 // optimistic concurrency: payloads com etag `ver` (escapam ao last-write-wins do PUT)
-export type BoardDoc = { ver: number; columns: Coluna[]; cards: Card[] }
 export type NotesDoc = { ver: number; items: Nota[] }
 export interface Template { id: string; name: string; kind: 'note' | 'card'; title?: string; body?: string; priority?: Prioridade; colId?: string; tags?: string[] }
 export interface Workdir { slug: string; name: string; description?: string; createdAt: number; icon?: string; repo?: string }
@@ -75,11 +69,11 @@ export const api = {
     get: (slug: string) => j<{ ver: number; items: Nota[] }>(`/api/w/${slug}/notes`),
     put: (slug: string, doc: { ver: number; items: Nota[] }) => j<{ ok: boolean; ver?: number }>(`/api/w/${slug}/notes`, 'PUT', doc),
   },
-  importRoadmap: (slug: string, path: string) => j<{ ok: boolean; addedCards: number; addedNotes: number; skipped: number; total: number }>(`/api/w/${slug}/import-roadmap`, 'POST', { path }),
+
   exportNotes: (slug: string) => j<{ ok: boolean; count: number }>(`/api/w/${slug}/export`, 'POST'),
   bundle: {
     get: (slug: string) => j<WorkdirBundle>(`/api/w/${slug}/bundle`),
-    put: (slug: string, doc: { meta: WorkdirMeta; notes: { ver: number; items: Nota[] }; kanban: { ver: number; columns: Coluna[]; cards: Card[] } }) => j<{ ok: boolean }>(`/api/w/${slug}/bundle`, 'PUT', doc),
+    put: (slug: string, doc: { meta: WorkdirMeta; notes: { ver: number; items: Nota[] }; kanban?: unknown }) => j<{ ok: boolean }>(`/api/w/${slug}/bundle`, 'PUT', doc),
   },
   // ponytail: snapshots — 4/dia, retenção 7d. UI chama list/run/restore. fileUrl é URL crua (a API serve application/json).
   snapshots: {
@@ -89,19 +83,8 @@ export const api = {
     fileUrl: (slug: string, slot: string, name: 'meta' | 'notes' | 'kanban') => `/api/w/${slug}/snapshots/${encodeURIComponent(slot)}/file/${name}`,
   },
   templates: { get: (slug: string) => j<Template[]>(`/api/w/${slug}/templates`) },
-  kanban: {
-    get: (slug: string) => j<{ ver: number; columns: Coluna[]; cards: Card[] }>(`/api/w/${slug}/kanban`),
-    put: (slug: string, doc: { ver: number; columns: Coluna[]; cards: Card[] }) => j<{ ok: boolean; ver?: number }>(`/api/w/${slug}/kanban`, 'PUT', doc),
-    // ponytail: card super-prompt-loop — persist SP body+ref + bump ver (optimistic concurrency).
-    sp: (slug: string, body: { cardId: string; body: string; ref: string; ver?: number }) => j<{ ok: boolean; ver?: number }>(`/api/w/${slug}/kanban/sp`, 'POST', body),
-    // refine re-spawn no mesmo wt (kill PID anterior + launchHermes). colId fica em review.
-    refine: (slug: string, body: { cardId: string; body: string; ref: string; ver?: number }) => j<{ ok: boolean; ver?: number }>(`/api/w/${slug}/kanban/refine`, 'POST', body),
-  },
-  // ponytail: live PID lookup p/ o chip 'agent: running (pid NNNN)'. Server le
-  // <wtRoot>/runs/<slug>/<cardId>.pid e devolve o PID + mtime (poll 5s no cliente, sem SSE).
-  runs: {
-    pid: (slug: string, cardId: string) => j<{ pid: number | null; mtime: number } | null>(`/api/w/${slug}/runs/${encodeURIComponent(cardId)}/pid`),
-  },
+
+
   // ponytail: SP atlas-calendar-2026-09-05 — calendar events. Flat array, no `ver` (no OT).
   // Mirror of notes/kanban shape (get/put) so the call-site reads identically.
   events: {
@@ -111,23 +94,6 @@ export const api = {
   logs: {
     get: (slug: string) => j<{ ver: number; items: LogEntry[] }>(`/api/w/${slug}/logs`),
     put: (slug: string, doc: { items: LogEntry[] }) => j<{ ok: boolean; cleared?: boolean; count?: number }>(`/api/w/${slug}/logs`, 'PUT', doc),
-  },
-  orchestrator: {
-    start: (slug?: string) => j<{ ok: boolean; moved: number }>(slug ? `/api/orchestrator/start/${encodeURIComponent(slug)}` : '/api/orchestrator/start', 'POST'),
-  },
-
-  review: {
-    approve: (slug: string, cardId: string) => j<{ ok: boolean; merge?: string }>(`/api/w/${slug}/review/approve`, 'POST', { cardId }),
-    approveAgent: (slug: string, cardId: string) => j<{ ok: boolean; mode: 'agent'; logPath: string }>(`/api/w/${slug}/review/approve-agent`, 'POST', { cardId }),
-    reject: (slug: string, cardId: string, p: { note?: string; title?: string; description?: string; priority?: Prioridade }) => j<{ ok: boolean }>(`/api/w/${slug}/review/reject`, 'POST', { cardId, ...p }),
-  },
-  run: {
-    // stream incremental do log do run headless (terminal a trabalhar / debugging)
-    output: (slug: string, cardId: string, offset = 0) => j<{ ok: boolean; started: boolean; done: boolean; code: number | null; chunk: string; offset: number; size: number }>(`/api/w/${slug}/output/${cardId}?offset=${offset}`),
-    // ponytail: cards em 'doing' com worker crashado (wrapper morreu / hermes travou). 1 GET, server faz a heuristica.
-    orphans: (slug: string) => j<{ orphans: OrphanRun[] }>(`/api/w/${slug}/orphans`),
-    // ponytail: card h1y3yfsy — limpa manualmente a worktree orfa' (POST). 404 se nao ha orphanWorktreePath.
-    clearOrphan: (slug: string, cardId: string) => j<{ ok: boolean; cleared?: string }>(`/api/w/${slug}/cards/${cardId}/clear-orphan`, 'POST'),
   },
   chat: {
     history: () => j<{ conversation: any; messages: ChatMsg[]; conversations: any[]; current: string }>('/api/chat/history'),
@@ -179,28 +145,12 @@ export interface WorkdirBundle {
   slug: string
   meta: WorkdirMeta
   notes: { ver: number; items: Nota[] }
-  kanban: { ver: number; columns: Coluna[]; cards: Card[] }
+  kanban?: unknown  // ponytail: shape preservado para bundles antigos. Card/Coluna removidos; opaque agora.
   ts: number
 }
 export const uid = () => Math.random().toString(36).slice(2, 10)
 
-export type OrphanRun = {
-  cardId: string
-  title: string
-  priority: string
-  startedAt: number
-  logSize: number
-  logMtime: number | null
-  stMtime: number | null
-  cardAgeMs: number
-  // ponytail: card h1y3yfsy crash diagnostics — tail do .log (5 linhas/500ch), heartbeat do .status,
-  // worktree orfa' (path) e classificacao do failure mode. A UI usa isto para o card.result e o
-  // badge de retry sem precisar de abrir o terminal pane.
-  logTail?: string
-  lastHeartbeatAt?: number | null
-  orphanWorktreePath?: string | null
-  classification?: 'CRASH_WRAPPER_DIED' | 'CRASH_HERMES_STUCK' | 'CRASH_TRANSIENT' | 'CRASH_MERGE_FAILED'
-  statusState?: string
-}
+// ponytail: OrphanRun removido em 2026-09-05 — kanban removido.
+
 
 

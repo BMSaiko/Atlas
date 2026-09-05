@@ -35,7 +35,7 @@ if (typeof globalThis.localStorage === 'undefined') {
 const { REGISTRY, getById, runCommand, recordUse, getRecent, clearRecent, useCommandsWith, getShortcutOverlay } =
   await import('../src/lib/commands.ts')
 
-const ALLOWED_GROUPS = new Set(['mundo', 'notas', 'kanban', 'global', 'navegacao', 'sistema'])
+const ALLOWED_GROUPS = new Set(['mundo', 'notas', 'global', 'navegacao', 'sistema'])
 
 test('registry has >= 40 commands', () => {
   assert.ok(REGISTRY.length >= 40, `REGISTRY has ${REGISTRY.length} commands (SP §4 requires >= 40)`)
@@ -79,10 +79,10 @@ test('useCommands filters by when? predicate', () => {
   const withSlug = useCommandsWith(ctxWithSlug)
 
   // Commands gated on slug should NOT appear in noSlug list.
-  const onlySlug = noSlug.find(c => c.id === 'mundo.merge-to-main')
+  const onlySlug = noSlug.find(c => c.id === 'mundo.terminais-wezterm')
   assert.equal(onlySlug, undefined, 'mundo.merge-to-main should be filtered when slug is null')
 
-  const visible = withSlug.find(c => c.id === 'mundo.merge-to-main')
+  const visible = withSlug.find(c => c.id === 'mundo.terminais-wezterm')
   assert.ok(visible, 'mundo.merge-to-main should be visible when slug is set')
 })
 

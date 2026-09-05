@@ -1,4 +1,4 @@
-import { api, BoardDoc } from '../api'
+import { api } from '../api'
 import { icon } from '../ui/icons'
 import { toast } from '../ui/toast'
 import { confirmDialog } from '../ui/confirm'
@@ -9,9 +9,6 @@ import { notifState, requestNotifs } from '../ui/notifs'
 export async function renderSettings(root: HTMLElement, slug: string) {
   const th = getTheme()
   let meta = await api.meta(slug).catch(() => null)
-  let board: BoardDoc = await api.kanban.get(slug).catch(() => ({ ver: 0, columns: [], cards: [] }))
-  const adopt = (d: { ver?: number } | undefined) => { if (d && typeof d.ver === 'number') board.ver = d.ver }
-  const saveBoard = async () => { adopt(await api.kanban.put(slug, board)) }
 
   root.innerHTML = `
     <div class="settings">
@@ -47,16 +44,6 @@ export async function renderSettings(root: HTMLElement, slug: string) {
           </select></div>
       </div>
       <div class="card-block">
-        <h3>Colunas do kanban</h3>
-        <div class="col-list" id="collist">
-          ${board.columns.map(c => colRow(c.id, c.name)).join('')}
-        </div>
-        <div class="actions-row" style="margin-top:12px">
-          <button class="btn btn-ghost" id="col-add" data-cmd="kanban.col-adicionar">${icon('plus', 16)} Adicionar coluna</button>
-          <button class="btn btn-primary" id="col-save" data-cmd="kanban.col-guardar">Guardar colunas</button>
-        </div>
-      </div>
-      <div class="card-block">
         <h3>Notificações</h3>
         <p class="muted" style="margin-bottom:12px">Notificações do navegador avisam quando um cartão entra em revisão e no fim do pomodoro.</p>
         <button class="btn" id="notif-btn" type="button" data-cmd="ui.notifs-toggle"></button>
@@ -65,55 +52,29 @@ export async function renderSettings(root: HTMLElement, slug: string) {
         <h3>Snapshots</h3>
         <p class="muted" style="margin-bottom:12px">Snapshots automáticos do workdir (4 por dia, 7 dias de retenção, dedup por hash). Botão "Restaurar" cria antes um pre-restore — seguro contra undo do undo.</p>
         <div class="actions-row" style="margin-bottom:12px">
-          <button class="btn btn-primary" id="snap-run" type="button" data-cmd="kanban.snapshot">${icon('archive', 16)} Snapshot agora</button>
+          <button class="btn btn-primary" id="snap-run" type="button">${icon('archive', 16)} Snapshot agora</button>
         </div>
         <div id="snap-list"></div>
       </div>
       <div class="card-block">
         <h3>Backup (bundle)</h3>
-        <p class="muted" style="margin-bottom:12px">Descarregar ou carregar o workdir inteiro (meta + notas + kanban) como um único ficheiro JSON. Útil para portabilidade entre instalações e para um snapshot fora do git.</p>
+        <p class="muted" style="margin-bottom:12px">Descarregar ou carregar o workdir inteiro (meta + notas + kanban-arquivo) como um único ficheiro JSON. O campo kanban e' preservado para compatibilidade (ficheiros antigos abrem) mas a UI ja' nao o mostra. Útil para portabilidade entre instalações e para um snapshot fora do git.</p>
         <div class="actions-row">
-          <button class="btn" id="bk-export" type="button" data-cmd="kanban.export-bundle">Exportar bundle (.json)</button>
-          <button class="btn btn-ghost" id="bk-import-btn" type="button" data-cmd="kanban.import-bundle-btn">Importar bundle…</button>
+          <button class="btn" id="bk-export" type="button" >Exportar bundle (.json)</button>
+          <button class="btn btn-ghost" id="bk-import-btn" type="button" >Importar bundle…</button>
           <input type="file" id="bk-import" accept="application/json,.json" hidden>
         </div>
       </div>
       <div class="card-block danger-zone">
         <h3>Zona perigosa</h3>
         <p class="muted" style="margin-bottom:12px">Eliminar este workdir apaga todas as notas e cartões. Irreversível.</p>
-        <button class="btn btn-danger" id="wd-del" data-cmd="ui.col-del">${icon('trash', 16)} Eliminar workdir</button>
+        <button class="btn btn-danger" id="wd-del" data-cmd="mundo.eliminar-workdir">${icon('trash', 16)} Eliminar workdir</button>
       </div>
     </div>`
 
-  const list = root.querySelector('#collist') as HTMLElement
-  const renderList = () => { list.innerHTML = board.columns.map(c => colRow(c.id, c.name)).join('') }
-
-  // delegated events on the list
-  list.addEventListener('click', e => {
-    const btn = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null
-    if (!btn || btn.dataset.act !== 'col-del') return
-    const id = (btn.closest('.col-row') as HTMLElement).dataset.col!
-    const colName = board.columns.find(x => x.id === id)?.name || ''
-    if (board.columns.length <= 1) { toast('Precisa de pelo menos uma coluna'); return }
-    confirmDialog({ title: 'Eliminar coluna', message: `Apagar a coluna "${colName}"?` }).then(ok => { if (!ok) return
-    const moving = board.cards.filter(c => c.colId === id).length
-    if (moving) board.cards.forEach(c => { if (c.colId === id) c.colId = board.columns[0].id })
-    board.columns = board.columns.filter(x => x.id !== id)
-    renderList(); toast(`${moving ? moving + ' cartões movidos. ' : ''}Coluna removida — guarda para persistir.`)
-    })
-  })
-  list.addEventListener('input', e => {
-    const inp = e.target as HTMLInputElement
-    if (!inp.classList.contains('col-name')) return
-    const col = board.columns.find(x => x.id === (inp.closest('.col-row') as HTMLElement).dataset.col!)
-    if (col) col.name = inp.value
-  })
-
-  root.querySelector('#col-add')!.addEventListener('click', () => {
-    board.columns.push({ id: 'c' + Math.random().toString(36).slice(2, 7), name: 'Nova coluna' })
-    renderList(); toast('Coluna adicionada — guarda para persistir')
-  })
-  root.querySelector('#col-save')!.addEventListener('click', async () => { await saveBoard(); toast('Colunas guardadas') })
+  // ponytail: 2026-09-05 strip-kanban — gestao de colunas do kanban removida (board, list,
+  // col-add, col-save, col-del, renderList, saveBoard). A secao "Colunas do kanban" ja' nao
+  // e' renderizada no template (acima).
 
   // --- Tema: modo auto/manual (a escolha do tema fica no indicador da sidebar) ---
   root.querySelector('#th-mode')!.addEventListener('change', e => {
@@ -192,8 +153,8 @@ export async function renderSettings(root: HTMLElement, slug: string) {
       bundle = JSON.parse(text)
     } catch { toast('Ficheiro JSON invalido'); (e.target as HTMLInputElement).value = ''; return }
     // ponytail: valida shape minimo — recusar bundle malformado NAO sobrescreve estado.
-    if (!bundle || typeof bundle !== 'object' || !bundle.meta || !bundle.notes || !bundle.kanban) {
-      toast('Bundle invalido: requer meta+notes+kanban'); (e.target as HTMLInputElement).value = ''; return
+    if (!bundle || typeof bundle !== 'object' || !bundle.meta || !bundle.notes) {
+      toast('Bundle invalido: requer meta+notes (kanban opcional, preservado para compat)'); (e.target as HTMLInputElement).value = ''; return
     }
     const ok = await confirmDialog({
       title: 'Importar bundle',
@@ -201,17 +162,13 @@ export async function renderSettings(root: HTMLElement, slug: string) {
     })
     if (!ok) { (e.target as HTMLInputElement).value = ''; return }
     try {
-      await api.bundle.put(slug, { meta: bundle.meta, notes: bundle.notes, kanban: bundle.kanban })
+      // ponytail: bundle preserva campo kanban (ficheiros antigos continuam a importar). UI nao o mostra.
+      await api.bundle.put(slug, { meta: bundle.meta, notes: bundle.notes, kanban: bundle.kanban ?? { ver: 0, columns: [], cards: [] } })
       toast('Bundle importado')
       navigate('/w/' + slug + '/settings')
     } catch (err: any) { toast('Erro a importar: ' + err.message) }
     finally { (e.target as HTMLInputElement).value = '' }
   })
 }
-function colRow(id: string, name: string) {
-  return `<div class="col-row" data-col="${id}">
-    <input class="col-name" value="${esc(name)}" aria-label="Nome da coluna">
-    <button class="btn-icon btn-ghost" data-act="col-del" aria-label="Eliminar coluna" data-cmd="mundo.eliminar-workdir">${icon('trash', 16)}</button>
-  </div>`
-}
+
 function esc(s: unknown) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
