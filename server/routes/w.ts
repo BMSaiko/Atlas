@@ -738,6 +738,20 @@ export const ROUTES: Route[] = [
           for (const t of Array.isArray(wdRaw) ? wdRaw : []) if (t && t.id) byId.set(t.id, t)
           send(200, [...byId.values()]); return
         }
+        // ponytail: SP atlas-calendar-2026-09-05 — calendar events handler. Flat array, no `ver`,
+        // no OT/wipe (events.json is user-private calendar data; lossy on PUT is fine — it's a
+        // "save whole state" model). PUT body shape: {events: CalendarEvent[]}.
+        if (kind === 'events') {
+          const file = join(DATA, slug, 'events.json')
+          if (!inside(DATA, file)) { send(400,{error:'bad path'}); return }
+          if (m === 'GET') { send(200, (await readJ(file)) ?? { events: [] }); return }
+          if (m === 'PUT') {
+            const b = await deps.readJsonBody(req)
+            if (!b || typeof b !== 'object' || !Array.isArray(b.events)) { send(400, { error: 'invalid body: expected {events: [...]}' }); return }
+            await writeJ(file, { events: b.events }); send(200, { ok: true }); return
+          }
+          send(405, { error: 'method not allowed' }); return
+        }
         if (!['notes','kanban','meta'].includes(kind)) { send(400,{error:'bad request'}); return }
           const file = join(DATA, slug, `${kind}.json`)
           if (!inside(DATA, file)) { send(400,{error:'bad path'}); return }

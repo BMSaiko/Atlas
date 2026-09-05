@@ -37,7 +37,7 @@ export function bindTagAutocomplete(inp: HTMLInputElement, existing: string[]) {
     items = tok ? existing.filter(t => t.startsWith(tok) && t !== tok).sort() : []
     close()
     if (!items.length) return
-    box.innerHTML = items.map((t, i) => `<button type="button" class="tag-sugg-item${i === idx ? ' on' : ''}" data-i="${i}" role="option">${esc(t)}</button>`).join('')
+    box.innerHTML = items.map((t, i) => `<button type="button" class="tag-sugg-item${i === idx ? ' on' : ''}" data-i="${i}" role="option" data-cmd="ui.tag-suggestion">${esc(t)}</button>`).join('')
     box.classList.add('open')
     if (scroll) box.querySelector<HTMLElement>('.on')?.scrollIntoView({ block: 'nearest' })
     position()
@@ -108,8 +108,8 @@ export async function openNewNoteModal(slug: string) {
     body: () => `<div class="field"><label for="nt-template">Template</label><select name="template" id="nt-template"><option value="">Novo a partir de template…</option></select></div>
       <div class="field"><label for="nt-title">Título</label><input id="nt-title" name="title" required></div>
       <div class="md-tabs">
-        <button type="button" class="md-tab on" data-tab="edit">Editar</button>
-        <button type="button" class="md-tab" data-tab="preview">Pré-visualização</button>
+        <button type="button" class="md-tab on" data-tab="edit" data-cmd="ui.tab-editar">Editar</button>
+        <button type="button" class="md-tab" data-tab="preview" data-cmd="ui.tab-preview">Pré-visualização</button>
       </div>
       <div class="field md-pane md-pane-edit"><label for="nt-text">Texto</label><textarea id="nt-text" name="text"></textarea></div>
       <div class="field md-pane md-pane-preview" style="display:none"><label>Pré-visualização</label><div class="md-preview"></div></div>
@@ -215,11 +215,11 @@ export async function renderNotes(root: HTMLElement, slug: string) {
   root.innerHTML = `
     <div class="notes-toolbar">
       <input class="notes-search" id="nsearch" placeholder="Buscar notas ou tags…" aria-label="Buscar notas">
-      <button class="btn btn-ghost" id="narch" aria-pressed="${showArch}" title="${showArch ? 'Ver ativas' : 'Ver arquivadas'}">${icon('archive', 16)} <span>Arquivadas</span><span class="side-count" id="narchcount">${archCount()}</span></button>
-      <button class="btn btn-primary kbdhint" id="nadd" aria-describedby="nadd-tip">${icon('plus', 16)} Nova nota<span class="kbdhint-tip" id="nadd-tip" role="tooltip"><kbd>Ctrl</kbd>+<kbd>K</kbd></span></button>
-      <button class="btn btn-ghost" id="nexport" title="Exportar notas para markdown na vault (docs/notas.md)" aria-label="Exportar notas para markdown">${icon('doc', 16)} <span>Exportar</span></button>
-      <button class="btn btn-ghost" id="nsel" title="Selecionar várias notas para operações em bulk" style="${selMode?'color:var(--gold)':''}">${icon('check', 16)} ${selMode ? 'Concluir' : 'Bulk'}</button>
-      <button class="btn btn-ghost" id="nbrain" title="Brainstorm + SWOT do projeto (headless — cria notas novas)" aria-label="Brainstorm + SWOT do projeto">${icon('aura', 16)} Brainstorm</button>
+      <button class="btn btn-ghost" id="narch" aria-pressed="${showArch}" title="${showArch ? 'Ver ativas' : 'Ver arquivadas'}" data-cmd="notas.toggle-archived">${icon('archive', 16)} <span>Arquivadas</span><span class="side-count" id="narchcount">${archCount()}</span></button>
+      <button class="btn btn-primary kbdhint" id="nadd" aria-describedby="nadd-tip" data-cmd="notas.nova">${icon('plus', 16)} Nova nota<span class="kbdhint-tip" id="nadd-tip" role="tooltip"><kbd>Ctrl</kbd>+<kbd>K</kbd></span></button>
+      <button class="btn btn-ghost" id="nexport" title="Exportar notas para markdown na vault (docs/notas.md)" aria-label="Exportar notas para markdown" data-cmd="notas.export">${icon('doc', 16)} <span>Exportar</span></button>
+      <button class="btn btn-ghost" id="nsel" title="Selecionar várias notas para operações em bulk" style="${selMode?'color:var(--gold)':''}" data-cmd="notas.bulk">${icon('check', 16)} ${selMode ? 'Concluir' : 'Bulk'}</button>
+      <button class="btn btn-ghost" id="nbrain" title="Brainstorm + SWOT do projeto (headless — cria notas novas)" aria-label="Brainstorm + SWOT do projeto" data-cmd="notas.brainstorm">${icon('aura', 16)} Brainstorm</button>
     </div>
     <div class="notes-tagbar" id="ntagbar"></div>
     ${selMode ? bulkBarNotes() : ''}
@@ -230,7 +230,7 @@ export async function renderNotes(root: HTMLElement, slug: string) {
     const all = Array.from(new Set(notes.flatMap(n => n.tags || []))).sort()
     const bar = root.querySelector('#ntagbar') as HTMLElement
     bar.innerHTML = all.length ? all.map(t =>
-      `<button class="tag-chip${t === tagFilter ? ' on' : ''}" data-tag="${esc(t)}" aria-pressed="${t === tagFilter}">${icon('tag', 12)} ${esc(t)}</button>`
+      `<button class="tag-chip${t === tagFilter ? ' on' : ''}" data-tag="${esc(t)}" aria-pressed="${t === tagFilter}" data-cmd="ui.tag-filter">${icon('tag', 12)} ${esc(t)}</button>`
     ).join('') : ''
     bar.classList.toggle('active', all.length > 0)
   }
@@ -254,14 +254,14 @@ export async function renderNotes(root: HTMLElement, slug: string) {
         ${selMode ? `<input type="checkbox" class="nselbox" data-sel="${n.id}" ${sel.has(n.id) ? 'checked' : ''} aria-label="Selecionar ${esc(n.title)}">` : ''}
         <h4>${esc(n.title)}</h4>
         <div class="note-text">${renderMd(n.text)}</div>
-        ${(n.tags && n.tags.length) ? `<div class="note-tags">${n.tags.map(t => `<button class="tag-chip" data-tag="${esc(t)}" aria-label="Filtrar por ${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}
+        ${(n.tags && n.tags.length) ? `<div class="note-tags">${n.tags.map(t => `<button class="tag-chip" data-tag="${esc(t)}" aria-label="Filtrar por ${esc(t)}" data-cmd="ui.tag-add">${esc(t)}</button>`).join('')}</div>` : ''}
         <div class="note-date">${showArch ? unhide('Arquivada') : ''}${fmt(n.ts)}</div>
         <div class="note-actions">
-          ${(n.tags||[]).some(t => t === 'grilled') ? `<button class="btn-icon btn-ghost" data-act="reply-grill" title="Abrir card e continuar grilling" aria-label="Continuar grilling">${icon('pencil', 16)}</button>` : ''}
-          <button class="btn-icon btn-ghost" data-act="tocanban" title="Converter para cartão" aria-label="Converter para cartão">${icon('board', 16)}</button>
-          <button class="btn-icon btn-ghost" data-act="edit" aria-label="Editar">${icon('pencil', 16)}</button>
-          <button class="btn-icon btn-ghost" data-act="${n.archived ? 'unarch' : 'arch'}" title="${n.archived ? 'Restaurar' : 'Arquivar'}" aria-label="${n.archived ? 'Restaurar' : 'Arquivar'}">${icon('archive', 16)}</button>
-          <button class="btn-icon btn-ghost" data-act="del" aria-label="Eliminar">${icon('trash', 16)}</button>
+          ${(n.tags||[]).some(t => t === 'grilled') ? `<button class="btn-icon btn-ghost" data-act="reply-grill" title="Abrir card e continuar grilling" aria-label="Continuar grilling" data-cmd="notas.reply-grill">${icon('pencil', 16)}</button>` : ''}
+          <button class="btn-icon btn-ghost" data-act="tocanban" title="Converter para cartão" aria-label="Converter para cartão" data-cmd="notas.para-cartao">${icon('board', 16)}</button>
+          <button class="btn-icon btn-ghost" data-act="edit" aria-label="Editar" data-cmd="notas.editar">${icon('pencil', 16)}</button>
+          <button class="btn-icon btn-ghost" data-act="${n.archived ? 'unarch' : 'arch'}" title="${n.archived ? 'Restaurar' : 'Arquivar'}" aria-label="${n.archived ? 'Restaurar' : 'Arquivar'}" data-cmd="notas.arquivar">${icon('archive', 16)}</button>
+          <button class="btn-icon btn-ghost" data-act="del" aria-label="Eliminar" data-cmd="notas.eliminar">${icon('trash', 16)}</button>
         </div>
       </article>`).join('')
     const nbar = document.getElementById('nbulkbar')
@@ -419,8 +419,8 @@ export async function renderNotes(root: HTMLElement, slug: string) {
       title: n ? 'Editar nota' : 'Nova nota', submitText: n ? 'Guardar' : 'Criar',
       body: () => `${tplField}<div class="field"><label for="nt-title">Título</label><input id="nt-title" name="title" required value="${esc(n?.title || '')}"></div>
                    <div class="md-tabs">
-                     <button type="button" class="md-tab on" data-tab="edit">Editar</button>
-                     <button type="button" class="md-tab" data-tab="preview">Pré-visualização</button>
+                     <button type="button" class="md-tab on" data-tab="edit" data-cmd="ui.tab-editar-2">Editar</button>
+                     <button type="button" class="md-tab" data-tab="preview" data-cmd="ui.tab-preview-2">Pré-visualização</button>
                    </div>
                    <div class="field md-pane md-pane-edit"><label for="nt-text">Texto</label><textarea id="nt-text" name="text">${esc(n?.text || '')}</textarea></div>
                    <div class="field md-pane md-pane-preview" style="display:none"><label>Pré-visualização</label><div class="md-preview"></div></div>
@@ -460,10 +460,10 @@ export async function renderNotes(root: HTMLElement, slug: string) {
     const i = showArch ? 'back' : 'archive'
     return `<div class="bulkbar" id="nbulkbar">
         <span class="muted" style="font-size:.85rem"><span id="nbulkcount">${sel.size}</span> selecionadas</span>
-        <button class="btn btn-ghost" id="nbulk-arch" ${sel.size===0?'disabled':''}>${icon(i,15)} ${label}</button>
-        <button class="btn btn-ghost" id="nbulk-card" ${sel.size===0?'disabled':''}>${icon('board',15)} Para cartão</button>
-        <button class="btn btn-danger" id="nbulk-del" ${sel.size===0?'disabled':''}>${icon('trash',15)} Eliminar</button>
-        <button class="btn btn-ghost" id="nbulk-clear" ${sel.size===0?'disabled':''}>Limpar</button>
+        <button class="btn btn-ghost" id="nbulk-arch" ${sel.size===0?'disabled':''} data-cmd="notas.bulk-arquivar">${icon(i,15)} ${label}</button>
+        <button class="btn btn-ghost" id="nbulk-card" ${sel.size===0?'disabled':''} data-cmd="notas.bulk-para-cartao">${icon('board',15)} Para cartão</button>
+        <button class="btn btn-danger" id="nbulk-del" ${sel.size===0?'disabled':''} data-cmd="notas.bulk-eliminar">${icon('trash',15)} Eliminar</button>
+        <button class="btn btn-ghost" id="nbulk-clear" ${sel.size===0?'disabled':''} data-cmd="notas.bulk-limpar">Limpar</button>
       </div>`
   }
   function refreshBulkNotes() {

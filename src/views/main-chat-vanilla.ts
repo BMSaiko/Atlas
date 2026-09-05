@@ -25,7 +25,7 @@ export async function renderMainChat(panel: HTMLElement) {
       <aside class="chat-sidebar" aria-label="Conversas">
         <div class="chat-side-head">
           <span>${icon('chat', 14)} Conversas</span>
-          <button class="btn btn-ghost btn-sm" id="chat-new" title="Nova conversa">${icon('plus', 14)}</button>
+          <button class="btn btn-ghost btn-sm" id="chat-new" title="Nova conversa" data-cmd="chat.nova-conversa">${icon('plus', 14)}</button>
         </div>
         <ol class="chat-conv-list" id="chat-conv-list" aria-label="Lista de conversas"></ol>
       </aside>
@@ -37,14 +37,14 @@ export async function renderMainChat(panel: HTMLElement) {
             <p class="chat-sub">Refere o mundo: <code>em atlas, …</code></p>
           </div>
           <div class="chat-actions">
-            <button class="btn btn-ghost btn-sm" id="chat-clear" title="Limpar mensagens desta conversa">${icon('trash', 14)} Limpar</button>
+            <button class="btn btn-ghost btn-sm" id="chat-clear" title="Limpar mensagens desta conversa" data-cmd="chat.limpar">${icon('trash', 14)} Limpar</button>
           </div>
         </header>
         <ol class="chat-thread" id="chat-thread" aria-live="polite"></ol>
         <div class="chat-typing" id="chat-typing" aria-live="polite" hidden><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="chat-typing-label">a responder…</span></div>
         <form class="chat-composer" id="chat-composer" autocomplete="off">
           <textarea id="chat-input" rows="2" placeholder='Ex: "em atlas, lista as 3 últimas notas"' aria-label="Mensagem para o agente"></textarea>
-          <button class="btn btn-primary" id="chat-send" type="submit">${icon('play', 14)} Enviar</button>
+          <button class="btn btn-primary" id="chat-send" type="submit" data-cmd="chat.enviar">${icon('play', 14)} Enviar</button>
         </form>
       </section>
     </div>`
@@ -220,7 +220,7 @@ function paintSidebar(panel: HTMLElement, conversations: Conv[], currentId: stri
     return `<li class="chat-conv ${c.id === currentId ? 'active' : ''}" data-cid="${c.id}">
       <div class="conv-title">${esc(c.title || 'conversa')}</div>
       <div class="conv-meta">${c.msgCount} msg · ${date}</div>
-      <button class="conv-del" title="Apagar" aria-label="Apagar conversa">${icon('trash', 12)}</button>
+      <button class="conv-del" title="Apagar" aria-label="Apagar conversa" data-cmd="chat.apagar-conversa">${icon('trash', 12)}</button>
     </li>`
   }).join('')
 }

@@ -4,8 +4,9 @@ import Dashboard from './views/dashboard'
 import Workspace from './views/workspace'
 import Settings from './views/settings'
 import MainChat from './views/main-chat'
+import Calendar from './views/calendar'
 
-// ponytail: SP §5 — frozen URL contract. Routes: /, /w/:slug, /w/:slug/settings, /c
+// ponytail: SP §5 + atlas-calendar-2026-09-05 — frozen URL contract. Routes: /, /w/:slug, /w/:slug/settings, /c, /c/calendar
 const router = createBrowserRouter([
   {
     path: '/',
@@ -15,6 +16,8 @@ const router = createBrowserRouter([
       { path: 'w/:slug', element: <Workspace /> },
       { path: 'w/:slug/settings', element: <Settings /> },
       { path: 'c', element: <MainChat /> },
+      // ponytail: SP atlas-calendar-2026-09-05 — month grid, deadline chips from kanban.json
+      { path: 'c/calendar', element: <Calendar /> },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },

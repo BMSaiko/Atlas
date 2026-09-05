@@ -2,7 +2,7 @@ import {
   Circle, Play, MessageSquare, Plus, FileText, BookOpen, KanbanSquare, Settings, Pencil, Trash2,
   Archive, Search, ChevronRight, ChevronLeft, Menu, MoveHorizontal, Check, Filter, Sparkles,
   Sun, Sunset, Moon, Timer, Pause, RotateCcw, Leaf, Bell, Tag, BellOff, Terminal, Snowflake,
-  Sprout, Cloud, CloudFog, CloudRain, CloudLightning, Power, type LucideIcon,
+  Sprout, Cloud, CloudFog, CloudRain, CloudLightning, Power, Calendar, type LucideIcon,
 } from 'lucide-react'
 import * as React from 'react'
 
@@ -45,6 +45,8 @@ const M: Record<string, LucideIcon> = {
   rain: CloudRain,
   storm: CloudLightning,
   kill: Power,
+  // ponytail: SP atlas-calendar-2026-09-05 — sidebar item for the calendar route
+  cal: Calendar,
   icon: Circle,
 }
 
