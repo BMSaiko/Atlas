@@ -318,7 +318,7 @@ export async function renderDashboard(panel: HTMLElement, items: Wd[]) {
             <div id="globResults" class="glob-results" hidden></div>
           </div>
           ${first ? `<a class="btn btn-ghost" href="/w/${first.slug}" data-nav="/w/${first.slug}">${icon('sphere', 16)} Ir para o mundo ativo</a>` : ''}
-          <button class="btn btn-ghost" id="orch-btn" title="Move todos os cartões TODO (não arquivados) de todos os mundos para Em Curso e lança os agentes">${icon('term', 16)} Ativar orquestrador</button>
+          <button class="btn btn-ghost" id="orch-btn" title="Move todos os cartões TODO (não arquivados) de todos os mundos para Em Curso e lança os agentes" data-cmd="kanban.orquestrar-global">${icon('term', 16)} Ativar orquestrador</button>
         </div>
       </header>
 
@@ -434,7 +434,7 @@ export async function renderWorldDashboard(panel: HTMLElement, wd: Wd) {
           ${wd.description ? `<p class="dash-sub">${esc(wd.description)}</p>` : ''}
         </div>
         <div class="dash-actions">
-          <button class="btn btn-ghost" id="orch-wd-btn" title="Move todos os cartões TODO (não arquivados) deste mundo para Em Curso e lança os agentes">${icon('term', 16)} Ativar orquestrador</button>
+          <button class="btn btn-ghost" id="orch-wd-btn" title="Move todos os cartões TODO (não arquivados) deste mundo para Em Curso e lança os agentes" data-cmd="kanban.orquestrar">${icon('term', 16)} Ativar orquestrador</button>
         </div>
       </header>
 

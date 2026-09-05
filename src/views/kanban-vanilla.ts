@@ -139,7 +139,7 @@ export function openReplyModal(c: Card, ctx: { onSubmit: (reply: string) => Prom
   leftPanel.style.cssText = 'position:fixed;top:5vh;left:2vw;width:48vw;height:85vh;background:var(--bg-1,#1a1a1a);border:1px solid var(--border,#333);border-radius:8px;padding:1.2rem;overflow:auto;z-index:1900;box-shadow:0 8px 32px rgba(0,0,0,0.4)'
   leftPanel.innerHTML = '<h3 style="margin:0 0 1rem">' + esc(leftTitle) + '</h3>' +
     '<div class="md-view" style="min-height:0;max-height:calc(85vh - 100px);overflow-y:auto;overflow-x:hidden;padding-right:0.5rem">' + renderMd(leftMd) + '</div>' +
-    '<div style="position:absolute;top:0.8rem;right:0.8rem"><button type="button" class="btn-icon btn-ghost" data-close-side aria-label="Fechar painel">×</button></div>'
+    '<div style="position:absolute;top:0.8rem;right:0.8rem"><button type="button" class="btn-icon btn-ghost" data-close-side aria-label="Fechar painel" data-cmd="ui.reply-close-panel">×</button></div>'
   document.body.appendChild(leftPanel)
   const closeLeft = () => leftPanel.remove()
   leftPanel.querySelector('[data-close-side]')!.addEventListener('click', closeLeft)
@@ -260,10 +260,10 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     root.innerHTML = `
       <div class="kanban-toolbar">
         <span class="kt-sec">
-          <button class="btn-icon btn-ghost" id="karch" title="Cartões arquivados">${icon('archive', 16)}</button>
-          <button class="btn-icon btn-ghost" id="kimport" title="Importar roadmap (markdown)">${icon('forward', 16)}</button>
-          <button class="btn-icon btn-ghost" id="kortch" title="Orquestrar mundo (TODO → Em Curso)">${icon('term', 16)}</button>
-          <button class="btn-icon btn-ghost" id="ksel" title="${selMode ? 'Concluir seleção' : 'Selecionar para bulk'}" style="${selMode?'color:var(--gold)':''}">${icon('check', 16)}</button>
+          <button class="btn-icon btn-ghost" id="karch" title="Cartões arquivados" data-cmd="kanban.arquivados">${icon('archive', 16)}</button>
+          <button class="btn-icon btn-ghost" id="kimport" title="Importar roadmap (markdown)" data-cmd="kanban.importar-roadmap">${icon('forward', 16)}</button>
+          <button class="btn-icon btn-ghost" id="kortch" title="Orquestrar mundo (TODO → Em Curso)" data-cmd="kanban.orquestrar">${icon('term', 16)}</button>
+          <button class="btn-icon btn-ghost" id="ksel" title="${selMode ? 'Concluir seleção' : 'Selecionar para bulk'}" style="${selMode?'color:var(--gold)':''}" data-cmd="kanban.bulk">${icon('check', 16)}</button>
         </span>
         <span class="kb-right"><span class="muted k-count">${board.cards.filter(c=>!c.archived).length} cartões</span></span>
       </div>
@@ -274,7 +274,7 @@ export async function renderKanban(root: HTMLElement, slug: string) {
             <h4>${esc(col.name)}</h4>
             <span class="kcount">${count(col.id)}</span>
             <div class="kctrl">
-              ${selMode ? `<button type="button" class="btn-icon btn-ghost kcol-sel" data-col-sel="${col.id}" title="Selecionar / limpar coluna (visíveis)">${icon('check',14)}</button>` : ''}
+              ${selMode ? `<button type="button" class="btn-icon btn-ghost kcol-sel" data-col-sel="${col.id}" title="Selecionar / limpar coluna (visíveis)" data-cmd="kanban.col-selecionar">${icon('check',14)}</button>` : ''}
               <select class="k-sort" data-col="${col.id}" aria-label="Ordenar ${esc(col.name)}" title="Ordenar coluna">
                 <option value="pos"   ${keyOf(col.id)==='pos'  ?'selected':''}>Posição</option>
                 <option value="prio"  ${keyOf(col.id)==='prio' ?'selected':''}>Prioridade</option>
@@ -356,10 +356,10 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     const activeP = active === 'all' ? null : PRIOS.find(p => p.id === active)
     const on = active !== 'all'
     const items = [{ id: 'all' as ColFilter, label: 'Todas' }, ...PRIOS].map(p =>
-      `<button type="button" class="kf-item${active === p.id ? ' on' : ''}" data-filter-prio="${p.id}" aria-pressed="${active === p.id}">${active === p.id ? icon('check', 13) : ''}${p.label}</button>`
+      `<button type="button" class="kf-item${active === p.id ? ' on' : ''}" data-filter-prio="${p.id}" aria-pressed="${active === p.id}" data-cmd="kanban.filtro-prio">${active === p.id ? icon('check', 13) : ''}${p.label}</button>`
     ).join('')
     return `<div class="kfwrap" data-kf="${colId}">
-      <button type="button" class="btn-icon btn-ghost kfilter-btn${on ? ' on' : ''}" data-filter-toggle="${colId}" aria-haspopup="menu" aria-expanded="false" title="${on ? `Filtro: ${activeP!.label}` : 'Filtrar por prioridade'}">${icon('filter', 15)}</button>
+      <button type="button" class="btn-icon btn-ghost kfilter-btn${on ? ' on' : ''}" data-filter-toggle="${colId}" aria-haspopup="menu" aria-expanded="false" title="${on ? `Filtro: ${activeP!.label}` : 'Filtrar por prioridade'}" data-cmd="kanban.filtro-toggle">${icon('filter', 15)}</button>
       <div class="kfilter-menu" data-kfmenu="${colId}" hidden>${items}</div>
     </div>`
   }
@@ -407,13 +407,13 @@ export async function renderKanban(root: HTMLElement, slug: string) {
     // — o user quer ver o badge sem ficar vermelho no kanban.
     const crashBadge = c.crashRetry ? `<span class="k-badge-warn" title="Card recuperado após crash — o botão Run agora é um retry manual">⚠ retry após crash</span>` : ''
     if (c.colId === 'todo') {
-      b.push(`<button class="btn-icon btn-ghost" data-act="run" aria-label="Executar no Hermes">${icon('play', 15)}</button>${crashBadge}`)
-      b.push(`<button class="btn-icon btn-ghost" data-act="dp" data-card="${c.id}" aria-label="Gerar DP (design plan)">${icon('doc', 15)}</button>`)
+      b.push(`<button class="btn-icon btn-ghost" data-act="run" aria-label="Executar no Hermes" data-cmd="kanban.correr-card">${icon('play', 15)}</button>${crashBadge}`)
+      b.push(`<button class="btn-icon btn-ghost" data-act="dp" data-card="${c.id}" aria-label="Gerar DP (design plan)" data-cmd="kanban.gerar-dp">${icon('doc', 15)}</button>`)
     } else if (c.colId === 'doing') {
-      b.push(`<button class="btn-icon btn-ghost" data-act="run" aria-label="Reiniciar execução">${icon('reset', 15)}</button>`)
-      b.push(`<button class="btn-icon btn-ghost" data-act="term" aria-label="Ver terminal / log do run">${icon('term', 16)}</button>`)
+      b.push(`<button class="btn-icon btn-ghost" data-act="run" aria-label="Reiniciar execução" data-cmd="kanban.reiniciar-card">${icon('reset', 15)}</button>`)
+      b.push(`<button class="btn-icon btn-ghost" data-act="term" aria-label="Ver terminal / log do run" data-cmd="kanban.ver-terminal">${icon('term', 16)}</button>`)
       // ponytail: reply — botão universal em doing. Re-spawn com description extendida. Sem filtro por skill.
-      b.push(`<button class="btn-icon btn-ghost" data-act="reply" aria-label="Responder (cola texto e reinicia)">${icon('pencil', 15)}</button>`)
+      b.push(`<button class="btn-icon btn-ghost" data-act="reply" aria-label="Responder (cola texto e reinicia)" data-cmd="kanban.reply-card">${icon('pencil', 15)}</button>`)
     }
     if (!b.length) return ''
     return `<div class="kops">${b.join('')}</div>`
@@ -428,9 +428,9 @@ export async function renderKanban(root: HTMLElement, slug: string) {
         <select id="bulk-prio" title="Mudar prioridade" ${sel.size===0?'disabled':''}><option value="">Prioridade…</option>
           <option value="urgent">Urgente</option><option value="low">Baixa</option><option value="medium">Média</option><option value="high">Alta</option>
         </select>
-        <button class="btn btn-ghost" id="bulk-arch" ${sel.size===0?'disabled':''}>${icon('archive',15)} Arquivar</button>
-        <button class="btn btn-danger" id="bulk-del" ${sel.size===0?'disabled':''}>${icon('trash',15)} Eliminar</button>
-        <button class="btn btn-ghost" id="bulk-clear" ${sel.size===0?'disabled':''}>Limpar</button>
+        <button class="btn btn-ghost" id="bulk-arch" ${sel.size===0?'disabled':''} data-cmd="kanban.bulk-arquivar">${icon('archive',15)} Arquivar</button>
+        <button class="btn btn-danger" id="bulk-del" ${sel.size===0?'disabled':''} data-cmd="kanban.bulk-eliminar">${icon('trash',15)} Eliminar</button>
+        <button class="btn btn-ghost" id="bulk-clear" ${sel.size===0?'disabled':''} data-cmd="kanban.bulk-limpar">Limpar</button>
       </div>`
   }
 
@@ -632,7 +632,7 @@ function runCard(c: Card) {
     pre.textContent = ''
     let timer: ReturnType<typeof setInterval> | undefined
     const body = () => `<div class="term-wrap">${pre.outerHTML}<div class="term-status" id="${esc(c.id)}-tstatus">ainda não lançado</div></div>` +
-    `<div class="term-actions" style="margin-top:.6rem"><button type="button" class="btn btn-primary" data-act="reply-from-term">Reply</button></div>`
+    `<div class="term-actions" style="margin-top:.6rem"><button type="button" class="btn btn-primary" data-act="reply-from-term" data-cmd="kanban.reply-from-term">Reply</button></div>`
     const m = openModal({
       title: 'Terminal · ' + c.title, submitText: 'Fechar', cancelText: 'Fechar',
       body,
@@ -772,16 +772,16 @@ function runCard(c: Card) {
             ? `<div class="ktimer-modal" data-timer-modal>
                 <span class="ktimer-modal-label">${c.timerStartedAt ? 'A contar: ' : 'Pausado · '}restantes <strong>${esc(fmtClock(timerRemainingMs(c)))}</strong> · duração total ${esc(fmtClock(c.timerMs))}</span>
                 <span class="ktimer-modal-actions">
-                  <button type="button" class="btn btn-ghost btn-sm" data-timer-act="toggle">${c.timerStartedAt ? 'Pausar' : 'Retomar'}</button>
-                  <button type="button" class="btn btn-ghost btn-sm" data-timer-act="add1">+1 min</button>
-                  <button type="button" class="btn btn-ghost btn-sm" data-timer-act="remove">Remover</button>
+                  <button type="button" class="btn btn-ghost btn-sm" data-timer-act="toggle" data-cmd="kanban.timer-pausar">${c.timerStartedAt ? 'Pausar' : 'Retomar'}</button>
+                  <button type="button" class="btn btn-ghost btn-sm" data-timer-act="add1" data-cmd="kanban.timer-add1">+1 min</button>
+                  <button type="button" class="btn btn-ghost btn-sm" data-timer-act="remove" data-cmd="kanban.timer-remover">Remover</button>
                 </span>
               </div>`
             : `<div class="ktimer-modal" data-timer-modal>
                 <span class="ktimer-modal-label">Sem temporizador</span>
                 <span class="ktimer-modal-actions">
                   <input type="number" min="1" max="240" step="1" value="25" name="timerMin" aria-label="Duração em minutos" style="width:5em">
-                  <button type="button" class="btn btn-primary btn-sm" data-timer-act="start">Iniciar</button>
+                  <button type="button" class="btn btn-primary btn-sm" data-timer-act="start" data-cmd="kanban.timer-iniciar">Iniciar</button>
                 </span>
               </div>`}
         </div>` : ''}
@@ -858,7 +858,7 @@ function runCard(c: Card) {
       title: c.title, submitText: 'Editar',
       body: () => `
         <div class="kmodal-head">
-          <button type="button" class="kcopy" data-id="${c.id}" title="Copiar ID">#${c.id}</button>
+          <button type="button" class="kcopy" data-id="${c.id}" title="Copiar ID" data-cmd="kanban.copiar-id">#${c.id}</button>
           <span class="prio ${PRIO[c.priority]}"><span class="dot"></span>${prioLabel(c.priority)}</span>
           <span class="muted"> · ${esc(col)}</span>
           <span class="muted"> · criado ${fmtDate(c.ts)}</span>
@@ -878,28 +878,28 @@ function runCard(c: Card) {
         <div class="kmodal-actions" data-card-actions>
           <div class="kmodal-actions-primary">
             ${c.colId === 'todo'
-              ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="run">${icon('play',14)} ${c.crashRetry ? 'Retry após crash' : 'Executar no Hermes'}</button>
-                 <button type="button" class="btn btn-ghost btn-sm" data-card-act="dp" data-card="${c.id}">${icon('doc',14)} Gerar DP</button>`
+              ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="run" data-cmd="kanban.correr-card-modal">${icon('play',14)} ${c.crashRetry ? 'Retry após crash' : 'Executar no Hermes'}</button>
+                 <button type="button" class="btn btn-ghost btn-sm" data-card-act="dp" data-card="${c.id}" data-cmd="kanban.gerar-dp-modal">${icon('doc',14)} Gerar DP</button>`
               : c.colId === 'doing'
-                ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="run">${icon('reset',14)} Reiniciar execução</button>
-                   <button type="button" class="btn btn-ghost btn-sm" data-card-act="term">${icon('term',14)} Ver terminal</button>`
+                ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="run" data-cmd="kanban.reiniciar-card-modal">${icon('reset',14)} Reiniciar execução</button>
+                   <button type="button" class="btn btn-ghost btn-sm" data-card-act="term" data-cmd="kanban.ver-terminal-modal">${icon('term',14)} Ver terminal</button>`
                 : c.colId === 'review'
-                  ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="approve">${icon('check',14)} Aprovar</button>
-                     <button type="button" class="btn btn-ghost btn-sm" data-card-act="reject">${icon('pencil',14)} Refinar</button>
-                     <button type="button" class="btn btn-ghost btn-sm" data-card-act="reset">${icon('reset',14)} Começar do zero</button>`
+                  ? `<button type="button" class="btn btn-primary btn-sm" data-card-act="approve" data-cmd="kanban.aprovar">${icon('check',14)} Aprovar</button>
+                     <button type="button" class="btn btn-ghost btn-sm" data-card-act="reject" data-cmd="kanban.refinar">${icon('pencil',14)} Refinar</button>
+                     <button type="button" class="btn btn-ghost btn-sm" data-card-act="reset" data-cmd="kanban.comecar-zero">${icon('reset',14)} Começar do zero</button>`
                   : '<span class="muted" style="font-size:.82rem">Sem ações para esta coluna</span>'}
             ${c.orphanWorktreePath
-              ? `<button type="button" class="btn btn-ghost btn-sm" data-card-act="clear-orphan" title="Apagar manualmente a worktree órfã em ${esc(c.orphanWorktreePath)}">${icon('trash',14)} Limpar worktree órfã</button>`
+              ? `<button type="button" class="btn btn-ghost btn-sm" data-card-act="clear-orphan" title="Apagar manualmente a worktree órfã em ${esc(c.orphanWorktreePath)}" data-cmd="kanban.clear-orphan">${icon('trash',14)} Limpar worktree órfã</button>`
               : ''}
           </div>
           <div class="kmodal-actions-meta">
-            <button type="button" class="btn-icon btn-ghost" data-card-act="move" data-dir="-1" ${prev?'':'disabled'} title="Mover atrás">${icon('back',15)}</button>
-            <button type="button" class="btn-icon btn-ghost" data-card-act="move" data-dir="1" ${next?'':'disabled'} title="Mover frente">${icon('forward',15)}</button>
-            <button type="button" class="btn-icon btn-ghost" data-card-act="edit" title="Editar">${icon('pencil',15)}</button>
+            <button type="button" class="btn-icon btn-ghost" data-card-act="move" data-dir="-1" ${prev?'':'disabled'} title="Mover atrás" data-cmd="kanban.mover-cartao">${icon('back',15)}</button>
+            <button type="button" class="btn-icon btn-ghost" data-card-act="move" data-dir="1" ${next?'':'disabled'} title="Mover frente" data-cmd="kanban.mover-cartao-frente">${icon('forward',15)}</button>
+            <button type="button" class="btn-icon btn-ghost" data-card-act="edit" title="Editar" data-cmd="kanban.editar-cartao">${icon('pencil',15)}</button>
           </div>
           <div class="kmodal-actions-danger">
-            <button type="button" class="btn-icon btn-ghost" data-card-act="arch" title="Arquivar">${icon('archive',15)}</button>
-            <button type="button" class="btn-icon btn-ghost" data-card-act="del" title="Eliminar" style="color:var(--danger)">${icon('trash',15)}</button>
+            <button type="button" class="btn-icon btn-ghost" data-card-act="arch" title="Arquivar" data-cmd="kanban.arquivar-cartao">${icon('archive',15)}</button>
+            <button type="button" class="btn-icon btn-ghost" data-card-act="del" title="Eliminar" style="color:var(--danger)" data-cmd="kanban.eliminar-cartao">${icon('trash',15)}</button>
           </div>
         </div>`
       ,
@@ -955,7 +955,7 @@ function runCard(c: Card) {
     if (arch.length === 0) { toast('Sem cartões arquivados'); return }
     openModal({
       title: 'Cartões arquivados', submitText: 'Fechar',
-      body: () => arch.map(c => `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${esc(c.title)}</span><button type="button" class="btn btn-ghost" data-restore="${c.id}">${icon('archive', 15)} Restaurar</button></div>`).join(''),
+      body: () => arch.map(c => `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${esc(c.title)}</span><button type="button" class="btn btn-ghost" data-restore="${c.id}" data-cmd="kanban.restaurar-cartao">${icon('archive', 15)} Restaurar</button></div>`).join(''),
       onSubmit: () => {},
     })
     document.querySelectorAll('[data-restore]').forEach(b => {

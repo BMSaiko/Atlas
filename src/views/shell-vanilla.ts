@@ -45,9 +45,9 @@ export async function renderShell(root: HTMLElement, slug: string | null, isSett
           <div class="tz-pop" id="tz-pop" hidden><label for="tz-select">Fuso horário</label><select id="tz-select" aria-label="Escolher fuso horário"></select></div>
         </div>
         <div class="side-focus" id="foco"></div>
-        <div class="side-foot"><button class="btn btn-primary btn-block" id="side-new">${icon('plus', 16)} Novo mundo</button></div>
+        <div class="side-foot"><button class="btn btn-primary btn-block" id="side-new" data-cmd="mundo.novo">${icon('plus', 16)} Novo mundo</button></div>
       </aside>
-      <button class="hamb" id="hamb" aria-label="Abrir menu workdirs">${icon('menu', 22)}</button>
+      <button class="hamb" id="hamb" aria-label="Abrir menu workdirs" data-cmd="ui.hamburger">${icon('menu', 22)}</button>
       <main class="panel" id="panel"></main>
     </div>`
 
@@ -229,8 +229,8 @@ function renderEmpty(panel: HTMLElement, items: Array<any>, root: HTMLElement) {
     <div class="panel-empty">
       <div class="logo">ATLAS</div>
       <p class="tagline">O titã que sustenta os céus — cada projecto, o seu próprio mundo.</p>
-      ${items.length ? `${lastWd ? `<button class="btn btn-ghost" id="reopen">${icon('sphere', 16)} Reabrir ${esc(lastWd.name)}</button>` : ''}` : `<p class="muted">Ainda não há workdirs. Cria o primeiro.</p>`}
-      <button class="btn btn-primary" id="panel-new" style="margin-top:14px">${icon('plus', 16)} ${items.length ? 'Novo mundo' : 'Criar o primeiro mundo'}</button>
+      ${items.length ? `${lastWd ? `<button class="btn btn-ghost" id="reopen" data-cmd="mundo.reabrir">${icon('sphere', 16)} Reabrir ${esc(lastWd.name)}</button>` : ''}` : `<p class="muted">Ainda não há workdirs. Cria o primeiro.</p>`}
+      <button class="btn btn-primary" id="panel-new" style="margin-top:14px" data-cmd="mundo.novo-primeiro">${icon('plus', 16)} ${items.length ? 'Novo mundo' : 'Criar o primeiro mundo'}</button>
     </div>`
   root.querySelector('#panel-new')!.addEventListener('click', () => newWorkdir())
   const reopen = panel.querySelector('#reopen')
@@ -316,7 +316,7 @@ export async function renderShellChrome(host: HTMLElement, slug: string | null, 
       <div class="tz-pop" id="tz-pop" hidden><label for="tz-select">Fuso horário</label><select id="tz-select" aria-label="Escolher fuso horário"></select></div>
     </div>
     <div class="side-focus" id="foco"></div>
-    <div class="side-foot"><button class="btn btn-primary btn-block" id="side-new">${icon('plus', 16)} Novo mundo</button></div>
+    <div class="side-foot"><button class="btn btn-primary btn-block" id="side-new" data-cmd="mundo.novo">${icon('plus', 16)} Novo mundo</button></div>
   `
 
   // The vanilla renderShell attached everything to the shell root element. Now we attach

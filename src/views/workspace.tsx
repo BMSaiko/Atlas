@@ -84,13 +84,13 @@ export default function Workspace() {
         </div>
       </div>
       <nav className="ws-tabs" id="tabs">
-        <button className={`ws-tab ${tab === 'dash' ? 'active' : ''}`} data-tab="dash" id="tab-dash" title="Alt+← / Alt+→" onClick={() => setTab('dash')}>
+        <button className={`ws-tab ${tab === 'dash' ? 'active' : ''}`} data-tab="dash" id="tab-dash" data-cmd="ui.tab-dash" title="Alt+← / Alt+→" onClick={() => setTab('dash')}>
           <Icon name="sphere" size={16} /> Dashboard
         </button>
-        <button className={`ws-tab ${tab === 'notes' ? 'active' : ''}`} data-tab="notes" id="tab-notes" title="Alt+← / Alt+→" onClick={() => setTab('notes')}>
+        <button className={`ws-tab ${tab === 'notes' ? 'active' : ''}`} data-tab="notes" id="tab-notes" data-cmd="ui.tab-notes" title="Alt+← / Alt+→" onClick={() => setTab('notes')}>
           <Icon name="note" size={16} /> Notas
         </button>
-        <button className={`ws-tab ${tab === 'kanban' ? 'active' : ''}`} data-tab="kanban" id="tab-kanban" title="Alt+← / Alt+→" onClick={() => setTab('kanban')}>
+        <button className={`ws-tab ${tab === 'kanban' ? 'active' : ''}`} data-tab="kanban" id="tab-kanban" data-cmd="ui.tab-kanban" title="Alt+← / Alt+→" onClick={() => setTab('kanban')}>
           <Icon name="board" size={16} /> Kanban
         </button>
       </nav>

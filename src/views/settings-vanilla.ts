@@ -23,10 +23,10 @@ export async function renderSettings(root: HTMLElement, slug: string) {
           <div class="field"><label for="s-repo">Repo (path absoluto)</label><input id="s-repo" name="repo" placeholder="ex. C:\Users\bruno\proj" value="${esc(meta?.repo || '')}"></div>
           <div class="field"><label>Icon do workdir</label>
             <div class="icon-grid" id="icon-grid">${(await api.icons()).map(n =>
-              `<button type="button" class="icon-cell${n === (meta?.icon || '') ? ' sel' : ''}" data-icon="${n}" aria-label="${n.replace(/\.svg$/,'')}"><img src="/icons/${n}" alt=""></button>`).join('')}
+              `<button type="button" class="icon-cell${n === (meta?.icon || '') ? ' sel' : ''}" data-icon="${n}" aria-label="${n.replace(/\.svg$/,'')}" data-cmd="ui.icon-pick"><img src="/icons/${n}" alt=""></button>`).join('')}
             </div>
           </div>
-          <button class="btn btn-primary" type="submit">Guardar</button>
+          <button class="btn btn-primary" type="submit" data-cmd="ui.form-guardar">Guardar</button>
         </form>
       </div>
       <div class="card-block">
@@ -52,20 +52,20 @@ export async function renderSettings(root: HTMLElement, slug: string) {
           ${board.columns.map(c => colRow(c.id, c.name)).join('')}
         </div>
         <div class="actions-row" style="margin-top:12px">
-          <button class="btn btn-ghost" id="col-add">${icon('plus', 16)} Adicionar coluna</button>
-          <button class="btn btn-primary" id="col-save">Guardar colunas</button>
+          <button class="btn btn-ghost" id="col-add" data-cmd="kanban.col-adicionar">${icon('plus', 16)} Adicionar coluna</button>
+          <button class="btn btn-primary" id="col-save" data-cmd="kanban.col-guardar">Guardar colunas</button>
         </div>
       </div>
       <div class="card-block">
         <h3>Notificações</h3>
         <p class="muted" style="margin-bottom:12px">Notificações do navegador avisam quando um cartão entra em revisão e no fim do pomodoro.</p>
-        <button class="btn" id="notif-btn" type="button"></button>
+        <button class="btn" id="notif-btn" type="button" data-cmd="ui.notifs-toggle"></button>
       </div>
       <div class="card-block">
         <h3>Snapshots</h3>
         <p class="muted" style="margin-bottom:12px">Snapshots automáticos do workdir (4 por dia, 7 dias de retenção, dedup por hash). Botão "Restaurar" cria antes um pre-restore — seguro contra undo do undo.</p>
         <div class="actions-row" style="margin-bottom:12px">
-          <button class="btn btn-primary" id="snap-run" type="button">${icon('archive', 16)} Snapshot agora</button>
+          <button class="btn btn-primary" id="snap-run" type="button" data-cmd="kanban.snapshot">${icon('archive', 16)} Snapshot agora</button>
         </div>
         <div id="snap-list"></div>
       </div>
@@ -73,15 +73,15 @@ export async function renderSettings(root: HTMLElement, slug: string) {
         <h3>Backup (bundle)</h3>
         <p class="muted" style="margin-bottom:12px">Descarregar ou carregar o workdir inteiro (meta + notas + kanban) como um único ficheiro JSON. Útil para portabilidade entre instalações e para um snapshot fora do git.</p>
         <div class="actions-row">
-          <button class="btn" id="bk-export" type="button">Exportar bundle (.json)</button>
-          <button class="btn btn-ghost" id="bk-import-btn" type="button">Importar bundle…</button>
+          <button class="btn" id="bk-export" type="button" data-cmd="kanban.export-bundle">Exportar bundle (.json)</button>
+          <button class="btn btn-ghost" id="bk-import-btn" type="button" data-cmd="kanban.import-bundle-btn">Importar bundle…</button>
           <input type="file" id="bk-import" accept="application/json,.json" hidden>
         </div>
       </div>
       <div class="card-block danger-zone">
         <h3>Zona perigosa</h3>
         <p class="muted" style="margin-bottom:12px">Eliminar este workdir apaga todas as notas e cartões. Irreversível.</p>
-        <button class="btn btn-danger" id="wd-del">${icon('trash', 16)} Eliminar workdir</button>
+        <button class="btn btn-danger" id="wd-del" data-cmd="ui.col-del">${icon('trash', 16)} Eliminar workdir</button>
       </div>
     </div>`
 
@@ -211,7 +211,7 @@ export async function renderSettings(root: HTMLElement, slug: string) {
 function colRow(id: string, name: string) {
   return `<div class="col-row" data-col="${id}">
     <input class="col-name" value="${esc(name)}" aria-label="Nome da coluna">
-    <button class="btn-icon btn-ghost" data-act="col-del" aria-label="Eliminar coluna">${icon('trash', 16)}</button>
+    <button class="btn-icon btn-ghost" data-act="col-del" aria-label="Eliminar coluna" data-cmd="mundo.eliminar-workdir">${icon('trash', 16)}</button>
   </div>`
 }
 function esc(s: unknown) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
